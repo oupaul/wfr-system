@@ -1,0 +1,30 @@
+{
+  "name": "fund-weekly-report-system",
+  "version": "1.0.0",
+  "description": "資金週報系統 - 使用 Node.js 和 SQLite",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "init-db": "node scripts/init-db.js",
+    "import-excel": "node scripts/import-excel.js",
+    "show-excel": "node scripts/show-excel-structure.js",
+    "create-admin": "node scripts/create-admin.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["fund", "report", "finance", "weekly"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.6",
+    "exceljs": "^4.4.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "multer": "^1.4.5-lts.1",
+    "argon2": "^0.31.2",
+    "express-session": "^1.17.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  }
+}

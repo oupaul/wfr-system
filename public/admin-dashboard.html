@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者儀錶板 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 40px 30px;
+        }
+
+        .admin-section {
+            margin-bottom: 40px;
+        }
+
+        .admin-section h2 {
+            color: #333;
+            font-size: 1.8em;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .admin-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        .admin-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .admin-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .admin-card.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .admin-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .admin-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .admin-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .card-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .admin-card h3 {
+            font-size: 1.4em;
+            margin-bottom: 10px;
+        }
+
+        .admin-card p {
+            font-size: 0.95em;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .admin-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="app-title">🎛️ 管理者儀錶板</h1>
+            <p>系統管理與監控中心</p>
+            <div class="nav-links">
+                <a href="/index.html">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="admin-section">
+                <h2>系統管理</h2>
+                <div class="admin-grid">
+                    <a href="/admin-system-health.html" class="admin-card success">
+                        <div class="card-icon">💚</div>
+                        <h3>系統健康狀態</h3>
+                        <p>監控系統運行狀態、資源使用情況、資料庫連線狀態等</p>
+                    </a>
+
+                    <a href="/admin-backup.html" class="admin-card info">
+                        <div class="card-icon">💾</div>
+                        <h3>備份管理</h3>
+                        <p>管理資料庫備份、設定自動備份排程、還原備份資料</p>
+                    </a>
+
+                    <a href="/users.html" class="admin-card primary">
+                        <div class="card-icon">👥</div>
+                        <h3>人員管理</h3>
+                        <p>管理系統使用者、設定權限、查看登入記錄</p>
+                    </a>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <h2>資料管理</h2>
+                <div class="admin-grid">
+                    <a href="/companies.html" class="admin-card">
+                        <div class="card-icon">🏢</div>
+                        <h3>公司管理</h3>
+                        <p>管理公司資料、組織架構設定</p>
+                    </a>
+
+                    <a href="/bank-accounts.html" class="admin-card">
+                        <div class="card-icon">🏦</div>
+                        <h3>銀行帳戶管理</h3>
+                        <p>管理銀行帳戶資訊、安全水位設定、即時餘額監控</p>
+                    </a>
+
+                    <a href="/transactions.html" class="admin-card">
+                        <div class="card-icon">💰</div>
+                        <h3>收支記錄</h3>
+                        <p>管理日常收支記錄、Excel 匯入匯出</p>
+                    </a>
+
+                    <a href="/settlement.html" class="admin-card">
+                        <div class="card-icon">✅</div>
+                        <h3>餘額結算</h3>
+                        <p>進行定期餘額結算、查看結算歷史記錄</p>
+                    </a>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <h2>監控與報表</h2>
+                <div class="admin-grid">
+                    <a href="/cash-gap-dashboard.html" class="admin-card warning">
+                        <div class="card-icon">⚠️</div>
+                        <h3>資金缺口通報</h3>
+                        <p>監控資金缺口、安全水位警告、資金預測分析</p>
+                    </a>
+
+                    <div class="admin-card" style="opacity: 0.6; cursor: not-allowed;">
+                        <div class="card-icon">📊</div>
+                        <h3>統計報表</h3>
+                        <p>財務統計分析、趨勢圖表（開發中）</p>
+                    </div>
+
+                    <a href="/admin-operation-logs.html" class="admin-card warning">
+                        <div class="card-icon">📋</div>
+                        <h3>操作日誌</h3>
+                        <p>檢視新增／修改／刪除記錄與前後差異（變更以黃標註）</p>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 檢查認證和管理員權限
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include',
+                    cache: 'no-cache'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('認證檢查失敗');
+                }
+                
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                
+                // 檢查是否為管理員
+                if (result.user.role !== 'admin') {
+                    alert('此頁面需要管理員權限');
+                    window.location.replace('/index.html');
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('檢查認證錯誤:', error);
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+
+        // 載入應用配置
+        async function loadConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const result = await response.json();
+                if (result.title) {
+                    document.title = '管理者儀錶板 - ' + result.title;
+                    document.getElementById('app-title').textContent = '🎛️ 管理者儀錶板';
+                }
+            } catch (error) {
+                console.error('載入配置失敗:', error);
+            }
+        }
+
+        // 頁面載入時執行
+        window.onload = async function() {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadConfig();
+            }
+        };
+    </script>
+</body>
+</html>

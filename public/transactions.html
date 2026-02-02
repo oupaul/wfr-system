@@ -1,0 +1,1411 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>收支記錄 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .filters {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .filters-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .filters-row .form-group {
+            margin-bottom: 0;
+        }
+
+        .filters-row label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .filters-row input,
+        .filters-row select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .statistics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .stat-card.income {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .stat-card.expense {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .stat-card.net {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        /* 模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .type-income {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .type-expense {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .amount-income {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .amount-expense {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .filters-row {
+                grid-template-columns: 1fr;
+            }
+            table {
+                font-size: 12px;
+            }
+            
+            /* 手機版 page-header 優化 */
+            .page-header {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .page-header h2 {
+                font-size: 1.4em;
+            }
+            
+            /* 隱藏說明文字在手機版 */
+            .page-header > div:first-child > div {
+                display: none;
+            }
+            
+            /* 按鈕容器在手機版改為垂直排列 */
+            .page-header > div:last-child {
+                flex-direction: column !important;
+                width: 100%;
+            }
+            
+            .page-header .btn {
+                width: 100%;
+                padding: 12px;
+                font-size: 15px;
+            }
+            
+            /* 統計卡片在手機版單列顯示 */
+            .statistics {
+                grid-template-columns: 1fr !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💰 日常收支記錄</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <!-- 配置狀態指示器 -->
+            <div id="configStatus" style="padding: 10px; background: #d1ecf1; color: #0c5460; border-radius: 5px; margin-bottom: 15px; display: none;">
+                <strong>系統模式：</strong><span id="configModeText">載入中...</span>
+            </div>
+            
+            <div class="page-header">
+                <div>
+                    <h2>收支記錄管理</h2>
+                    <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                        <span style="margin-right: 20px;">📄 下載範本：下載匯入格式範本檔案</span>
+                        <span style="margin-right: 20px;">📥 匯出：將目前查詢結果匯出為Excel檔案</span>
+                        <span>📤 匯入：從Excel檔案匯入收支記錄（支援.xlsx/.xls格式）</span>
+                    </div>
+                </div>
+                <div style="display: flex; gap: 10px; align-items: flex-start;">
+                    <button class="btn btn-secondary" onclick="downloadTemplate()">📄 下載範本</button>
+                    <button class="btn btn-secondary" onclick="exportToExcel()">📥 匯出Excel</button>
+                    <button class="btn btn-secondary" onclick="document.getElementById('importFileInput').click()">📤 匯入Excel</button>
+                    <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
+                    <button class="btn btn-primary" onclick="openAddModal()">➕ 新增收支記錄</button>
+                </div>
+            </div>
+
+            <div id="message"></div>
+
+            <!-- 統計卡片 -->
+            <div class="statistics" id="statistics">
+                <div class="stat-card income">
+                    <h3>總收入</h3>
+                    <div class="value" id="totalIncome">$0</div>
+                </div>
+                <div class="stat-card expense">
+                    <h3>總支出</h3>
+                    <div class="value" id="totalExpense">$0</div>
+                </div>
+                <div class="stat-card net">
+                    <h3>淨收支</h3>
+                    <div class="value" id="netAmount">$0</div>
+                </div>
+            </div>
+
+            <!-- 篩選條件 -->
+            <div class="filters">
+                <div class="filters-row">
+                    <div class="form-group">
+                        <label>開始日期</label>
+                        <input type="date" id="filterStartDate">
+                    </div>
+                    <div class="form-group">
+                        <label>結束日期</label>
+                        <input type="date" id="filterEndDate">
+                    </div>
+                    <div class="form-group">
+                        <label>類型</label>
+                        <select id="filterType">
+                            <option value="">全部</option>
+                            <option value="income">收入</option>
+                            <option value="expense">支出</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>公司名稱</label>
+                        <input type="text" id="filterCompany" placeholder="輸入公司名稱">
+                    </div>
+                    <div class="form-group">
+                        <label>帳戶</label>
+                        <input type="text" id="filterAccount" placeholder="輸入帳戶名稱或帳號">
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <button class="btn btn-secondary" onclick="resetFilters()">清除篩選</button>
+                    <button class="btn btn-primary" onclick="loadTransactions()">🔍 查詢</button>
+                </div>
+            </div>
+
+            <!-- 批次操作列 -->
+            <div class="batch-actions" style="margin-bottom: 15px; display: flex; align-items: center; gap: 12px;">
+                <button type="button" class="btn btn-danger" id="batchDeleteBtn" onclick="batchDelete()" disabled title="請先勾選要刪除的記錄">
+                    🗑️ 批次刪除 (<span id="selectedCount">0</span>)
+                </button>
+            </div>
+
+            <!-- 數據表格 -->
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 42px;">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="全選">
+                            </th>
+                            <th>日期</th>
+                            <th>類型</th>
+                            <th>金額</th>
+                            <th>類別</th>
+                            <th>說明</th>
+                            <th>公司名稱</th>
+                            <th>帳戶</th>
+                            <th>備註</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transactionsTable">
+                        <tr>
+                            <td colspan="10" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯模態框 -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增收支記錄</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="transactionForm" onsubmit="saveTransaction(event)">
+                    <input type="hidden" id="recordId" value="">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalTransactionDate">交易日期 <span class="required">*</span></label>
+                            <input type="date" id="modalTransactionDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalType">類型 <span class="required">*</span></label>
+                            <select id="modalType" required>
+                                <option value="">請選擇</option>
+                                <option value="income">收入</option>
+                                <option value="expense">支出</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalAmount">金額 <span class="required">*</span></label>
+                            <input type="number" id="modalAmount" step="0.01" required placeholder="0.00">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalCategory">類別</label>
+                            <input type="text" id="modalCategory" placeholder="例如：薪資、租金、餐費">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalDescription">說明</label>
+                        <input type="text" id="modalDescription" placeholder="交易說明">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalCompanyId">公司名稱</label>
+                            <select id="modalCompanyId" onchange="onCompanyChange()">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalAccountId">帳戶名稱</label>
+                            <select id="modalAccountId" onchange="onAccountChange()">
+                                <option value="">請選擇帳戶</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalAccountNumber">帳號（可自動帶入或手動輸入）</label>
+                        <input type="text" id="modalAccountNumber" placeholder="銀行帳號">
+                    </div>
+                    
+                    <!-- 隱藏欄位用於儲存原始值 -->
+                    <input type="hidden" id="modalCompanyName">
+                    <input type="hidden" id="modalAccountName">
+
+                    <div class="form-group">
+                        <label for="modalRemarks">備註</label>
+                        <textarea id="modalRemarks" placeholder="輸入備註說明..."></textarea>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        // 檢查認證，未登入則導向登入頁（重啟服務後 session 失效會自動跳轉）
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' });
+                const result = await response.json();
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+        
+        let companiesList = [];
+        let bankAccountsList = [];
+        let transactionMode = 'full'; // 預設為完整功能，可能是 'full' 或 'expense_only'
+
+        // 載入公司列表
+        function loadCompanies() {
+            return fetch(`${API_BASE}/companies?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        return;
+                    }
+                    companiesList = data.data || [];
+                    const select = document.getElementById('modalCompanyId');
+                    if (select) {
+                        select.innerHTML = '<option value="">請選擇公司</option>' +
+                            companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                    }
+                })
+                .catch(err => {
+                    console.error('載入公司列表錯誤:', err);
+                });
+        }
+
+        // 載入銀行帳戶列表（可選公司ID）
+        function loadBankAccounts(companyId = null) {
+            let url = `${API_BASE}/bank-accounts?active=true`;
+            if (companyId) {
+                url += `&company_id=${companyId}`;
+            }
+            
+            return fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        return;
+                    }
+                    bankAccountsList = data.data || [];
+                    const select = document.getElementById('modalAccountId');
+                    if (select) {
+                        select.innerHTML = '<option value="">請選擇帳戶</option>' +
+                            bankAccountsList.map(a => `<option value="${a.id}" data-account-number="${a.account_number || ''}">${a.account_name}${a.company_name ? ' (' + a.company_name + ')' : ''}</option>`).join('');
+                    }
+                })
+                .catch(err => {
+                    console.error('載入銀行帳戶列表錯誤:', err);
+                });
+        }
+
+        // 公司選擇變更時
+        window.onCompanyChange = function() {
+            const companyId = document.getElementById('modalCompanyId').value;
+            const selectedCompany = companiesList.find(c => c.id == companyId);
+            document.getElementById('modalCompanyName').value = selectedCompany ? selectedCompany.name : '';
+            
+            // 載入該公司的帳戶列表
+            loadBankAccounts(companyId || null);
+        };
+
+        // 帳戶選擇變更時（同時帶入所屬公司，確保餘額能正確對應）
+        window.onAccountChange = function() {
+            const accountId = document.getElementById('modalAccountId').value;
+            const selectedAccount = bankAccountsList.find(a => a.id == accountId);
+            if (selectedAccount) {
+                document.getElementById('modalAccountName').value = selectedAccount.account_name || '';
+                const accountNumberInput = document.getElementById('modalAccountNumber');
+                if (!accountNumberInput.value || accountNumberInput.value === '') {
+                    accountNumberInput.value = selectedAccount.account_number || '';
+                }
+                // 依所選帳戶自動帶入公司，否則送出時 company_name 為空，餘額不會扣款
+                if (selectedAccount.company_id != null && selectedAccount.company_id !== '') {
+                    document.getElementById('modalCompanyId').value = selectedAccount.company_id;
+                }
+                document.getElementById('modalCompanyName').value = selectedAccount.company_name || '';
+            } else {
+                document.getElementById('modalAccountName').value = '';
+                document.getElementById('modalCompanyName').value = '';
+            }
+        };
+
+        // 開啟新增模態框
+        window.openAddModal = function() {
+            console.log('📝 開啟新增記錄模態框，當前模式:', transactionMode);
+            
+            document.getElementById('recordId').value = '';
+            document.getElementById('modalTitle').textContent = '新增收支記錄';
+            document.getElementById('transactionForm').reset();
+            // 清空隱藏欄位
+            document.getElementById('modalCompanyName').value = '';
+            document.getElementById('modalAccountName').value = '';
+            // 預設日期為今天
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('modalTransactionDate').value = today;
+            
+            // 如果是僅支出模式，自動設定類型為支出
+            if (transactionMode === 'expense_only') {
+                console.log('  → 設定類型為「支出」');
+                setTimeout(() => {
+                    const modalType = document.getElementById('modalType');
+                    if (modalType) {
+                        modalType.value = 'expense';
+                        console.log('  ✓ 類型已設定為:', modalType.value);
+                        
+                        // 再次確認收入選項是否被隱藏
+                        const incomeOption = modalType.querySelector('option[value="income"]');
+                        const emptyOption = modalType.querySelector('option[value=""]');
+                        if (incomeOption && incomeOption.style.display !== 'none') {
+                            incomeOption.style.display = 'none';
+                            incomeOption.disabled = true;
+                            console.log('  ✓ 重新隱藏收入選項');
+                        }
+                        if (emptyOption && emptyOption.style.display !== 'none') {
+                            emptyOption.style.display = 'none';
+                            emptyOption.disabled = true;
+                            console.log('  ✓ 重新隱藏「請選擇」選項');
+                        }
+                    }
+                }, 100);
+            }
+            
+            document.getElementById('dataModal').style.display = 'block';
+            // 載入公司和帳戶列表
+            loadCompanies();
+            loadBankAccounts();
+        };
+
+        // 編輯記錄
+        window.editTransaction = function(id) {
+            fetch(`${API_BASE}/transactions/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    const record = data.data;
+                    document.getElementById('recordId').value = record.id;
+                    document.getElementById('modalTitle').textContent = '編輯收支記錄';
+                    document.getElementById('modalTransactionDate').value = record.transaction_date;
+                    document.getElementById('modalType').value = record.type;
+                    document.getElementById('modalAmount').value = record.amount;
+                    document.getElementById('modalCategory').value = record.category || '';
+                    document.getElementById('modalDescription').value = record.description || '';
+                    document.getElementById('modalRemarks').value = record.remarks || '';
+                    
+                    // 先載入公司和帳戶列表
+                    Promise.all([loadCompanies(), loadBankAccounts()]).then(() => {
+                        // 嘗試根據名稱匹配公司
+                        if (record.company_name) {
+                            const company = companiesList.find(c => c.name === record.company_name);
+                            if (company) {
+                                document.getElementById('modalCompanyId').value = company.id;
+                                // 重新載入該公司的帳戶
+                                loadBankAccounts(company.id).then(() => {
+                                    // 嘗試匹配帳戶
+                                    if (record.account_name) {
+                                        const account = bankAccountsList.find(a => a.account_name === record.account_name);
+                                        if (account) {
+                                            document.getElementById('modalAccountId').value = account.id;
+                                            onAccountChange();
+                                        } else {
+                                            // 如果找不到匹配的帳戶，使用隱藏欄位和手動輸入
+                                            document.getElementById('modalAccountName').value = record.account_name;
+                                            document.getElementById('modalAccountNumber').value = record.account_number || '';
+                                        }
+                                    } else {
+                                        document.getElementById('modalAccountNumber').value = record.account_number || '';
+                                    }
+                                });
+                            } else {
+                                // 如果找不到匹配的公司，使用隱藏欄位
+                                document.getElementById('modalCompanyName').value = record.company_name;
+                                document.getElementById('modalAccountName').value = record.account_name || '';
+                                document.getElementById('modalAccountNumber').value = record.account_number || '';
+                            }
+                        } else {
+                            document.getElementById('modalAccountNumber').value = record.account_number || '';
+                        }
+                    });
+                    
+                    document.getElementById('dataModal').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('載入記錄失敗', 'error');
+                });
+        };
+
+        // 關閉模態框
+        window.closeModal = function() {
+            document.getElementById('dataModal').style.display = 'none';
+        };
+
+        // 儲存記錄
+        window.saveTransaction = function(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('recordId').value;
+            // 從下拉選單或隱藏欄位取得公司和帳戶名稱
+            const companyId = document.getElementById('modalCompanyId').value;
+            let companyName = document.getElementById('modalCompanyName').value;
+            if (!companyName && companyId) {
+                const selectedCompany = companiesList.find(c => c.id == companyId);
+                companyName = selectedCompany ? selectedCompany.name : '';
+            }
+            
+            const accountId = document.getElementById('modalAccountId').value;
+            let accountName = document.getElementById('modalAccountName').value;
+            if (!accountName && accountId) {
+                const selectedAccount = bankAccountsList.find(a => a.id == accountId);
+                accountName = selectedAccount ? selectedAccount.account_name : '';
+            }
+            
+            const data = {
+                transaction_date: document.getElementById('modalTransactionDate').value,
+                type: document.getElementById('modalType').value,
+                amount: parseFloat(document.getElementById('modalAmount').value),
+                category: document.getElementById('modalCategory').value,
+                description: document.getElementById('modalDescription').value,
+                company_name: companyName,
+                account_name: accountName,
+                account_number: document.getElementById('modalAccountNumber').value,
+                remarks: document.getElementById('modalRemarks').value
+            };
+
+            const url = id ? `${API_BASE}/transactions/${id}` : `${API_BASE}/transactions`;
+            const method = id ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已儲存', 'success');
+                    closeModal();
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('儲存失敗', 'error');
+                });
+        };
+
+        // 刪除記錄
+        window.deleteTransaction = function(id) {
+            if (!confirm('確定要刪除此記錄嗎？')) {
+                return;
+            }
+
+            fetch(`${API_BASE}/transactions/${id}`, {
+                method: 'DELETE'
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已刪除', 'success');
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 載入收支記錄
+        function loadTransactions() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const type = document.getElementById('filterType').value;
+            const company = document.getElementById('filterCompany').value;
+            const account = document.getElementById('filterAccount').value;
+
+            let url = `${API_BASE}/transactions?limit=1000`;
+            if (startDate) url += `&startDate=${startDate}`;
+            if (endDate) url += `&endDate=${endDate}`;
+            if (type) url += `&type=${type}`;
+            if (company) url += `&company=${company}`;
+            if (account) url += `&account=${account}`;
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displayTransactions(data.data || []);
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                });
+        }
+
+        // 顯示收支記錄
+        function displayTransactions(transactions) {
+            const tbody = document.getElementById('transactionsTable');
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) selectAll.checked = false;
+            updateBatchDeleteState();
+
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #666;">尚無記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = transactions.map(t => `
+                <tr>
+                    <td><input type="checkbox" class="row-checkbox" value="${t.id}" data-id="${t.id}" onchange="updateBatchDeleteState()"></td>
+                    <td>${t.transaction_date}</td>
+                    <td><span class="type-${t.type}">${t.type === 'income' ? '💰 收入' : '💸 支出'}</span></td>
+                    <td class="amount-${t.type}">${formatCurrency(t.amount)}</td>
+                    <td>${t.category || '-'}</td>
+                    <td>${t.description || '-'}</td>
+                    <td>${t.company_name || '-'}</td>
+                    <td>${t.account_name || '-'}</td>
+                    <td>${t.remarks || '-'}</td>
+                    <td class="actions">
+                        <button class="btn btn-edit btn-sm" onclick="editTransaction(${t.id})">編輯</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id})">刪除</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 全選/取消全選
+        window.toggleSelectAll = function(checkbox) {
+            const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+            rowCheckboxes.forEach(cb => { cb.checked = !!checkbox.checked; });
+            updateBatchDeleteState();
+        };
+
+        // 取得已勾選的 id 陣列
+        function getSelectedIds() {
+            const checked = document.querySelectorAll('.row-checkbox:checked');
+            return Array.from(checked).map(cb => parseInt(cb.value, 10)).filter(id => !isNaN(id));
+        }
+
+        // 更新批次刪除按鈕狀態與數量（供全選與單筆勾選時呼叫）
+        window.updateBatchDeleteState = function() {
+            const ids = getSelectedIds();
+            const countEl = document.getElementById('selectedCount');
+            const btn = document.getElementById('batchDeleteBtn');
+            if (countEl) countEl.textContent = ids.length;
+            if (btn) btn.disabled = ids.length === 0;
+            const selectAll = document.getElementById('selectAll');
+            if (selectAll) {
+                const rowCheckboxes = document.querySelectorAll('.row-checkbox');
+                const allChecked = rowCheckboxes.length > 0 && ids.length === rowCheckboxes.length;
+                selectAll.checked = allChecked;
+            }
+        };
+
+        // 批次刪除
+        window.batchDelete = function() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) {
+                showMessage('請先勾選要刪除的記錄', 'error');
+                return;
+            }
+            if (!confirm(`確定要刪除已勾選的 ${ids.length} 筆記錄嗎？此操作無法復原。`)) {
+                return;
+            }
+            const btn = document.getElementById('batchDeleteBtn');
+            if (btn) btn.disabled = true;
+            fetch(`${API_BASE}/transactions/batch-delete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '批次刪除完成', 'success');
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch(err => {
+                    console.error('批次刪除錯誤:', err);
+                    showMessage('批次刪除失敗: ' + err.message, 'error');
+                })
+                .finally(() => { updateBatchDeleteState(); });
+        };
+
+        // 載入統計
+        function loadStatistics() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const company = document.getElementById('filterCompany').value;
+            const account = document.getElementById('filterAccount').value;
+
+            let url = `${API_BASE}/transactions/statistics`;
+            const params = [];
+            if (startDate) params.push(`startDate=${startDate}`);
+            if (endDate) params.push(`endDate=${endDate}`);
+            if (company) params.push(`company=${company}`);
+            if (account) params.push(`account=${account}`);
+            if (params.length > 0) url += '?' + params.join('&');
+
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        return;
+                    }
+                    const stats = {};
+                    (data.data || []).forEach(item => {
+                        stats[item.type] = parseFloat(item.total_amount) || 0;
+                    });
+                    const totalIncome = stats.income || 0;
+                    const totalExpense = stats.expense || 0;
+                    const netAmount = totalIncome - totalExpense;
+                    
+                    document.getElementById('totalIncome').textContent = formatCurrency(totalIncome);
+                    document.getElementById('totalExpense').textContent = formatCurrency(totalExpense);
+                    document.getElementById('netAmount').textContent = formatCurrency(netAmount);
+                })
+                .catch(err => {
+                    console.error('載入統計錯誤:', err);
+                });
+        }
+
+        // 清除篩選
+        function resetFilters() {
+            document.getElementById('filterStartDate').value = '';
+            document.getElementById('filterEndDate').value = '';
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterCompany').value = '';
+            document.getElementById('filterAccount').value = '';
+            loadTransactions();
+            loadStatistics();
+        }
+
+        // 格式化貨幣
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 下載匯入範本
+        window.downloadTemplate = function() {
+            const url = `${API_BASE}/transactions/template`;
+            showMessage('範本下載中...', 'success');
+            
+            fetch(url)
+                .then(res => {
+                    if (!res.ok) {
+                        throw new Error('下載失敗');
+                    }
+                    return res.blob();
+                })
+                .then(blob => {
+                    const link = document.createElement('a');
+                    const blobUrl = window.URL.createObjectURL(blob);
+                    link.href = blobUrl;
+                    link.download = '收支記錄匯入範本.xlsx';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    window.URL.revokeObjectURL(blobUrl);
+                    showMessage('範本下載完成', 'success');
+                })
+                .catch(err => {
+                    console.error('下載錯誤:', err);
+                    showMessage('下載失敗: ' + err.message, 'error');
+                });
+        };
+
+        // 匯出Excel
+        window.exportToExcel = function() {
+            const startDate = document.getElementById('filterStartDate').value;
+            const endDate = document.getElementById('filterEndDate').value;
+            const type = document.getElementById('filterType').value;
+            const company = document.getElementById('filterCompany').value;
+            const account = document.getElementById('filterAccount').value;
+
+            let url = `${API_BASE}/transactions/export?`;
+            const params = [];
+            if (startDate) params.push(`startDate=${encodeURIComponent(startDate)}`);
+            if (endDate) params.push(`endDate=${encodeURIComponent(endDate)}`);
+            if (type) params.push(`type=${encodeURIComponent(type)}`);
+            if (company) params.push(`company=${encodeURIComponent(company)}`);
+            if (account) params.push(`account=${encodeURIComponent(account)}`);
+            
+            url += params.join('&');
+
+            // 創建一個臨時的a標籤來觸發下載
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            showMessage('匯出中，請稍候...', 'success');
+        };
+
+        // 匯入Excel
+        window.importFromExcel = function(event) {
+            const file = event.target.files[0];
+            if (!file) {
+                return;
+            }
+
+            // 檢查檔案類型
+            if (!file.name.match(/\.(xlsx|xls)$/i)) {
+                showMessage('請選擇Excel檔案（.xlsx或.xls）', 'error');
+                event.target.value = '';
+                return;
+            }
+
+            if (!confirm(`確定要匯入檔案 "${file.name}" 嗎？\n\n注意：匯入的資料將會新增到資料庫中。`)) {
+                event.target.value = '';
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            showMessage('匯入中，請稍候...', 'success');
+
+            fetch(`${API_BASE}/transactions/import`, {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    
+                    let message = result.message || '匯入完成';
+                    if (result.errors && result.errors.length > 0) {
+                        message += '\n錯誤詳情：\n' + result.errors.slice(0, 10).join('\n');
+                        if (result.errors.length > 10) {
+                            message += `\n... 還有 ${result.errors.length - 10} 個錯誤`;
+                        }
+                        alert(message);
+                    } else {
+                        showMessage(message, 'success');
+                    }
+                    
+                    // 重新載入列表
+                    loadTransactions();
+                    loadStatistics();
+                    
+                    // 清空檔案選擇
+                    event.target.value = '';
+                })
+                .catch(err => {
+                    console.error('匯入錯誤:', err);
+                    showMessage('匯入失敗: ' + err.message, 'error');
+                    event.target.value = '';
+                });
+        };
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('dataModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        // 載入配置
+        async function loadConfig() {
+            try {
+                console.log('🔧 開始載入系統配置...');
+                const response = await fetch(`${API_BASE}/config`, {
+                    cache: 'no-cache',
+                    headers: {
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
+                const config = await response.json();
+                console.log('✅ 配置載入成功:', config);
+                
+                // 更新標題
+                if (config.title) {
+                    document.title = '收支記錄 - ' + config.title;
+                    const titleElement = document.getElementById('app-title');
+                    if (titleElement) {
+                        titleElement.textContent = '💰 ' + config.title;
+                    }
+                }
+                
+                // 根據交易模式配置顯示/隱藏收入功能
+                transactionMode = config.transaction_mode || 'full';
+                console.log('💰 交易模式:', transactionMode);
+                
+                if (transactionMode === 'expense_only') {
+                    console.log('🚫 啟用「僅支出」模式 - 開始隱藏收入相關元素');
+                    
+                    // 隱藏收入相關的元素
+                    const incomeStatCard = document.querySelector('.stat-card.income');
+                    const netStatCard = document.querySelector('.stat-card.net');
+                    const incomeFilterOption = document.querySelector('#filterType option[value="income"]');
+                    const incomeTypeOption = document.querySelector('#modalType option[value="income"]');
+                    const pleaseSelectOption = document.querySelector('#modalType option[value=""]');
+                    
+                    let hiddenCount = 0;
+                    
+                    if (incomeStatCard) {
+                        incomeStatCard.style.display = 'none';
+                        hiddenCount++;
+                        console.log('  ✓ 隱藏「總收入」卡片');
+                    }
+                    if (netStatCard) {
+                        netStatCard.style.display = 'none';
+                        hiddenCount++;
+                        console.log('  ✓ 隱藏「淨收支」卡片');
+                    }
+                    if (incomeFilterOption) {
+                        incomeFilterOption.style.display = 'none';
+                        incomeFilterOption.disabled = true;
+                        hiddenCount++;
+                        console.log('  ✓ 隱藏篩選器中的「收入」選項');
+                    }
+                    if (incomeTypeOption) {
+                        incomeTypeOption.style.display = 'none';
+                        incomeTypeOption.disabled = true;
+                        hiddenCount++;
+                        console.log('  ✓ 隱藏類型中的「收入」選項');
+                    }
+                    
+                    // 隱藏「請選擇」選項並設定預設值
+                    if (pleaseSelectOption) {
+                        pleaseSelectOption.style.display = 'none';
+                        pleaseSelectOption.disabled = true;
+                        hiddenCount++;
+                        console.log('  ✓ 隱藏「請選擇」選項');
+                    }
+                    
+                    const modalType = document.getElementById('modalType');
+                    if (modalType) {
+                        modalType.value = 'expense';
+                        console.log('  ✓ 設定預設類型為「支出」');
+                    }
+                    
+                    console.log(`✅ 「僅支出」模式配置完成！已隱藏 ${hiddenCount} 個元素`);
+                    
+                    // 顯示配置狀態
+                    const configStatus = document.getElementById('configStatus');
+                    const configModeText = document.getElementById('configModeText');
+                    if (configStatus && configModeText) {
+                        configStatus.style.display = 'block';
+                        configStatus.style.background = '#fff3cd';
+                        configStatus.style.color = '#856404';
+                        configModeText.textContent = '僅支出功能（收入功能已隱藏）';
+                    }
+                } else {
+                    console.log('ℹ️ 使用「完整功能」模式（收入 + 支出）');
+                    
+                    // 顯示配置狀態
+                    const configStatus = document.getElementById('configStatus');
+                    const configModeText = document.getElementById('configModeText');
+                    if (configStatus && configModeText) {
+                        configStatus.style.display = 'block';
+                        configModeText.textContent = '完整功能（收入 + 支出）';
+                    }
+                }
+                
+                return config;
+            } catch (error) {
+                console.error('❌ 載入配置失敗:', error);
+                console.error('請檢查：');
+                console.error('1. 伺服器是否正在運行');
+                console.error('2. API 端點 /api/config 是否可訪問');
+                console.error('3. .env 檔案中是否有 TRANSACTION_MODE 設定');
+                throw error;
+            }
+        }
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await checkAuth();
+            if (!authenticated) return;
+            await loadConfig();
+            loadTransactions();
+            loadStatistics();
+            loadCompanies();
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>操作日誌 - 資金週報系統</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        header h1 { font-size: 2.2em; margin-bottom: 10px; }
+        .nav-links { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        .nav-links a:hover { background: rgba(255, 255, 255, 0.3); transform: translateY(-2px); }
+        .content { padding: 30px; }
+        .filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+            align-items: flex-end;
+        }
+        .filters label { font-weight: bold; margin-right: 5px; }
+        .filters select { padding: 8px 12px; border-radius: 5px; }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
+        table { width: 100%; border-collapse: collapse; background: white; }
+        table th, table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        table th { background: #f8f9fa; font-weight: bold; color: #666; font-size: 0.85em; }
+        table tr:hover { background: #f8f9fa; }
+        .log-row-expand { cursor: pointer; }
+        .diff-section {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        .diff-section h4 { margin-bottom: 8px; font-size: 14px; color: #333; }
+        .diff-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .diff-table th { text-align: left; padding: 6px 10px; background: #e9ecef; width: 140px; }
+        .diff-table td { padding: 6px 10px; }
+        .diff-table .changed { background: #fff3cd !important; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .message { padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .message.error { background: #f8d7da; color: #721c24; }
+        .message.success { background: #d4edda; color: #155724; }
+        .badge-create { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-update { background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .badge-delete { background: #f8d7da; color: #721c24; padding: 4px 8px; border-radius: 4px; font-size: 12px; }
+        .entity-type { font-size: 0.9em; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📋 操作日誌</h1>
+            <p>檢視新增／修改／刪除記錄與前後差異</p>
+            <div class="nav-links">
+                <a href="/admin-dashboard.html">🎛️ 管理儀錶板</a>
+                <a href="/index.html">🏠 首頁</a>
+            </div>
+        </header>
+        <div class="content">
+            <div id="message"></div>
+            <div class="filters">
+                <div>
+                    <label>類型</label>
+                    <select id="filterEntity">
+                        <option value="">全部</option>
+                        <option value="transaction">收支記錄</option>
+                        <option value="company">公司</option>
+                        <option value="bank_account">銀行帳戶</option>
+                        <option value="settlement">結算</option>
+                        <option value="user">使用者</option>
+                    </select>
+                </div>
+                <div>
+                    <label>操作</label>
+                    <select id="filterAction">
+                        <option value="">全部</option>
+                        <option value="create">新增</option>
+                        <option value="update">修改</option>
+                        <option value="delete">刪除</option>
+                    </select>
+                </div>
+                <button class="btn" onclick="loadLogs()">🔄 重新整理</button>
+            </div>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>操作者</th>
+                            <th>操作</th>
+                            <th>對象</th>
+                            <th>摘要</th>
+                            <th>差異</th>
+                        </tr>
+                    </thead>
+                    <tbody id="logsTable">
+                        <tr><td colspan="6" class="loading">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <script>
+        const API_BASE = '/api';
+        async function checkAuth() {
+            try {
+                const res = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-cache' });
+                if (!res.ok) throw new Error('認證失敗');
+                const result = await res.json();
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                if (result.user.role !== 'admin') {
+                    alert('此頁面需要管理員權限');
+                    window.location.replace('/index.html');
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+        function formatDate(s) {
+            if (!s) return '-';
+            const d = new Date(s);
+            return d.toLocaleString('zh-TW');
+        }
+        function entityTypeLabel(t) {
+            const map = { transaction: '收支記錄', company: '公司', bank_account: '銀行帳戶', settlement: '結算', user: '使用者' };
+            return map[t] || t;
+        }
+        function actionLabel(a) {
+            const map = { create: '新增', update: '修改', delete: '刪除' };
+            return map[a] || a;
+        }
+        function buildDiffHtml(beforeData, afterData) {
+            if (!beforeData && !afterData) return '';
+            const keys = new Set([...(beforeData ? Object.keys(beforeData) : []), ...(afterData ? Object.keys(afterData) : [])]);
+            const skipKeys = ['created_at', 'updated_at', 'password_hash'];
+            const keyList = [...keys].filter(k => !skipKeys.includes(k)).sort();
+            let html = '<table class="diff-table"><thead><tr><th>欄位</th><th>修改前</th><th>修改後</th></tr></thead><tbody>';
+            keyList.forEach(k => {
+                const beforeVal = beforeData && beforeData[k] != null ? String(beforeData[k]) : '';
+                const afterVal = afterData && afterData[k] != null ? String(afterData[k]) : '';
+                const changed = beforeVal !== afterVal;
+                html += '<tr>';
+                html += '<th>' + k + '</th>';
+                html += '<td class="' + (changed ? 'changed' : '') + '">' + escapeHtml(beforeVal) + '</td>';
+                html += '<td class="' + (changed ? 'changed' : '') + '">' + escapeHtml(afterVal) + '</td>';
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+            return html;
+        }
+        function escapeHtml(str) {
+            if (str == null) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+        function loadLogs() {
+            const entity = document.getElementById('filterEntity').value;
+            const action = document.getElementById('filterAction').value;
+            let url = `${API_BASE}/admin/operation-logs?limit=200`;
+            if (entity) url += '&entity_type=' + encodeURIComponent(entity);
+            if (action) url += '&action=' + encodeURIComponent(action);
+            fetch(url, { credentials: 'include' })
+                .then(res => {
+                    if (res.ok) return res.json().then(result => ({ status: res.status, result }));
+                    return res.text().then(text => {
+                        try {
+                            const result = JSON.parse(text);
+                            return { status: res.status, result };
+                        } catch (_) {
+                            return { status: res.status, result: { error: '載入失敗', details: res.status + ' 伺服器回傳非 JSON' } };
+                        }
+                    });
+                })
+                .then(({ status, result }) => {
+                    if (result.error) {
+                        const msg = result.details ? result.error + '：' + result.details : result.error;
+                        document.getElementById('logsTable').innerHTML = '<tr><td colspan="6" style="color:red">' + escapeHtml(msg) + '</td></tr>';
+                        return;
+                    }
+                    const logs = result.data || [];
+                    if (logs.length === 0) {
+                        document.getElementById('logsTable').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#666">尚無操作日誌</td></tr>';
+                        return;
+                    }
+                    document.getElementById('logsTable').innerHTML = logs.map((log, idx) => {
+                        const hasDiff = log.action === 'update' && (log.before_data || log.after_data) || log.action === 'create' && log.after_data || log.action === 'delete' && log.before_data;
+                        const badgeClass = log.action === 'create' ? 'badge-create' : log.action === 'update' ? 'badge-update' : 'badge-delete';
+                        const diffHtml = hasDiff ? buildDiffHtml(log.before_data || null, log.after_data || null) : '';
+                        const expandId = 'expand-' + log.id + '-' + idx;
+                        return '<tr class="log-row-expand">' +
+                            '<td>' + formatDate(log.created_at) + '</td>' +
+                            '<td>' + escapeHtml(log.username || '-') + '</td>' +
+                            '<td><span class="' + badgeClass + '">' + actionLabel(log.action) + '</span></td>' +
+                            '<td><span class="entity-type">' + entityTypeLabel(log.entity_type) + '</span> #' + escapeHtml(log.entity_id || '') + '</td>' +
+                            '<td>' + escapeHtml(log.summary || '-') + '</td>' +
+                            '<td>' + (hasDiff ? '<button type="button" class="btn" style="padding:6px 12px;font-size:12px" onclick="toggleDiff(\'' + expandId + '\');event.stopPropagation()">顯示差異</button>' : '-') + '</td>' +
+                            '</tr>' +
+                            (hasDiff ? '<tr id="' + expandId + '" style="display:none"><td colspan="6"><div class="diff-section">' +
+                                '<h4>修改前後差異（變更欄位以黃底標註）</h4>' + diffHtml + '</div></td></tr>' : '');
+                    }).join('');
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('logsTable').innerHTML = '<tr><td colspan="6" style="color:red">載入失敗</td></tr>';
+                });
+        }
+        function toggleDiff(id) {
+            const row = document.getElementById(id);
+            if (!row) return;
+            const isHidden = row.style.display === 'none';
+            row.style.display = isHidden ? 'table-row' : 'none';
+            const btn = row.previousElementSibling.querySelector('button');
+            if (btn) btn.textContent = isHidden ? '隱藏差異' : '顯示差異';
+        }
+        window.onload = async function() {
+            const ok = await checkAuth();
+            if (ok) loadLogs();
+        };
+    </script>
+</body>
+</html>

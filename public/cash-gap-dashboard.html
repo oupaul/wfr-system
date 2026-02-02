@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資金缺口通報儀表板 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .summary-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .summary-card.warning {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        }
+
+        .summary-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        }
+
+        .summary-card h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .summary-card .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .data-source-note,
+        .reconcile-note {
+            font-size: 13px;
+            color: #666;
+            margin: 0 0 15px 0;
+            padding: 8px 0;
+        }
+        .reconcile-note { margin-top: 10px; }
+
+        .filters {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 15px;
+            align-items: flex-end;
+        }
+
+        .filter-group {
+            flex: 1;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .account-card {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            transition: all 0.3s;
+        }
+
+        .account-card.has-gap {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .account-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+
+        .account-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+
+        .account-title h3 {
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .account-title .subtitle {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .gap-badge {
+            background: #dc3545;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .no-gap-badge {
+            background: #28a745;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .account-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .detail-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+        }
+
+        .detail-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .detail-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .detail-value.positive {
+            color: #28a745;
+        }
+
+        .detail-value.negative {
+            color: #dc3545;
+        }
+
+        /* 手機版表格可左右滑動 */
+        .table-scroll-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            margin-top: 15px;
+        }
+        .by-date-table {
+            width: 100%;
+            min-width: 480px;
+            margin-top: 0;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .by-date-table th,
+        .by-date-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .by-date-table th {
+            background: #f0f0f0;
+            color: #333;
+            font-weight: bold;
+        }
+        .by-date-table tr:hover {
+            background: #f8f9fa;
+        }
+        .by-date-table .gap-cell {
+            font-weight: bold;
+        }
+        .by-date-table .gap-cell.has-gap {
+            color: #dc3545;
+        }
+        .summary-by-dates {
+            margin-top: 20px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .summary-by-dates table {
+            width: 100%;
+            min-width: 320px;
+            border-collapse: collapse;
+        }
+        .summary-by-dates th,
+        .summary-by-dates td {
+            padding: 10px 14px;
+            text-align: right;
+            border: 1px solid #ddd;
+        }
+        .summary-by-dates th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .summary-by-dates th:first-child {
+            text-align: left;
+        }
+        .summary-by-dates td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .detail-value.warning {
+            color: #ffc107;
+            font-size: 20px;
+        }
+
+        #nearestGapDate {
+            line-height: 1.4;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        @media (max-width: 768px) {
+            .account-details {
+                grid-template-columns: 1fr;
+            }
+            .filters {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚠️ 資金缺口通報儀表板</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <!-- 摘要卡片 -->
+            <div class="summary-cards" id="summaryCards">
+                <div class="summary-card">
+                    <h3>總餘額</h3>
+                    <div class="value" id="totalBalance">$0</div>
+                    <div style="font-size: 12px; margin-top: 5px; opacity: 0.9;" id="balanceDate"></div>
+                </div>
+                <div class="summary-card success">
+                    <h3>檢視方式</h3>
+                    <div class="value" style="font-size: 18px;">未來三個月</div>
+                    <div style="font-size: 12px; margin-top: 5px;">每個月 10 號、25 號</div>
+                </div>
+            </div>
+
+            <!-- 各日總缺口摘要表 -->
+            <div class="summary-by-dates" id="summaryByDatesSection" style="display: none;">
+                <h3 style="margin-bottom: 12px;">各日資金缺口總計</h3>
+                <table id="summaryByDatesTable">
+                    <thead><tr><th>日期</th><th>當日總缺口</th></tr></thead>
+                    <tbody id="summaryByDatesBody"></tbody>
+                </table>
+            </div>
+
+            <!-- 篩選條件 -->
+            <div class="filters">
+                <div class="filter-group">
+                    <label>顯示選項</label>
+                    <select id="filterType" onchange="filterAccounts()">
+                        <option value="all">全部帳戶</option>
+                        <option value="gap">僅顯示有缺口</option>
+                        <option value="safe">僅顯示安全</option>
+                    </select>
+                </div>
+                <div>
+                    <button class="btn" onclick="recalculateBalances().then(() => loadDashboard())">🔄 重新整理</button>
+                </div>
+            </div>
+
+            <!-- 說明 -->
+            <p class="data-source-note">以下顯示<strong>未來三個月的每個月 10 號、25 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
+
+            <!-- 帳戶列表 -->
+            <div id="accountsList">
+                <div class="loading">載入中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        // 檢查認證，未登入則導向登入頁（重啟服務後 session 失效會自動跳轉）
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' });
+                const result = await response.json();
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+        
+        let dashboardData = [];
+        let targetDates = [];
+        let summaryData = {};
+
+        // 格式化貨幣
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined) return '-';
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        // 格式化日期為 月/日
+        function formatDateShort(dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
+        }
+
+        // 格式化日期為 年/月/日
+        function formatDateFull(dateStr) {
+            const d = new Date(dateStr + 'T00:00:00');
+            return d.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+        }
+
+        // 進入頁面時自動重新計算所有銀行帳戶即時餘額，再載入儀表板
+        function recalculateBalances() {
+            return fetch(`${API_BASE}/bank-accounts/recalculate-balances`, { method: 'POST', credentials: 'include' })
+                .then(res => res.json())
+                .catch(() => ({}));
+        }
+
+        // 載入儀表板資料（未來三個月 10 號、25 號）
+        function loadDashboard() {
+            const loading = document.getElementById('accountsList');
+            loading.innerHTML = '<div class="loading">載入中...</div>';
+
+            fetch(`${API_BASE}/cash-gap-dashboard-by-dates`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    targetDates = data.targetDates || [];
+                    dashboardData = data.data || [];
+                    summaryData = data.summary || {};
+                    displaySummary(summaryData);
+                    displaySummaryByDates(targetDates, summaryData.totalGapByDate || {});
+                    displayAccounts(dashboardData);
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗: ' + err.message, 'error');
+                    loading.innerHTML = '<div class="error">載入失敗，請稍後再試</div>';
+                });
+        }
+
+        // 顯示摘要
+        function displaySummary(summary) {
+            document.getElementById('totalBalance').textContent = formatCurrency(summary.totalBalance || 0);
+            if (summary.currentDate) {
+                document.getElementById('balanceDate').textContent = '截至 ' + formatDateFull(summary.currentDate);
+            }
+        }
+
+        // 顯示各日總缺口摘要表
+        function displaySummaryByDates(dates, totalGapByDate) {
+            const section = document.getElementById('summaryByDatesSection');
+            const tbody = document.getElementById('summaryByDatesBody');
+            if (!dates || dates.length === 0) {
+                section.style.display = 'none';
+                return;
+            }
+            section.style.display = 'block';
+            tbody.innerHTML = dates.map(d => {
+                const gap = totalGapByDate[d] || 0;
+                return `<tr><td>${formatDateFull(d)}</td><td class="${gap > 0 ? 'gap-cell has-gap' : ''}">${formatCurrency(gap)}</td></tr>`;
+            }).join('');
+        }
+
+        // 顯示帳戶列表（含各日預計餘額與缺口）
+        function displayAccounts(accounts) {
+            const container = document.getElementById('accountsList');
+            const filterType = document.getElementById('filterType').value;
+
+            let filteredAccounts = accounts;
+            if (filterType === 'gap') {
+                filteredAccounts = accounts.filter(a => (a.by_date || []).some(d => d.gap > 0));
+            } else if (filterType === 'safe') {
+                filteredAccounts = accounts.filter(a => !(a.by_date || []).some(d => d.gap > 0));
+            }
+
+            if (filteredAccounts.length === 0) {
+                container.innerHTML = '<div class="loading">尚無帳戶資料或所有帳戶在檢視日期皆安全</div>';
+                return;
+            }
+
+            container.innerHTML = filteredAccounts.map(account => {
+                const byDate = account.by_date || [];
+                const hasAnyGap = byDate.some(d => d.gap > 0);
+                return `
+                <div class="account-card ${hasAnyGap ? 'has-gap' : ''}">
+                    <div class="account-header">
+                        <div class="account-title">
+                            <h3>${account.account_name || '未命名帳戶'}</h3>
+                            <div class="subtitle">
+                                ${account.company_name || ''} ${account.account_number ? '- ' + account.account_number : ''}
+                            </div>
+                        </div>
+                        ${hasAnyGap ? 
+                            `<div class="gap-badge">⚠️ 部分日期有資金缺口</div>` :
+                            `<div class="no-gap-badge">✓ 檢視期內資金充足</div>`
+                        }
+                    </div>
+                    <div class="account-details">
+                        <div class="detail-item">
+                            <div class="detail-label">期初餘額</div>
+                            <div class="detail-value">${formatCurrency(account.opening_balance != null ? account.opening_balance : 0)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">當前餘額</div>
+                            <div class="detail-value">${formatCurrency(account.current_balance)}</div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">安全水位</div>
+                            <div class="detail-value ${account.current_balance < account.safety_level ? 'negative' : ''}">${formatCurrency(account.safety_level)}</div>
+                        </div>
+                        ${account.last_settlement_date ? `
+                        <div class="detail-item">
+                            <div class="detail-label">上次結算日期</div>
+                            <div class="detail-value" style="font-size: 14px;">${account.last_settlement_date}</div>
+                        </div>
+                        ` : ''}
+                        ${(account.transaction_count != null) ? `
+                        <div class="detail-item">
+                            <div class="detail-label">參與計算交易筆數</div>
+                            <div class="detail-value" style="font-size: 14px;">${account.transaction_count}</div>
+                        </div>
+                        ` : ''}
+                    </div>
+                    ${byDate.length ? `
+                    <div class="table-scroll-wrapper">
+                        <table class="by-date-table">
+                            <thead><tr><th>日期</th><th>收入合計</th><th>支出合計</th><th>預計餘額</th><th>資金缺口</th></tr></thead>
+                            <tbody>
+                                ${byDate.map(d => `
+                                    <tr>
+                                        <td>${formatDateFull(d.date)}</td>
+                                        <td>${formatCurrency(d.income_sum != null ? d.income_sum : 0)}</td>
+                                        <td>${formatCurrency(d.expense_sum != null ? d.expense_sum : 0)}</td>
+                                        <td class="${d.projected_balance < account.safety_level ? 'detail-value warning' : ''}">${formatCurrency(d.projected_balance)}</td>
+                                        <td class="gap-cell ${d.gap > 0 ? 'has-gap' : ''}">${d.gap > 0 ? formatCurrency(d.gap) : '-'}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="reconcile-note">預計餘額 = 期初餘額 + 收入合計 − 支出合計。若與 Excel 不符，請確認：① 期初餘額是否在「結算」建立且與 Excel 一致 ② 公司／帳戶／帳號與匯入範本完全一致。</p>
+                    ` : ''}
+                </div>
+            `}).join('');
+        }
+
+        // 篩選帳戶
+        function filterAccounts() {
+            displayAccounts(dashboardData);
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 頁面載入時執行（先檢查登入 → 自動重新計算餘額 → 載入儀表板）
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await checkAuth();
+            if (!authenticated) return;
+            await recalculateBalances();
+            loadDashboard();
+        });
+    </script>
+</body>
+</html>
+

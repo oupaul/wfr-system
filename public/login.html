@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            padding: 40px;
+            width: 100%;
+            max-width: 450px;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            font-size: 2em;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .login-header p {
+            color: #666;
+            font-size: 0.95em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .error.show {
+            display: block;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success.show {
+            display: block;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .remember-me input[type="checkbox"] {
+            width: auto;
+        }
+
+        .remember-me label {
+            font-weight: normal;
+            margin: 0;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>💰 資金週報系統</h1>
+            <p>請登入以繼續</p>
+        </div>
+
+        <div id="error-message" class="error"></div>
+        <div id="success-message" class="success"></div>
+
+        <form id="loginForm" onsubmit="handleLogin(event)">
+            <div class="form-group">
+                <label for="username">使用者名稱</label>
+                <input type="text" id="username" name="username" required autofocus placeholder="輸入使用者名稱">
+            </div>
+
+            <div class="form-group">
+                <label for="password">密碼</label>
+                <input type="password" id="password" name="password" required placeholder="輸入密碼">
+            </div>
+
+            <div class="remember-me">
+                <input type="checkbox" id="rememberMe" name="rememberMe">
+                <label for="rememberMe">記住我</label>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="loginBtn">登入</button>
+        </form>
+
+        <div class="loading" id="loading">登入中...</div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            document.getElementById('success-message').classList.remove('show');
+        }
+
+        function showSuccess(message) {
+            const successDiv = document.getElementById('success-message');
+            successDiv.textContent = message;
+            successDiv.classList.add('show');
+            document.getElementById('error-message').classList.remove('show');
+        }
+
+        function hideMessages() {
+            document.getElementById('error-message').classList.remove('show');
+            document.getElementById('success-message').classList.remove('show');
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const rememberMe = document.getElementById('rememberMe').checked;
+            
+            if (!username || !password) {
+                showError('請輸入使用者名稱和密碼');
+                return;
+            }
+
+            const loginBtn = document.getElementById('loginBtn');
+            const loading = document.getElementById('loading');
+            
+            loginBtn.disabled = true;
+            loading.classList.add('show');
+            hideMessages();
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include', // 重要：包含 cookies
+                    body: JSON.stringify({
+                        username,
+                        password,
+                        rememberMe
+                    })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || '登入失敗');
+                }
+
+                if (result.success) {
+                    showSuccess('登入成功，正在跳轉...');
+                    // 等待稍長時間確保 session cookie 已設置
+                    setTimeout(() => {
+                        // 檢查是否有重定向參數
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const redirect = urlParams.get('redirect') || '/';
+                        // 強制重新載入頁面以確保 session 被正確讀取
+                        window.location.replace(redirect);
+                    }, 800);
+                } else {
+                    throw new Error(result.error || '登入失敗');
+                }
+            } catch (error) {
+                console.error('登入錯誤:', error);
+                showError(error.message || '登入失敗，請檢查使用者名稱和密碼');
+            } finally {
+                loginBtn.disabled = false;
+                loading.classList.remove('show');
+            }
+        }
+
+        // 檢查是否已登入
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include'
+                });
+                const result = await response.json();
+                
+                if (result.authenticated) {
+                    // 已登入，重定向到首頁
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const redirect = urlParams.get('redirect') || '/';
+                    window.location.href = redirect;
+                }
+            } catch (error) {
+                console.error('檢查認證狀態錯誤:', error);
+            }
+        }
+
+        // 頁面載入時檢查
+        window.onload = function() {
+            checkAuth();
+        };
+    </script>
+</body>
+</html>
+

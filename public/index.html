@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 50px 30px;
+        }
+
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .welcome-section h2 {
+            font-size: 2em;
+            color: #333;
+            margin-bottom: 15px;
+        }
+
+        .welcome-section p {
+            font-size: 1.1em;
+            color: #666;
+            line-height: 1.8;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 25px;
+            margin-top: 40px;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .feature-card.warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .feature-card.success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .feature-card.info {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .feature-card.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+        }
+
+        .feature-card h3 {
+            font-size: 1.4em;
+            margin-bottom: 10px;
+        }
+
+        .feature-card p {
+            font-size: 0.95em;
+            opacity: 0.9;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            header h1 {
+                font-size: 2em;
+            }
+            
+            .welcome-section h2 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="app-title">💰 資金週報系統</h1>
+            <p>財務資料查詢與分析平台</p>
+            <div class="nav-links" id="navLinks">
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+                <a href="/admin-dashboard.html" id="adminNavLink" style="display: none;">🎛️ 管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="welcome-section">
+                <h2>歡迎使用資金週報系統</h2>
+                <p>這是一個完整的財務管理平台，幫助您監控資金狀況、管理收支記錄，並進行餘額結算。</p>
+            </div>
+
+            <div class="features-grid">
+                <a href="/cash-gap-dashboard.html" class="feature-card warning">
+                    <div class="feature-icon">⚠️</div>
+                    <h3>資金缺口通報</h3>
+                    <p>即時監控各帳戶的資金狀況，預測未來資金缺口，並提供安全水位警告</p>
+                </a>
+
+                <a href="/transactions.html" class="feature-card success">
+                    <div class="feature-icon">💰</div>
+                    <h3>收支記錄管理</h3>
+                    <p>管理日常的收入與支出記錄，支援 Excel 匯出與匯入功能</p>
+                </a>
+
+                <a href="/settlement.html" class="feature-card info">
+                    <div class="feature-icon">✅</div>
+                    <h3>餘額結算確認</h3>
+                    <p>定期進行帳戶餘額結算與確認，自動計算收支差異</p>
+                </a>
+
+                <a href="/companies.html" class="feature-card primary">
+                    <div class="feature-icon">🏢</div>
+                    <h3>公司管理</h3>
+                    <p>管理公司基本資料，建立完整的組織架構</p>
+                </a>
+
+                <a href="/bank-accounts.html" class="feature-card primary">
+                    <div class="feature-icon">🏦</div>
+                    <h3>銀行帳戶管理</h3>
+                    <p>管理銀行帳戶資訊，設定安全水位與帳戶狀態</p>
+                </a>
+
+                <a href="/admin-dashboard.html" class="feature-card primary" id="adminDashboardCard" style="display: none;">
+                    <div class="feature-icon">🎛️</div>
+                    <h3>管理者儀表板</h3>
+                    <p>系統健康狀態、操作日誌、備份與還原等管理功能</p>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 檢查認證狀態
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include',
+                    cache: 'no-cache' // 確保不從緩存讀取
+                });
+                
+                if (!response.ok) {
+                    throw new Error('認證檢查失敗');
+                }
+                
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                if (result.user && result.user.role === 'admin') {
+                    const adminLink = document.getElementById('adminNavLink');
+                    if (adminLink) adminLink.style.display = '';
+                    const adminCard = document.getElementById('adminDashboardCard');
+                    if (adminCard) adminCard.style.display = 'block';
+                }
+                return true;
+            } catch (error) {
+                console.error('檢查認證錯誤:', error);
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+
+        // 載入應用配置（標題等）
+        async function loadConfig() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const result = await response.json();
+                if (result.title) {
+                    document.title = result.title;
+                    const titleElement = document.getElementById('app-title');
+                    if (titleElement) {
+                        titleElement.textContent = '💰 ' + result.title;
+                    }
+                }
+            } catch (error) {
+                console.error('載入配置失敗:', error);
+            }
+        }
+
+        // 頁面載入時執行
+        window.onload = async function() {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadConfig();
+            }
+        };
+    </script>
+</body>
+</html>

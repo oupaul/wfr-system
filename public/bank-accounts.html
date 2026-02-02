@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>銀行帳戶管理 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* 模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏦 銀行帳戶管理</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="page-header">
+                <h2>銀行帳戶資訊管理</h2>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="recalculateBalances()" id="recalcBtn">🔄 重新計算餘額</button>
+                    <button class="btn btn-primary" onclick="openAddModal()">➕ 新增帳戶</button>
+                </div>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">載入中...</div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>公司名稱</th>
+                            <th>帳戶名稱</th>
+                            <th>帳號</th>
+                            <th>銀行名稱</th>
+                            <th>分行名稱</th>
+                            <th>帳戶類型</th>
+                            <th>幣別</th>
+                            <th>即時餘額</th>
+                            <th>安全水位</th>
+                            <th>狀態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bankAccountsTable">
+                        <tr>
+                            <td colspan="12" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯模態框 -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增銀行帳戶</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="bankAccountForm" onsubmit="saveBankAccount(event)">
+                    <input type="hidden" id="recordId" value="">
+                    
+                    <div class="form-group">
+                        <label for="modalCompanyId">所屬公司</label>
+                        <select id="modalCompanyId">
+                            <option value="">請選擇公司</option>
+                        </select>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalAccountName">帳戶名稱 <span class="required">*</span></label>
+                            <input type="text" id="modalAccountName" required placeholder="例如：台新銀行活存">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalAccountNumber">帳號</label>
+                            <input type="text" id="modalAccountNumber" placeholder="銀行帳號">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalBankName">銀行名稱</label>
+                            <input type="text" id="modalBankName" placeholder="例如：台新銀行">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalBranchName">分行名稱</label>
+                            <input type="text" id="modalBranchName" placeholder="分行名稱">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalAccountType">帳戶類型</label>
+                            <select id="modalAccountType">
+                                <option value="">請選擇</option>
+                                <option value="活存">活存</option>
+                                <option value="定存">定存</option>
+                                <option value="支票">支票</option>
+                                <option value="外幣">外幣</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalCurrency">幣別</label>
+                            <select id="modalCurrency">
+                                <option value="TWD">新台幣 (TWD)</option>
+                                <option value="USD">美元 (USD)</option>
+                                <option value="EUR">歐元 (EUR)</option>
+                                <option value="CNY">人民幣 (CNY)</option>
+                                <option value="JPY">日圓 (JPY)</option>
+                                <option value="HKD">港幣 (HKD)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalSafetyLevel">安全水位</label>
+                            <input type="number" id="modalSafetyLevel" step="0.01" placeholder="設定最低餘額警戒線">
+                            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                                當帳戶餘額低於此金額時，系統會發出資金缺口警告
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalRemarks">備註</label>
+                        <textarea id="modalRemarks" placeholder="輸入備註說明..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="modalIsActive" checked>
+                            <label for="modalIsActive">啟用</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 檢查認證，未登入則導向登入頁（重啟服務後 session 失效會自動跳轉）
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' });
+                const result = await response.json();
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+
+        let companiesList = [];
+
+        // 格式化金額
+        function formatCurrency(value) {
+            if (value === null || value === undefined || value === '') return '-';
+            const num = parseFloat(value);
+            if (isNaN(num)) return '-';
+            
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(num);
+        }
+
+        // 載入公司列表
+        function loadCompanies(callback) {
+            fetch(`${API_BASE}/companies?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        if (callback) callback();
+                        return;
+                    }
+                    companiesList = data.data || [];
+                    const select = document.getElementById('modalCompanyId');
+                    select.innerHTML = '<option value="">請選擇公司</option>' +
+                        companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                    if (callback) callback();
+                })
+                .catch(err => {
+                    console.error('載入公司列表錯誤:', err);
+                    if (callback) callback();
+                });
+        }
+
+        // 開啟新增模態框
+        window.openAddModal = function() {
+            document.getElementById('recordId').value = '';
+            document.getElementById('modalTitle').textContent = '新增銀行帳戶';
+            document.getElementById('bankAccountForm').reset();
+            document.getElementById('modalIsActive').checked = true;
+            document.getElementById('modalCurrency').value = 'TWD';
+            document.getElementById('modalSafetyLevel').value = '';
+            loadCompanies();
+            document.getElementById('dataModal').style.display = 'block';
+        };
+
+        // 編輯記錄
+        window.editBankAccount = function(id) {
+            fetch(`${API_BASE}/bank-accounts/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    const record = data.data;
+                    // 先保存需要設置的值，確保轉換為字符串
+                    const companyId = record.company_id ? String(record.company_id) : '';
+                    
+                    // 先載入公司列表，然後在回調中設置值
+                    loadCompanies(function() {
+                        // 設置所有表單欄位
+                        document.getElementById('recordId').value = record.id;
+                        document.getElementById('modalTitle').textContent = '編輯銀行帳戶';
+                        
+                        // 確保公司選擇框的值被正確設置
+                        const companySelect = document.getElementById('modalCompanyId');
+                        if (companySelect) {
+                            // 直接設置值
+                            companySelect.value = companyId;
+                            // 如果設置失敗（可能是選項還沒完全生成），使用 requestAnimationFrame 再次嘗試
+                            if (companyId && companySelect.value !== companyId) {
+                                requestAnimationFrame(() => {
+                                    companySelect.value = companyId;
+                                });
+                            }
+                        }
+                        
+                        document.getElementById('modalAccountName').value = record.account_name || '';
+                        document.getElementById('modalAccountNumber').value = record.account_number || '';
+                        document.getElementById('modalBankName').value = record.bank_name || '';
+                        document.getElementById('modalBranchName').value = record.branch_name || '';
+                        document.getElementById('modalAccountType').value = record.account_type || '';
+                        document.getElementById('modalCurrency').value = record.currency || 'TWD';
+                        document.getElementById('modalSafetyLevel').value = record.safety_level || '';
+                        document.getElementById('modalRemarks').value = record.remarks || '';
+                        document.getElementById('modalIsActive').checked = record.is_active !== 0;
+                        
+                        // 顯示模態框
+                        document.getElementById('dataModal').style.display = 'block';
+                    });
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('載入記錄失敗', 'error');
+                });
+        };
+
+        // 關閉模態框
+        window.closeModal = function() {
+            document.getElementById('dataModal').style.display = 'none';
+        };
+
+        // 儲存記錄
+        window.saveBankAccount = function(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('recordId').value;
+            const companyId = document.getElementById('modalCompanyId').value;
+            const data = {
+                company_id: companyId ? parseInt(companyId) : null,
+                account_name: document.getElementById('modalAccountName').value,
+                account_number: document.getElementById('modalAccountNumber').value,
+                bank_name: document.getElementById('modalBankName').value,
+                branch_name: document.getElementById('modalBranchName').value,
+                account_type: document.getElementById('modalAccountType').value,
+                currency: document.getElementById('modalCurrency').value,
+                safety_level: document.getElementById('modalSafetyLevel').value ? parseFloat(document.getElementById('modalSafetyLevel').value) : 0,
+                remarks: document.getElementById('modalRemarks').value,
+                is_active: document.getElementById('modalIsActive').checked ? 1 : 0
+            };
+
+            const url = id ? `${API_BASE}/bank-accounts/${id}` : `${API_BASE}/bank-accounts`;
+            const method = id ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已儲存', 'success');
+                    closeModal();
+                    loadBankAccounts();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('儲存失敗', 'error');
+                });
+        };
+
+        // 刪除記錄
+        window.deleteBankAccount = function(id) {
+            if (!confirm('確定要刪除此銀行帳戶嗎？')) {
+                return;
+            }
+
+            fetch(`${API_BASE}/bank-accounts/${id}`, {
+                method: 'DELETE'
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已刪除', 'success');
+                    loadBankAccounts();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 重新計算所有帳戶即時餘額（依結算+交易重算）
+        window.recalculateBalances = function() {
+            const btn = document.getElementById('recalcBtn');
+            if (btn) btn.disabled = true;
+            fetch(`${API_BASE}/bank-accounts/recalculate-balances`, { method: 'POST' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '餘額已重新計算', 'success');
+                    loadBankAccounts();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('重新計算失敗', 'error');
+                })
+                .finally(() => { if (btn) btn.disabled = false; });
+        };
+
+        // 載入銀行帳戶列表
+        function loadBankAccounts() {
+            const loading = document.getElementById('loading');
+            const tbody = document.getElementById('bankAccountsTable');
+            
+            loading.style.display = 'block';
+
+            fetch(`${API_BASE}/bank-accounts`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displayBankAccounts(data.data || []);
+                    loading.style.display = 'none';
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                    loading.style.display = 'none';
+                });
+        }
+
+        // 顯示銀行帳戶列表
+        function displayBankAccounts(accounts) {
+            const tbody = document.getElementById('bankAccountsTable');
+            
+            if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 40px; color: #666;">尚無銀行帳戶記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = accounts.map(a => {
+                const currentBalance = parseFloat(a.current_balance) || 0;
+                const safetyLevel = parseFloat(a.safety_level) || 0;
+                const isBelowSafety = safetyLevel > 0 && currentBalance < safetyLevel;
+                
+                return `
+                <tr>
+                    <td>${a.id}</td>
+                    <td>${a.company_name || '-'}</td>
+                    <td>${a.account_name || '-'}</td>
+                    <td>${a.account_number || '-'}</td>
+                    <td>${a.bank_name || '-'}</td>
+                    <td>${a.branch_name || '-'}</td>
+                    <td>${a.account_type || '-'}</td>
+                    <td>${a.currency || 'TWD'}</td>
+                    <td style="text-align: right; font-weight: bold; color: ${isBelowSafety ? '#dc3545' : '#28a745'}">
+                        ${formatCurrency(currentBalance)}
+                        ${isBelowSafety ? '<br><small style="color: #dc3545;">⚠️ 低於安全水位</small>' : ''}
+                    </td>
+                    <td style="text-align: right;">${safetyLevel > 0 ? formatCurrency(safetyLevel) : '-'}</td>
+                    <td><span class="${a.is_active ? 'status-active' : 'status-inactive'}">${a.is_active ? '啟用' : '停用'}</span></td>
+                    <td class="actions">
+                        <button class="btn btn-edit btn-sm" onclick="editBankAccount(${a.id})">編輯</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteBankAccount(${a.id})">刪除</button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('dataModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await checkAuth();
+            if (!authenticated) return;
+            loadCompanies();
+            loadBankAccounts();
+        });
+    </script>
+</body>
+</html>
+

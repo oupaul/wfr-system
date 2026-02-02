@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>備份管理 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .action-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+        }
+
+        table th, table td {
+            padding: 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+
+        table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #666;
+            text-transform: uppercase;
+            font-size: 0.85em;
+        }
+
+        table tr:hover {
+            background: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .message.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        @media (max-width: 768px) {
+            table {
+                font-size: 0.9em;
+            }
+            
+            table th, table td {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💾 備份管理</h1>
+            <p>資料庫備份與還原管理</p>
+            <div class="nav-links">
+                <a href="/admin-dashboard.html">🎛️ 管理儀錶板</a>
+                <a href="/index.html">🏠 首頁</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="action-bar">
+                <h2>備份檔案列表</h2>
+                <div>
+                    <button class="btn btn-success" onclick="createBackup()">➕ 立即備份</button>
+                    <button class="btn btn-primary" onclick="loadBackups()">🔄 重新整理</button>
+                </div>
+            </div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>檔案名稱</th>
+                            <th>來源</th>
+                            <th>大小</th>
+                            <th>建立時間</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="backupsTable">
+                        <tr>
+                            <td colspan="5" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 檢查認證和管理員權限
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include',
+                    cache: 'no-cache'
+                });
+                
+                if (!response.ok) {
+                    throw new Error('認證檢查失敗');
+                }
+                
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                
+                if (result.user.role !== 'admin') {
+                    alert('此頁面需要管理員權限');
+                    window.location.replace('/index.html');
+                    return false;
+                }
+                
+                return true;
+            } catch (error) {
+                console.error('檢查認證錯誤:', error);
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.innerHTML = `<div class="message ${type}">${message}</div>`;
+            setTimeout(() => {
+                messageDiv.innerHTML = '';
+            }, 5000);
+        }
+
+        // 格式化日期
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            const date = new Date(dateString);
+            return date.toLocaleString('zh-TW');
+        }
+
+        // 載入備份列表
+        async function loadBackups() {
+            try {
+                const response = await fetch(`${API_BASE}/admin/backups`);
+                const result = await response.json();
+                
+                if (result.error) {
+                    showMessage(result.error, 'error');
+                    return;
+                }
+                
+                displayBackups(result.data || []);
+            } catch (error) {
+                console.error('載入備份列表失敗:', error);
+                showMessage('載入備份列表失敗', 'error');
+            }
+        }
+
+        // 顯示備份列表
+        function displayBackups(backups) {
+            const tbody = document.getElementById('backupsTable');
+            
+            if (backups.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px; color: #666;">尚無備份檔案</td></tr>';
+                return;
+            }
+
+            window._backupsList = backups;
+            tbody.innerHTML = backups.map((backup, index) => `
+                <tr>
+                    <td>${backup.filename}</td>
+                    <td><span style="padding: 5px 10px; border-radius: 5px; background: ${backup.source === 'system' ? '#d1ecf1' : '#f8f9fa'}; font-size: 0.9em;">${backup.source === 'system' ? '系統備份' : '本地備份'}</span></td>
+                    <td>${backup.size}</td>
+                    <td>${formatDate(backup.created)}</td>
+                    <td>
+                        <button class="btn btn-primary" style="padding: 8px 16px; font-size: 14px; margin-right: 8px;" data-index="${index}" onclick="downloadBackupByIndex(this.dataset.index)">下載</button>
+                        <button class="btn btn-primary" style="padding: 8px 16px; font-size: 14px;" data-index="${index}" onclick="restoreBackupByIndex(this.dataset.index)">還原</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function downloadBackupByIndex(index) {
+            const list = window._backupsList;
+            if (!list || !list[index]) return;
+            downloadBackup(list[index].filepath, list[index].filename);
+        }
+
+        async function downloadBackup(filepath, filename) {
+            try {
+                const response = await fetch(`${API_BASE}/admin/backup/download`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filepath })
+                });
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    showMessage(err.error || '下載失敗', 'error');
+                    return;
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename || 'backup.db';
+                a.click();
+                URL.revokeObjectURL(url);
+                showMessage('已開始下載：' + (filename || 'backup.db'), 'success');
+            } catch (error) {
+                console.error('下載備份失敗:', error);
+                showMessage('下載備份失敗', 'error');
+            }
+        }
+
+        // 創建備份
+        async function createBackup() {
+            if (!confirm('確定要立即建立備份嗎？')) {
+                return;
+            }
+
+            try {
+                showMessage('正在建立備份...', 'info');
+                const response = await fetch(`${API_BASE}/admin/backup`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    showMessage(result.error, 'error');
+                    return;
+                }
+                
+                showMessage(result.message || '備份建立成功', 'success');
+                loadBackups();
+            } catch (error) {
+                console.error('建立備份失敗:', error);
+                showMessage('建立備份失敗', 'error');
+            }
+        }
+
+        function restoreBackupByIndex(index) {
+            const list = window._backupsList;
+            if (!list || !list[index]) return;
+            restoreBackup(list[index].filepath, list[index].filename);
+        }
+
+        // 還原備份
+        async function restoreBackup(filepath, filename) {
+            if (!confirm(`確定要還原備份 "${filename}" 嗎？\n\n注意：這將覆蓋現有資料庫！`)) {
+                return;
+            }
+
+            try {
+                showMessage('正在還原備份...', 'info');
+                const response = await fetch(`${API_BASE}/admin/restore`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ filepath })
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    showMessage(result.error, 'error');
+                    return;
+                }
+                
+                showMessage(result.message || '備份還原成功，建議重新啟動伺服器', 'success');
+            } catch (error) {
+                console.error('還原備份失敗:', error);
+                showMessage('還原備份失敗', 'error');
+            }
+        }
+
+        // 頁面載入時執行
+        window.onload = async function() {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadBackups();
+            }
+        };
+    </script>
+</body>
+</html>

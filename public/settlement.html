@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>餘額結算 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .settlement-form {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+            background-color: white;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23333' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 35px;
+        }
+
+        .form-group select:hover {
+            border-color: #667eea;
+        }
+
+        .form-group select:disabled {
+            background-color: #f5f5f5;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .select-wrapper {
+            position: relative;
+        }
+
+        .select-wrapper::after {
+            content: '';
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            pointer-events: none;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .form-checkbox:hover {
+            background: #e9ecef;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
+
+        .form-checkbox label {
+            margin: 0;
+            cursor: pointer;
+            font-weight: normal;
+            color: #333;
+        }
+
+        .actual-balance-section {
+            display: none;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 2px solid #eee;
+        }
+
+        .actual-balance-section.show {
+            display: block;
+        }
+
+        .calculation-result {
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 25px;
+            margin-top: 20px;
+        }
+
+        .calculation-result h3 {
+            margin-bottom: 20px;
+            color: #667eea;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .calc-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .calc-row:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 1.1em;
+            margin-top: 10px;
+            padding-top: 20px;
+            border-top: 2px solid #333;
+        }
+
+        .calc-label {
+            color: #666;
+        }
+
+        .calc-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .calc-value.positive {
+            color: #28a745;
+        }
+
+        .calc-value.negative {
+            color: #dc3545;
+        }
+
+        .settlement-history {
+            margin-top: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        /* 編輯模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>✅ 餘額結算確認</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="page-header">
+                <h2>餘額結算確認</h2>
+            </div>
+
+            <div id="message"></div>
+
+            <!-- 結算表單 -->
+            <div class="settlement-form">
+                <h3 style="margin-bottom: 20px; color: #333;">結算資訊</h3>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="settlementDate">📅 結算日期 <span class="required">*</span></label>
+                        <input type="date" id="settlementDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="companyId">🏢 公司名稱 <span class="required">*</span></label>
+                        <div class="select-wrapper">
+                            <select id="companyId" required onchange="onCompanyChangeSettlement()">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <input type="hidden" id="companyName">
+                        <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                            選擇公司後，將自動載入該公司的帳戶列表
+                        </small>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="accountId">🏦 帳戶名稱 <span style="color: #666; font-weight: normal;">（選填）</span></label>
+                        <div class="select-wrapper">
+                            <select id="accountId" onchange="onAccountChangeSettlement()" disabled>
+                                <option value="">請先選擇公司</option>
+                            </select>
+                        </div>
+                        <input type="hidden" id="accountName">
+                        <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                            選擇帳戶後，帳號將自動帶入
+                        </small>
+                    </div>
+                    <div class="form-group">
+                        <label for="accountNumber">💳 帳號</label>
+                        <input type="text" id="accountNumber" placeholder="選擇帳戶後自動帶入，或手動輸入" readonly style="background-color: #f8f9fa;">
+                        <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                            從選取的帳戶自動帶入
+                        </small>
+                    </div>
+                </div>
+
+                <!-- 上一期結算資訊顯示區域 -->
+                <div id="previousSettlementInfo" style="display: none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">
+                    <h3 style="margin: 0 0 10px 0; color: #333; font-size: 16px;">📋 上一期結算資訊</h3>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; font-size: 14px;">
+                        <div>
+                            <span style="color: #666;">結算日期：</span>
+                            <span id="previousSettlementDate" style="font-weight: bold; color: #333;">-</span>
+                        </div>
+                        <div>
+                            <span style="color: #666;">期初餘額：</span>
+                            <span id="previousOpeningBalance" style="font-weight: bold; color: #333;">-</span>
+                        </div>
+                        <div>
+                            <span style="color: #666;">實際餘額：</span>
+                            <span id="previousActualBalance" style="font-weight: bold; color: #28a745;">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="text-align: right; margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <button class="btn btn-primary" onclick="calculateSettlement()" style="font-size: 16px; padding: 14px 32px;">
+                        📊 計算結算
+                    </button>
+                </div>
+            </div>
+
+            <!-- 計算結果 -->
+            <div id="calculationResult" style="display: none;">
+                <div class="calculation-result">
+                    <h3>結算計算結果</h3>
+                    <div id="calcContent"></div>
+                    
+                    <div style="margin-top: 30px;">
+                        <div class="form-checkbox" onclick="toggleInitialBalance()">
+                            <input type="checkbox" id="isInitialBalance" onchange="toggleInitialBalance()">
+                            <label for="isInitialBalance">這是期初餘額（需要手動輸入實際餘額）</label>
+                        </div>
+                        
+                        <div id="actualBalanceSection" class="actual-balance-section">
+                            <div class="form-group">
+                                <label for="actualBalance">實際餘額 <span class="required">*</span></label>
+                                <input type="number" id="actualBalance" step="0.01" placeholder="輸入實際餘額">
+                                <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                                    期初餘額請輸入實際的帳戶餘額
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 20px;">
+                            <label for="settlementRemarks">備註</label>
+                            <textarea id="settlementRemarks" placeholder="輸入備註說明..."></textarea>
+                        </div>
+                        <div style="text-align: right; margin-top: 20px;">
+                            <button class="btn btn-primary" onclick="saveSettlement()">💾 儲存結算記錄</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 結算歷史記錄 -->
+            <div class="settlement-history">
+                <h3 style="margin-bottom: 20px; color: #333;">結算歷史記錄</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>結算日期</th>
+                                <th>公司名稱</th>
+                                <th>帳戶</th>
+                                <th>期初餘額</th>
+                                <th>期間收入</th>
+                                <th>期間支出</th>
+                                <th>計算餘額</th>
+                                <th>實際餘額</th>
+                                <th>差異</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="settlementsTable">
+                            <tr>
+                                <td colspan="10" class="loading">載入中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 編輯結算記錄模態框 -->
+    <div id="editSettlementModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2>編輯結算記錄</h2>
+                <button class="close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="editSettlementForm" onsubmit="saveEditedSettlement(event)">
+                    <input type="hidden" id="editSettlementId">
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editSettlementDate">結算日期 <span class="required">*</span></label>
+                            <input type="date" id="editSettlementDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editCompanyName">公司名稱 <span class="required">*</span></label>
+                            <input type="text" id="editCompanyName" required readonly style="background-color: #f5f5f5;">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editAccountName">帳戶名稱</label>
+                            <input type="text" id="editAccountName" readonly style="background-color: #f5f5f5;">
+                        </div>
+                        <div class="form-group">
+                            <label for="editAccountNumber">帳號</label>
+                            <input type="text" id="editAccountNumber" readonly style="background-color: #f5f5f5;">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="editActualBalance">實際餘額 <span class="required">*</span></label>
+                            <input type="number" id="editActualBalance" step="0.01" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="editRemarks">備註</label>
+                            <input type="text" id="editRemarks">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        
+        let companiesListSettlement = [];
+        let bankAccountsListSettlement = [];
+        let currentUser = null;
+
+        // 載入公司列表
+        function loadCompaniesSettlement() {
+            return fetch(`${API_BASE}/companies?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('載入公司列表API錯誤:', data.error);
+                        return;
+                    }
+                    companiesListSettlement = data.data || [];
+                    const select = document.getElementById('companyId');
+                    if (select) {
+                        if (companiesListSettlement.length === 0) {
+                            select.innerHTML = '<option value="">尚無公司資料，請先至「公司管理」新增公司</option>';
+                        } else {
+                            select.innerHTML = '<option value="">請選擇公司</option>' +
+                                companiesListSettlement.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                        }
+                    } else {
+                        console.error('找不到companyId元素');
+                    }
+                })
+                .catch(err => {
+                    console.error('載入公司列表錯誤:', err);
+                });
+        }
+
+        // 載入銀行帳戶列表
+        function loadBankAccountsSettlement(companyId = null) {
+            let url = `${API_BASE}/bank-accounts?active=true`;
+            if (companyId) {
+                url += `&company_id=${companyId}`;
+            }
+            
+            return fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        console.error('載入銀行帳戶列表API錯誤:', data.error);
+                        return;
+                    }
+                    bankAccountsListSettlement = data.data || [];
+                    const select = document.getElementById('accountId');
+                    if (select) {
+                        if (bankAccountsListSettlement.length === 0) {
+                            select.innerHTML = '<option value="">尚無帳戶資料，請先至「銀行帳戶管理」新增帳戶</option>';
+                            select.disabled = false;
+                        } else {
+                            select.innerHTML = '<option value="">請選擇帳戶（選填）</option>' +
+                                bankAccountsListSettlement.map(a => `<option value="${a.id}">${a.account_name}${a.account_number ? ' - ' + a.account_number : ''}${a.company_name ? ' (' + a.company_name + ')' : ''}</option>`).join('');
+                            select.disabled = false;
+                        }
+                    } else {
+                        console.error('找不到accountId元素');
+                    }
+                })
+                .catch(err => {
+                    console.error('載入銀行帳戶列表錯誤:', err);
+                });
+        }
+
+        // 公司選擇變更時
+        window.onCompanyChangeSettlement = function() {
+            const companyId = document.getElementById('companyId').value;
+            const selectedCompany = companiesListSettlement.find(c => String(c.id) === String(companyId));
+            const accountSelect = document.getElementById('accountId');
+            
+            if (selectedCompany) {
+                document.getElementById('companyName').value = selectedCompany.name;
+                // 啟用帳戶選擇
+                if (accountSelect) {
+                    accountSelect.disabled = false;
+                    accountSelect.innerHTML = '<option value="">載入中...</option>';
+                }
+                // 載入該公司的帳戶列表
+                loadBankAccountsSettlement(companyId ? parseInt(companyId) : null).then(() => {
+                    // 帳戶列表載入完成後，立即載入上一期結算資訊（此時還沒有選擇帳戶，所以只會顯示公司的結算資訊）
+                    loadPreviousSettlement();
+                });
+            } else {
+                document.getElementById('companyName').value = '';
+                // 禁用帳戶選擇
+                if (accountSelect) {
+                    accountSelect.disabled = true;
+                    accountSelect.innerHTML = '<option value="">請先選擇公司</option>';
+                }
+            }
+            // 清空帳戶選擇
+            if (accountSelect) accountSelect.value = '';
+            document.getElementById('accountName').value = '';
+            document.getElementById('accountNumber').value = '';
+            // 清空上一期結算資訊顯示
+            clearPreviousSettlementInfo();
+        };
+
+        // 帳戶選擇變更時
+        window.onAccountChangeSettlement = function() {
+            const accountId = document.getElementById('accountId').value;
+            const selectedAccount = bankAccountsListSettlement.find(a => String(a.id) === String(accountId));
+            if (selectedAccount) {
+                document.getElementById('accountName').value = selectedAccount.account_name || '';
+                document.getElementById('accountNumber').value = selectedAccount.account_number || '';
+                // 立即載入上一期結算資訊（使用新的帳戶資訊）
+                loadPreviousSettlement();
+            } else {
+                document.getElementById('accountName').value = '';
+                document.getElementById('accountNumber').value = '';
+                // 清空帳戶資訊後，重新載入（只使用公司資訊）
+                loadPreviousSettlement();
+            }
+        };
+
+        // 載入上一期結算資訊
+        function loadPreviousSettlement() {
+            const companyName = document.getElementById('companyName').value;
+            const accountName = document.getElementById('accountName').value;
+            const accountNumber = document.getElementById('accountNumber').value;
+            const infoDiv = document.getElementById('previousSettlementInfo');
+
+            if (!companyName) {
+                clearPreviousSettlementInfo();
+                return;
+            }
+
+            // 構建查詢 URL，優先查詢匹配的帳戶結算記錄
+            let queryUrl = `${API_BASE}/settlements?company_name=${encodeURIComponent(companyName)}&limit=50&order=date_desc`;
+            
+            // 如果有帳戶資訊，同時傳遞帳戶名稱和帳號作為過濾條件
+            if (accountName) {
+                queryUrl += `&account_name=${encodeURIComponent(accountName)}`;
+            }
+            if (accountNumber) {
+                queryUrl += `&account_number=${encodeURIComponent(accountNumber)}`;
+            }
+            
+            fetch(queryUrl, {
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        clearPreviousSettlementInfo();
+                        return;
+                    }
+
+                    let lastSettlement = null;
+                    const settlements = data.data || [];
+
+                    if (settlements.length > 0) {
+                        // 如果有帳戶資訊，優先找完全匹配的帳戶結算記錄
+                        if (accountName || accountNumber) {
+                            lastSettlement = settlements.find(s => {
+                                const matchAccount = accountName ? (s.account_name === accountName) : true;
+                                const matchNumber = accountNumber ? (s.account_number === accountNumber) : true;
+                                return matchAccount && matchNumber;
+                            });
+                        }
+                        
+                        // 如果沒找到完全匹配的帳戶記錄，使用該公司最新的結算記錄
+                        if (!lastSettlement) {
+                            lastSettlement = settlements[0];
+                        }
+                    }
+
+                    if (lastSettlement) {
+                        displayPreviousSettlementInfo(lastSettlement);
+                    } else {
+                        clearPreviousSettlementInfo();
+                    }
+                })
+                .catch(err => {
+                    console.error('載入上一期結算資訊錯誤:', err);
+                    clearPreviousSettlementInfo();
+                });
+        }
+
+        // 顯示上一期結算資訊
+        function displayPreviousSettlementInfo(settlement) {
+            const infoDiv = document.getElementById('previousSettlementInfo');
+            const dateSpan = document.getElementById('previousSettlementDate');
+            const openingSpan = document.getElementById('previousOpeningBalance');
+            const actualSpan = document.getElementById('previousActualBalance');
+
+            if (infoDiv && dateSpan && openingSpan && actualSpan) {
+                dateSpan.textContent = settlement.settlement_date || '-';
+                openingSpan.textContent = formatCurrency(settlement.opening_balance || 0);
+                actualSpan.textContent = formatCurrency(settlement.actual_balance || 0);
+                infoDiv.style.display = 'block';
+            }
+        }
+
+        // 清空上一期結算資訊顯示
+        function clearPreviousSettlementInfo() {
+            const infoDiv = document.getElementById('previousSettlementInfo');
+            const dateSpan = document.getElementById('previousSettlementDate');
+            const openingSpan = document.getElementById('previousOpeningBalance');
+            const actualSpan = document.getElementById('previousActualBalance');
+
+            if (infoDiv) infoDiv.style.display = 'none';
+            if (dateSpan) dateSpan.textContent = '-';
+            if (openingSpan) openingSpan.textContent = '-';
+            if (actualSpan) actualSpan.textContent = '-';
+        }
+
+        // 計算結算
+        window.calculateSettlement = function() {
+            const settlementDate = document.getElementById('settlementDate').value;
+            const companyName = document.getElementById('companyName').value;
+            const accountName = document.getElementById('accountName').value;
+            const accountNumber = document.getElementById('accountNumber').value;
+
+            if (!settlementDate || !companyName) {
+                showMessage('請填寫結算日期和公司名稱', 'error');
+                return;
+            }
+
+            fetch(`${API_BASE}/settlements/calculate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settlement_date: settlementDate,
+                    company_name: companyName,
+                    account_name: accountName || null,
+                    account_number: accountNumber || null
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displayCalculation(data.data);
+                    document.getElementById('calculationResult').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('計算錯誤:', err);
+                    showMessage('計算失敗', 'error');
+                });
+        };
+
+        // 顯示計算結果
+        function displayCalculation(calcData) {
+            const content = document.getElementById('calcContent');
+            
+            // 儲存計算餘額到 data 屬性，方便後續使用
+            content.setAttribute('data-calculated-balance', calcData.calculated_balance);
+            
+            content.innerHTML = `
+                <div class="calc-row">
+                    <span class="calc-label">上一次結算日期：</span>
+                    <span class="calc-value">${calcData.previous_settlement_date || '無（首次結算）'}</span>
+                </div>
+                <div class="calc-row">
+                    <span class="calc-label">期初餘額：</span>
+                    <span class="calc-value">${formatCurrency(calcData.opening_balance)}</span>
+                </div>
+                <div class="calc-row">
+                    <span class="calc-label">期間總收入：</span>
+                    <span class="calc-value positive">+ ${formatCurrency(calcData.total_income)}</span>
+                </div>
+                <div class="calc-row">
+                    <span class="calc-label">期間總支出：</span>
+                    <span class="calc-value negative">- ${formatCurrency(calcData.total_expense)}</span>
+                </div>
+                <div class="calc-row">
+                    <span class="calc-label">計算餘額（期初 + 收入 - 支出）：</span>
+                    <span class="calc-value" id="calculatedBalanceValue">${formatCurrency(calcData.calculated_balance)}</span>
+                </div>
+                <div class="calc-row">
+                    <span class="calc-label">結算期間：</span>
+                    <span class="calc-value">${calcData.period_start} 至 ${calcData.period_end}</span>
+                </div>
+            `;
+            
+            // 重置期初餘額勾選狀態
+            document.getElementById('isInitialBalance').checked = false;
+            toggleInitialBalance();
+        }
+
+        // 切換期初餘額選項
+        window.toggleInitialBalance = function() {
+            const checkbox = document.getElementById('isInitialBalance');
+            const section = document.getElementById('actualBalanceSection');
+            const input = document.getElementById('actualBalance');
+            
+            if (checkbox.checked) {
+                section.classList.add('show');
+                input.required = true;
+            } else {
+                section.classList.remove('show');
+                input.required = false;
+                input.value = '';
+            }
+        };
+
+        // 儲存結算記錄
+        window.saveSettlement = function() {
+            const settlementDate = document.getElementById('settlementDate').value;
+            const companyName = document.getElementById('companyName').value;
+            const accountName = document.getElementById('accountName').value;
+            const accountNumber = document.getElementById('accountNumber').value;
+            const isInitialBalance = document.getElementById('isInitialBalance').checked;
+            const actualBalanceInput = document.getElementById('actualBalance').value;
+            const remarks = document.getElementById('settlementRemarks').value;
+
+            if (!settlementDate || !companyName) {
+                showMessage('請填寫結算日期和公司名稱', 'error');
+                return;
+            }
+
+            // 如果是期初餘額，必須輸入實際餘額
+            if (isInitialBalance && !actualBalanceInput) {
+                showMessage('期初餘額必須輸入實際餘額', 'error');
+                return;
+            }
+
+            // 如果不是期初餘額，使用計算餘額作為實際餘額
+            let actualBalance;
+            if (isInitialBalance) {
+                actualBalance = parseFloat(actualBalanceInput);
+            } else {
+                // 從計算結果的 data 屬性中取得計算餘額
+                const calcContent = document.getElementById('calcContent');
+                const calculatedBalance = parseFloat(calcContent.getAttribute('data-calculated-balance')) || 0;
+                actualBalance = calculatedBalance;
+            }
+
+            fetch(`${API_BASE}/settlements`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    settlement_date: settlementDate,
+                    company_name: companyName,
+                    account_name: accountName || null,
+                    account_number: accountNumber || null,
+                    actual_balance: actualBalance,
+                    remarks: remarks || null
+                })
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '結算記錄已儲存', 'success');
+                    document.getElementById('calculationResult').style.display = 'none';
+                    document.getElementById('isInitialBalance').checked = false;
+                    document.getElementById('actualBalance').value = '';
+                    document.getElementById('settlementRemarks').value = '';
+                    toggleInitialBalance(); // 重置顯示狀態
+                    loadSettlements();
+                })
+                .catch(err => {
+                    console.error('儲存錯誤:', err);
+                    showMessage('儲存失敗', 'error');
+                });
+        };
+
+        // 載入結算記錄
+        function loadSettlements() {
+            fetch(`${API_BASE}/settlements?limit=100`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displaySettlements(data.data || []);
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                });
+        }
+
+        // 顯示結算記錄
+        function displaySettlements(settlements) {
+            const tbody = document.getElementById('settlementsTable');
+            
+            if (settlements.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #666;">尚無結算記錄</td></tr>';
+                return;
+            }
+
+            // 檢查是否為管理員
+            const isAdmin = currentUser && currentUser.role === 'admin';
+
+            tbody.innerHTML = settlements.map(s => `
+                <tr>
+                    <td>${s.settlement_date}</td>
+                    <td>${s.company_name || '-'}</td>
+                    <td>${s.account_name || '-'}</td>
+                    <td>${formatCurrency(s.opening_balance)}</td>
+                    <td class="positive">${formatCurrency(s.total_income)}</td>
+                    <td class="negative">${formatCurrency(s.total_expense)}</td>
+                    <td>${formatCurrency(s.calculated_balance)}</td>
+                    <td>${formatCurrency(s.actual_balance)}</td>
+                    <td class="${s.difference >= 0 ? 'positive' : 'negative'}">${formatCurrency(s.difference)}</td>
+                    <td>
+                        ${isAdmin ? `<button class="btn btn-edit btn-sm" onclick="editSettlement(${s.id})">編輯</button>` : ''}
+                        ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteSettlement(${s.id})">刪除</button>` : '<span style="color: #999;">-</span>'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // 編輯結算記錄
+        window.editSettlement = function(id) {
+            fetch(`${API_BASE}/settlements/${id}`, {
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    const settlement = data.data;
+                    
+                    // 填充表單
+                    document.getElementById('editSettlementId').value = settlement.id;
+                    document.getElementById('editSettlementDate').value = settlement.settlement_date || '';
+                    document.getElementById('editCompanyName').value = settlement.company_name || '';
+                    document.getElementById('editAccountName').value = settlement.account_name || '';
+                    document.getElementById('editAccountNumber').value = settlement.account_number || '';
+                    document.getElementById('editActualBalance').value = settlement.actual_balance || '';
+                    document.getElementById('editRemarks').value = settlement.remarks || '';
+                    
+                    // 顯示模態框
+                    document.getElementById('editSettlementModal').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('載入結算記錄錯誤:', err);
+                    showMessage('載入記錄失敗', 'error');
+                });
+        };
+
+        // 關閉編輯模態框
+        window.closeEditModal = function() {
+            document.getElementById('editSettlementModal').style.display = 'none';
+            document.getElementById('editSettlementForm').reset();
+        };
+
+        // 儲存編輯的結算記錄
+        window.saveEditedSettlement = function(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('editSettlementId').value;
+            const settlementDate = document.getElementById('editSettlementDate').value;
+            const companyName = document.getElementById('editCompanyName').value;
+            const accountName = document.getElementById('editAccountName').value;
+            const accountNumber = document.getElementById('editAccountNumber').value;
+            const actualBalance = document.getElementById('editActualBalance').value;
+            const remarks = document.getElementById('editRemarks').value;
+
+            if (!settlementDate || !companyName || !actualBalance) {
+                showMessage('請填寫必填欄位', 'error');
+                return;
+            }
+
+            fetch(`${API_BASE}/settlements/${id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    settlement_date: settlementDate,
+                    company_name: companyName,
+                    account_name: accountName || null,
+                    account_number: accountNumber || null,
+                    actual_balance: parseFloat(actualBalance),
+                    remarks: remarks || null
+                })
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '結算記錄已更新', 'success');
+                    closeEditModal();
+                    loadSettlements();
+                })
+                .catch(err => {
+                    console.error('更新錯誤:', err);
+                    showMessage('更新失敗', 'error');
+                });
+        };
+
+        // 刪除結算記錄
+        window.deleteSettlement = function(id) {
+            if (!confirm('確定要刪除此結算記錄嗎？')) {
+                return;
+            }
+
+            fetch(`${API_BASE}/settlements/${id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已刪除', 'success');
+                    loadSettlements();
+                })
+                .catch(err => {
+                    console.error('刪除錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 格式化貨幣
+        function formatCurrency(amount) {
+            if (amount === null || amount === undefined) return '-';
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(amount);
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 檢查認證狀態並獲取用戶資訊
+        async function checkAuthAndLoadUser() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include'
+                });
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return false;
+                }
+
+                currentUser = result.user;
+                return true;
+            } catch (error) {
+                console.error('檢查認證錯誤:', error);
+                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+        }
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await checkAuthAndLoadUser();
+            if (!authenticated) return;
+
+            // 預設日期為今天
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('settlementDate').value = today;
+            // 載入公司列表（初始不載入帳戶，等選擇公司後再載入）
+            loadCompaniesSettlement().then(() => {
+                loadSettlements();
+            });
+        });
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('editSettlementModal');
+            if (event.target == modal) {
+                closeEditModal();
+            }
+        };
+    </script>
+</body>
+</html>
+

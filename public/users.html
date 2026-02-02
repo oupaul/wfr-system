@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>人員管理 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .user-info {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-info span {
+            font-size: 0.9em;
+        }
+
+        .user-info button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .user-info button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* 模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .form-group small {
+            display: block;
+            margin-top: 5px;
+            color: #666;
+            font-size: 12px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .role-admin {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .role-user {
+            color: #28a745;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .user-info {
+                position: static;
+                margin-top: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>👥 人員管理</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="page-header">
+                <h2>使用者帳號管理</h2>
+                <button class="btn btn-primary" onclick="openAddModal()">➕ 新增使用者</button>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">載入中...</div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>使用者名稱</th>
+                            <th>姓名</th>
+                            <th>電子郵件</th>
+                            <th>角色</th>
+                            <th>狀態</th>
+                            <th>最後登入</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usersTable">
+                        <tr>
+                            <td colspan="8" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯模態框 -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增使用者</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="userForm" onsubmit="saveUser(event)">
+                    <input type="hidden" id="recordId" value="">
+                    
+                    <div class="form-group">
+                        <label for="modalUsername">使用者名稱 <span class="required">*</span></label>
+                        <input type="text" id="modalUsername" required placeholder="輸入使用者名稱" autocomplete="username">
+                        <small>用於登入的使用者名稱，不可重複</small>
+                    </div>
+
+                    <div class="form-group" id="passwordGroup">
+                        <label for="modalPassword">密碼 <span class="required" id="passwordRequired">*</span></label>
+                        <input type="password" id="modalPassword" placeholder="輸入密碼" autocomplete="new-password">
+                        <small id="passwordHint">至少 6 個字元</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalFullName">姓名</label>
+                        <input type="text" id="modalFullName" placeholder="輸入完整姓名">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalEmail">電子郵件</label>
+                        <input type="email" id="modalEmail" placeholder="輸入電子郵件">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalRole">角色</label>
+                        <select id="modalRole">
+                            <option value="user">一般使用者</option>
+                            <option value="admin">系統管理員</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="modalIsActive" checked>
+                            <label for="modalIsActive">啟用</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 檢查認證狀態
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, {
+                    credentials: 'include'
+                });
+                const result = await response.json();
+                
+                if (!result.authenticated) {
+                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                    return false;
+                }
+
+                // 顯示當前使用者資訊
+                if (result.user) {
+                    document.getElementById('currentUser').textContent = 
+                        `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
+                }
+
+                return true;
+            } catch (error) {
+                console.error('檢查認證錯誤:', error);
+                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
+                return false;
+            }
+        }
+
+        // 登出
+        async function handleLogout() {
+            if (!confirm('確定要登出嗎？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/logout`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('登出錯誤:', error);
+                window.location.href = '/login.html';
+            }
+        }
+
+        // 開啟新增模態框
+        window.openAddModal = function() {
+            document.getElementById('recordId').value = '';
+            document.getElementById('modalTitle').textContent = '新增使用者';
+            document.getElementById('userForm').reset();
+            document.getElementById('modalIsActive').checked = true;
+            document.getElementById('modalRole').value = 'user';
+            document.getElementById('passwordGroup').style.display = 'block';
+            document.getElementById('passwordRequired').style.display = 'inline';
+            document.getElementById('modalPassword').required = true;
+            document.getElementById('dataModal').style.display = 'block';
+        };
+
+        // 編輯記錄
+        window.editUser = function(id) {
+            fetch(`${API_BASE}/users/${id}`, {
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    const record = data.data;
+                    
+                    document.getElementById('recordId').value = record.id;
+                    document.getElementById('modalTitle').textContent = '編輯使用者';
+                    document.getElementById('modalUsername').value = record.username || '';
+                    document.getElementById('modalFullName').value = record.full_name || '';
+                    document.getElementById('modalEmail').value = record.email || '';
+                    document.getElementById('modalRole').value = record.role || 'user';
+                    document.getElementById('modalIsActive').checked = record.is_active !== 0;
+                    
+                    // 編輯時密碼為選填
+                    document.getElementById('passwordGroup').style.display = 'block';
+                    document.getElementById('passwordRequired').style.display = 'none';
+                    document.getElementById('modalPassword').required = false;
+                    document.getElementById('modalPassword').value = '';
+                    document.getElementById('passwordHint').textContent = '留空則不修改密碼';
+                    
+                    document.getElementById('dataModal').style.display = 'block';
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('載入記錄失敗', 'error');
+                });
+        };
+
+        // 關閉模態框
+        window.closeModal = function() {
+            document.getElementById('dataModal').style.display = 'none';
+        };
+
+        // 儲存記錄
+        window.saveUser = function(event) {
+            event.preventDefault();
+            
+            const id = document.getElementById('recordId').value;
+            const username = document.getElementById('modalUsername').value.trim();
+            const password = document.getElementById('modalPassword').value;
+            const fullName = document.getElementById('modalFullName').value.trim();
+            const email = document.getElementById('modalEmail').value.trim();
+            const role = document.getElementById('modalRole').value;
+            const isActive = document.getElementById('modalIsActive').checked ? 1 : 0;
+
+            if (!username) {
+                showMessage('請輸入使用者名稱', 'error');
+                return;
+            }
+
+            const data = {
+                username,
+                full_name: fullName || null,
+                email: email || null,
+                role,
+                is_active: isActive
+            };
+
+            // 如果是新增或提供了密碼，則包含密碼
+            if (!id || password) {
+                if (!password && !id) {
+                    showMessage('請輸入密碼', 'error');
+                    return;
+                }
+                if (password && password.length < 6) {
+                    showMessage('密碼至少需要 6 個字元', 'error');
+                    return;
+                }
+                if (password) {
+                    data.password = password;
+                }
+            }
+
+            const url = id ? `${API_BASE}/users/${id}` : `${API_BASE}/users`;
+            const method = id ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已儲存', 'success');
+                    closeModal();
+                    loadUsers();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('儲存失敗', 'error');
+                });
+        };
+
+        // 刪除記錄
+        window.deleteUser = function(id) {
+            if (!confirm('確定要刪除此使用者嗎？')) {
+                return;
+            }
+
+            fetch(`${API_BASE}/users/${id}`, {
+                method: 'DELETE',
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已刪除', 'success');
+                    loadUsers();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 載入使用者列表
+        function loadUsers() {
+            const loading = document.getElementById('loading');
+            const tbody = document.getElementById('usersTable');
+            
+            loading.style.display = 'block';
+
+            fetch(`${API_BASE}/users`, {
+                credentials: 'include'
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displayUsers(data.data || []);
+                    loading.style.display = 'none';
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                    loading.style.display = 'none';
+                });
+        }
+
+        // 顯示使用者列表
+        function displayUsers(users) {
+            const tbody = document.getElementById('usersTable');
+            
+            if (users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px; color: #666;">尚無使用者記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(u => {
+                const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('zh-TW') : '從未登入';
+                return `
+                    <tr>
+                        <td>${u.id}</td>
+                        <td>${u.username || '-'}</td>
+                        <td>${u.full_name || '-'}</td>
+                        <td>${u.email || '-'}</td>
+                        <td><span class="${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? '管理員' : '一般使用者'}</span></td>
+                        <td><span class="${u.is_active ? 'status-active' : 'status-inactive'}">${u.is_active ? '啟用' : '停用'}</span></td>
+                        <td>${lastLogin}</td>
+                        <td class="actions">
+                            <button class="btn btn-edit btn-sm" onclick="editUser(${u.id})">編輯</button>
+                            <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">刪除</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const modal = document.getElementById('dataModal');
+            if (event.target == modal) {
+                closeModal();
+            }
+        }
+
+        // 頁面載入時執行
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await checkAuth();
+            if (authenticated) {
+                loadUsers();
+            }
+        });
+    </script>
+</body>
+</html>
+
