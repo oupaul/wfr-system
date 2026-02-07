@@ -11,7 +11,7 @@
 ## 📦 功能特色
 
 ### 當前版本（已上線功能）
-- 🔐 **登入與權限**：Session 認證、管理員／一般使用者角色
+- 🔐 **登入與權限**：Session 認證、管理員／一般使用者角色、全站登出按鈕（含手機版響應式版面）
 - ⚠️ **資金缺口儀表板**：即時監控各帳戶餘額、安全水位、預計支出與缺口預測
 - 💰 **收支記錄管理**：新增／修改／刪除、Excel 匯入與匯出、批次刪除
 - ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳
@@ -22,7 +22,7 @@
   - 系統健康狀態（運行時間、Node 版本、DB 狀態、記錄數）
   - 操作日誌（新增／修改／刪除前後差異、黃標註變更欄位）
   - 備份管理：列出備份、建立備份、還原、下載備份檔
-- 📊 Excel 收支匯入（支援民國年日期如 115/2/10）
+- 📊 Excel 收支匯入與匯出（支援民國年日期如 115/2/10；匯出為單一「金額」欄位）
 - 💾 SQLite 資料庫、RESTful API、現代化 Web 介面
 
 ### 規劃中功能
@@ -309,7 +309,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 ├── install.sh / uninstall.sh / backup.sh / restore.sh
 ├── server.js           # Express 主程式（含 API 與操作日誌）
 ├── package.json
-├── README.md / QUICK-START.md / SYSTEM-ROADMAP.md / FIX-INSTALL.md / SCRIPTS.md
+├── README.md / QUICK-START.md / SYSTEM-ROADMAP.md / FIX-INSTALL.md / SCRIPTS.md / CHANGELOG.md
 └── EXCEL-ANALYSIS.md / FRONTEND-ROADMAP.md
 ```
 

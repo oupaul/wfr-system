@@ -1455,10 +1455,7 @@ app.get('/api/transactions/export', (req, res) => {
             worksheet.columns = [
                 { header: '日期', key: 'date', width: 12 },
                 { header: '說明', key: 'description', width: 50 },
-                { header: '金額1', key: 'amount1', width: 15 },
-                { header: '金額2', key: 'amount2', width: 15 },
-                { header: '金額3', key: 'amount3', width: 15 },
-                { header: '金額4', key: 'amount4', width: 15 },
+                { header: '金額', key: 'amount', width: 15 },
                 { header: '類型', key: 'type', width: 10 },
                 { header: '類別', key: 'category', width: 20 },
                 { header: '公司名稱', key: 'company', width: 25 },
@@ -1493,10 +1490,7 @@ app.get('/api/transactions/export', (req, res) => {
                 const dataRow = worksheet.addRow({
                     date: toROCYear(row.transaction_date),
                     description: row.description || '',
-                    amount1: row.type === 'expense' ? -Math.abs(row.amount) : (row.type === 'income' ? Math.abs(row.amount) : ''),
-                    amount2: '',
-                    amount3: '',
-                    amount4: '',
+                    amount: row.type === 'expense' ? -Math.abs(row.amount) : (row.type === 'income' ? Math.abs(row.amount) : ''),
                     type: row.type === 'income' ? '收入' : '支出',
                     category: row.category || '',
                     company: row.company_name || '',
@@ -1506,7 +1500,7 @@ app.get('/api/transactions/export', (req, res) => {
                 });
 
                 // 設定金額欄位格式（負數用括號表示）
-                const amountCell = dataRow.getCell('amount1');
+                const amountCell = dataRow.getCell('amount');
                 if (amountCell.value !== '') {
                     if (row.type === 'expense') {
                         amountCell.numFmt = '#,##0_);(#,##0)'; // 負數用括號

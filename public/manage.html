@@ -57,6 +57,10 @@
         .nav-links a:hover {
             background: rgba(255, 255, 255, 0.3);
         }
+        .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
+        .user-info span { font-size: 0.9em; }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: rgba(255,255,255,0.2); color: white; cursor: pointer; transition: background 0.3s; }
+        .user-info button:hover { background: rgba(255,255,255,0.3); }
 
         .content {
             padding: 30px;
@@ -321,6 +325,11 @@
                 align-items: flex-start;
                 gap: 15px;
             }
+            .user-info {
+                position: static;
+                margin-top: 15px;
+                justify-content: center;
+            }
         }
     </style>
 </head>
@@ -336,6 +345,10 @@
                 <a href="/settlement.html">✅ 餘額結算</a>
                 <a href="/companies.html">🏢 公司管理</a>
                 <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
             </div>
         </header>
 
@@ -690,7 +703,38 @@
         }
 
         // 頁面載入時執行
-        window.onload = function() {
+        async function checkAuth() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' });
+                const result = await response.json();
+                if (!result.authenticated) {
+                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                    return false;
+                }
+                const currentUserEl = document.getElementById('currentUser');
+                if (currentUserEl && result.user) {
+                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
+                }
+                return true;
+            } catch (error) {
+                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
+                return false;
+            }
+        }
+        async function handleLogout() {
+            if (!confirm('確定要登出嗎？')) return;
+            try {
+                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
+                window.location.href = '/login.html';
+            } catch (error) {
+                console.error('登出錯誤:', error);
+                window.location.href = '/login.html';
+            }
+        }
+
+        window.onload = async function() {
+            const ok = await checkAuth();
+            if (!ok) return;
             loadConfig();
             loadRecords();
         };

@@ -4,6 +4,7 @@
 
 根目錄其他技術文件：
 - **README.md**：專案說明、安裝、使用、API 摘要、專案結構、配置、故障排除
+- **CHANGELOG.md**：版本更新紀錄
 - **QUICK-START.md**：快速開始、Excel 結構確認與匯入
 - **SYSTEM-ROADMAP.md**：系統開發路線圖與階段完成項目
 - **FIX-INSTALL.md**：安裝腳本故障排除（如換行符問題）
