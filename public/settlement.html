@@ -460,6 +460,7 @@
             }
         }
     </style>
+    <script src="/js/auth-common.js"></script>
 </head>
 <body>
     <div class="container">
@@ -1248,17 +1249,6 @@
                 console.error('檢查認證錯誤:', error);
                 window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
                 return false;
-            }
-        }
-
-        async function handleLogout() {
-            if (!confirm('確定要登出嗎？')) return;
-            try {
-                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('登出錯誤:', error);
-                window.location.href = '/login.html';
             }
         }
 

@@ -365,6 +365,7 @@
             }
         }
     </style>
+    <script src="/js/auth-common.js"></script>
 </head>
 <body>
     <div class="container">
@@ -524,36 +525,6 @@
 
     <script>
         const API_BASE = '/api';
-
-        // 檢查認證，未登入則導向登入頁（重啟服務後 session 失效會自動跳轉）
-        async function checkAuth() {
-            try {
-                const response = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' });
-                const result = await response.json();
-                if (!result.authenticated) {
-                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                    return false;
-                }
-                const currentUserEl = document.getElementById('currentUser');
-                if (currentUserEl && result.user) {
-                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
-                }
-                return true;
-            } catch (error) {
-                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                return false;
-            }
-        }
-        async function handleLogout() {
-            if (!confirm('確定要登出嗎？')) return;
-            try {
-                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('登出錯誤:', error);
-                window.location.href = '/login.html';
-            }
-        }
 
         let companiesList = [];
 

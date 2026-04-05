@@ -163,6 +163,7 @@
             }
         }
     </style>
+    <script src="/js/auth-common.js"></script>
 </head>
 <body>
     <div class="container">
@@ -265,49 +266,8 @@
 
         // 檢查認證和管理員權限
         async function checkAuth() {
-            try {
-                const response = await fetch(`${API_BASE}/auth/check`, {
-                    credentials: 'include',
-                    cache: 'no-cache'
-                });
-                
-                if (!response.ok) {
-                    throw new Error('認證檢查失敗');
-                }
-                
-                const result = await response.json();
-                
-                if (!result.authenticated) {
-                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                    return false;
-                }
-                
-                if (result.user.role !== 'admin') {
-                    alert('此頁面需要管理員權限');
-                    window.location.replace('/index.html');
-                    return false;
-                }
-                const currentUserEl = document.getElementById('currentUser');
-                if (currentUserEl && result.user) {
-                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (管理員)`;
-                }
-                return true;
-            } catch (error) {
-                console.error('檢查認證錯誤:', error);
-                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                return false;
-            }
-        }
-
-        async function handleLogout() {
-            if (!confirm('確定要登出嗎？')) return;
-            try {
-                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('登出錯誤:', error);
-                window.location.href = '/login.html';
-            }
+            const user = await window.checkAuth({ adminOnly: true });
+            return !!user;
         }
 
         // 格式化運行時間

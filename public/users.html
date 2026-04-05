@@ -387,6 +387,7 @@
             }
         }
     </style>
+    <script src="/js/auth-common.js"></script>
 </head>
 <body>
     <div class="container">
@@ -500,52 +501,6 @@
 
     <script>
         const API_BASE = '/api';
-
-        // 檢查認證狀態
-        async function checkAuth() {
-            try {
-                const response = await fetch(`${API_BASE}/auth/check`, {
-                    credentials: 'include'
-                });
-                const result = await response.json();
-                
-                if (!result.authenticated) {
-                    window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                    return false;
-                }
-
-                // 顯示當前使用者資訊
-                if (result.user) {
-                    document.getElementById('currentUser').textContent = 
-                        `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
-                }
-
-                return true;
-            } catch (error) {
-                console.error('檢查認證錯誤:', error);
-                window.location.href = '/login.html?redirect=' + encodeURIComponent(window.location.pathname);
-                return false;
-            }
-        }
-
-        // 登出
-        async function handleLogout() {
-            if (!confirm('確定要登出嗎？')) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/auth/logout`, {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-                
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('登出錯誤:', error);
-                window.location.href = '/login.html';
-            }
-        }
 
         // 開啟新增模態框
         window.openAddModal = function() {

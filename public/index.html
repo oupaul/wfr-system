@@ -189,6 +189,7 @@
             }
         }
     </style>
+    <script src="/js/auth-common.js"></script>
 </head>
 <body>
     <div class="container">
@@ -259,51 +260,17 @@
     <script>
         const API_BASE = '/api';
 
-        // 檢查認證狀態
+        // 檢查認證狀態（保留 admin 連結邏輯）
         async function checkAuth() {
-            try {
-                const response = await fetch(`${API_BASE}/auth/check`, {
-                    credentials: 'include',
-                    cache: 'no-cache' // 確保不從緩存讀取
-                });
-                
-                if (!response.ok) {
-                    throw new Error('認證檢查失敗');
-                }
-                
-                const result = await response.json();
-                
-                if (!result.authenticated) {
-                    window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                    return false;
-                }
-                const currentUserEl = document.getElementById('currentUser');
-                if (currentUserEl && result.user) {
-                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
-                }
-                if (result.user && result.user.role === 'admin') {
-                    const adminLink = document.getElementById('adminNavLink');
-                    if (adminLink) adminLink.style.display = '';
-                    const adminCard = document.getElementById('adminDashboardCard');
-                    if (adminCard) adminCard.style.display = 'block';
-                }
-                return true;
-            } catch (error) {
-                console.error('檢查認證錯誤:', error);
-                window.location.replace('/login.html?redirect=' + encodeURIComponent(window.location.pathname));
-                return false;
+            const user = await window.checkAuth();
+            if (!user) return false;
+            if (user.role === 'admin') {
+                const adminLink = document.getElementById('adminNavLink');
+                if (adminLink) adminLink.style.display = '';
+                const adminCard = document.getElementById('adminDashboardCard');
+                if (adminCard) adminCard.style.display = 'block';
             }
-        }
-
-        async function handleLogout() {
-            if (!confirm('確定要登出嗎？')) return;
-            try {
-                await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-                window.location.href = '/login.html';
-            } catch (error) {
-                console.error('登出錯誤:', error);
-                window.location.href = '/login.html';
-            }
+            return true;
         }
 
         // 載入應用配置（標題等）
