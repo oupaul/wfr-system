@@ -566,6 +566,12 @@
             flex: 1;
         }
 
+        .account-filter-item-number {
+            display: block;
+            font-size: 11px;
+            color: #94A3B8;
+        }
+
         .account-filter-group-label {
             font-size: 12px;
             font-weight: bold;
@@ -1044,7 +1050,10 @@
                 ${g.items.map(c => `
                     <div class="account-filter-item">
                         <input type="checkbox" id="acctFilter_${c.account_id}" checked onchange="onAccountFilterChange(${c.account_id}, this.checked)">
-                        <label for="acctFilter_${c.account_id}">${c.bank_name ? c.bank_name + ' ' : ''}${c.account_name || '未命名帳戶'}${c.account_type ? `（${c.account_type}）` : ''}</label>
+                        <label for="acctFilter_${c.account_id}">
+                            ${c.bank_name ? c.bank_name + ' ' : ''}${c.account_name || '未命名帳戶'}${c.account_type ? `（${c.account_type}）` : ''}
+                            ${c.account_number ? `<span class="account-filter-item-number">${c.account_number}</span>` : ''}
+                        </label>
                     </div>
                 `).join('')}
             `).join('');
