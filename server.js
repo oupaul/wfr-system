@@ -7,6 +7,7 @@ const logger = require('./utils/logger');
 const { db, initDatabase } = require('./database/db');
 const { OPERATION_LOGS_TABLE_SQL } = require('./utils/operationLog');
 const { requireAuth } = require('./middleware/auth');
+const { isConfigured: ssoConfigured, tenantId: entraTenantId, clientId: entraClientId } = require('./utils/entraAuth');
 
 // 載入環境變數（如果存在 .env 檔案）
 if (fs.existsSync('.env')) {
@@ -14,6 +15,9 @@ if (fs.existsSync('.env')) {
 }
 
 const app = express();
+// 部署在反向代理（nginx/Cloudflare）後方時，讓 Express 信任第一層代理的
+// X-Forwarded-* 標頭，否則 express-rate-limit 無法正確辨識來源 IP。
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const APP_TITLE = process.env.APP_TITLE || '資金週報系統';
 // 收入功能已重新開啟：固定為完整功能（收入 + 支出）。若需改回僅支出，改回下一行並設環境變數 TRANSACTION_MODE=expense_only
@@ -78,7 +82,10 @@ const adminRoutes = require('./routes/admin');
 app.get('/api/config', (req, res) => {
     res.json({
         title: APP_TITLE,
-        transaction_mode: TRANSACTION_MODE
+        transaction_mode: TRANSACTION_MODE,
+        sso: ssoConfigured()
+            ? { enabled: true, tenantId: entraTenantId(), clientId: entraClientId() }
+            : { enabled: false }
     });
 });
 

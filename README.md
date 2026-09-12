@@ -341,8 +341,25 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 - `DB_PATH`: 資料庫檔案路徑（若未設則使用 `database/fund_report.db`）
 - `BACKUP_PATH`: 備份目錄（可自訂；未設則使用部署路徑下 `backups/`）
 - `SESSION_SECRET`: Session 加密金鑰（建議生產環境自訂）
+- `ENTRA_TENANT_ID` / `ENTRA_CLIENT_ID`: M365 / Entra ID SSO 登入設定（選用，見下）
 
 安裝時會自動建立 `.env` 檔案，之後可手動編輯進行調整。
+
+### M365 / Entra ID SSO 登入（選用）
+
+在 `.env` 同時填入 `ENTRA_TENANT_ID` 和 `ENTRA_CLIENT_ID` 後重啟服務，登入頁會自動出現「使用 M365 登入」按鈕；兩者留空則完全不受影響，維持原本的帳號密碼登入。
+
+**運作方式：**
+- 前端用 MSAL.js（瀏覽器端，無需再存任何密鑰）走 Authorization Code + PKCE 流程取得 Entra ID token
+- 後端驗證 token 簽章與 issuer/audience，取出 email 後比對 `users` 表中**已存在且啟用中**的帳號
+- 找不到對應帳號會直接拒絕登入（403），**不會自動建立新帳號**——要開放某人用 M365 登入，必須先用「人員管理」頁面建立一個 `email` 欄位相符的帳號
+- 帳號密碼登入不受影響，可作為 SSO 無法使用時的備援
+
+**Entra ID App Registration 設定需求：**
+- 平台類型選 **單頁應用程式 (SPA)**
+- Redirect URI 設為 `https://你的網域/login.html`（例如 `https://cashflow.ai4ou.com/login.html`）
+- API 權限：`openid`、`profile`、`email`（Microsoft Graph 委派權限，通常免管理員同意）
+- Client ID 不是機密（SPA 公開用戶端本就設計成可以放在前端程式碼中），可以安心寫在 `.env` 裡
 
 **常駐服務說明：**
 - 安裝時可選擇配置 systemd 常駐服務

@@ -164,6 +164,45 @@
             margin: 0;
             cursor: pointer;
         }
+
+        .btn-sso {
+            background: white;
+            color: #1E293B;
+            border: 1px solid #E2E8F0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn-sso.show {
+            display: flex;
+        }
+
+        .btn-sso:hover {
+            background: #F8FAFC;
+        }
+
+        .sso-divider {
+            display: none;
+            align-items: center;
+            gap: 12px;
+            margin: 20px 0;
+            color: #64748B;
+            font-size: 13px;
+        }
+
+        .sso-divider.show {
+            display: flex;
+        }
+
+        .sso-divider::before,
+        .sso-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: #E2E8F0;
+        }
     </style>
 </head>
 <body>
@@ -175,6 +214,11 @@
 
         <div id="error-message" class="error"></div>
         <div id="success-message" class="success"></div>
+
+        <button type="button" class="btn btn-sso" id="ssoBtn" onclick="handleSsoLogin()">
+            <span>🔑</span><span>使用 M365 登入</span>
+        </button>
+        <div class="sso-divider" id="ssoDivider"><span>或</span></div>
 
         <form id="loginForm" onsubmit="handleLogin(event)">
             <div class="form-group">
@@ -200,6 +244,7 @@
 
     <script>
         const API_BASE = '/api';
+        let msalInstance = null;
 
         function showError(message) {
             const errorDiv = document.getElementById('error-message');
@@ -288,7 +333,7 @@
                     credentials: 'include'
                 });
                 const result = await response.json();
-                
+
                 if (result.authenticated) {
                     // 已登入，重定向到首頁
                     const urlParams = new URLSearchParams(window.location.search);
@@ -300,9 +345,89 @@
             }
         }
 
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => reject(new Error(`無法載入 ${src}`));
+                document.head.appendChild(script);
+            });
+        }
+
+        // 若後端有設定 M365 SSO（ENTRA_TENANT_ID / ENTRA_CLIENT_ID），才載入 MSAL.js 並顯示按鈕
+        async function initSso() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const config = await response.json();
+
+                if (!config.sso || !config.sso.enabled) return;
+
+                await loadScript('https://cdn.jsdelivr.net/npm/@azure/msal-browser@3/lib/msal-browser.min.js');
+
+                msalInstance = new msal.PublicClientApplication({
+                    auth: {
+                        clientId: config.sso.clientId,
+                        authority: `https://login.microsoftonline.com/${config.sso.tenantId}`,
+                        redirectUri: window.location.origin + '/login.html'
+                    },
+                    cache: {
+                        cacheLocation: 'sessionStorage'
+                    }
+                });
+                await msalInstance.initialize();
+
+                document.getElementById('ssoBtn').classList.add('show');
+                document.getElementById('ssoDivider').classList.add('show');
+            } catch (error) {
+                console.error('初始化 M365 SSO 失敗:', error);
+            }
+        }
+
+        async function handleSsoLogin() {
+            if (!msalInstance) return;
+
+            const ssoBtn = document.getElementById('ssoBtn');
+            const loading = document.getElementById('loading');
+            hideMessages();
+            ssoBtn.disabled = true;
+            loading.classList.add('show');
+
+            try {
+                const loginResult = await msalInstance.loginPopup({ scopes: ['openid', 'profile', 'email'] });
+
+                const response = await fetch(`${API_BASE}/auth/sso-login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ idToken: loginResult.idToken })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok || !result.success) {
+                    throw new Error(result.error || 'M365 登入失敗');
+                }
+
+                showSuccess('登入成功，正在跳轉...');
+                setTimeout(() => {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const redirect = urlParams.get('redirect') || '/';
+                    window.location.replace(redirect);
+                }, 800);
+            } catch (error) {
+                console.error('M365 登入錯誤:', error);
+                showError(error.message || 'M365 登入失敗');
+            } finally {
+                ssoBtn.disabled = false;
+                loading.classList.remove('show');
+            }
+        }
+
         // 頁面載入時檢查
         window.onload = function() {
             checkAuth();
+            initSso();
         };
     </script>
 </body>

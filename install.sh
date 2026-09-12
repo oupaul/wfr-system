@@ -436,6 +436,14 @@ DB_PATH=database/fund_report.db
 
 # 備份路徑（可為應用下 backups 或 /opt 下自訂目錄）
 BACKUP_PATH=$BACKUP_PATH
+
+# M365 / Entra ID SSO 登入（選用）：兩個值都填了才會啟用，
+# 登入頁才會出現「使用 M365 登入」按鈕。只允許 email 已存在於
+# users 表且啟用中的帳號登入，不會自動建立新帳號。
+# 需先在 Entra ID 建立 App Registration（平台選 SPA，Redirect URI
+# 設為 https://你的網域/login.html），Client ID 不是機密，可安心留在此檔。
+# ENTRA_TENANT_ID=
+# ENTRA_CLIENT_ID=
 EOF
 echo -e "${GREEN}✓ 環境配置檔案已建立${NC}"
 echo ""
