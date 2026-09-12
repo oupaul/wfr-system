@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Microsoft JhengHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #F8FAFC;
             min-height: 100vh;
             padding: 20px;
         }
@@ -28,8 +28,9 @@
         }
 
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
             padding: 30px;
             text-align: center;
             position: relative;
@@ -49,23 +50,23 @@
         }
 
         .nav-links a {
-            color: white;
+            color: #1E293B;
             text-decoration: none;
             padding: 10px 20px;
             border-radius: 5px;
-            background: rgba(255, 255, 255, 0.2);
+            background: #F8FAFC;
             transition: all 0.3s;
             font-size: 14px;
         }
 
         .nav-links a:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #F1F5F9;
             transform: translateY(-2px);
         }
         .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
         .user-info span { font-size: 0.9em; }
-        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: rgba(255,255,255,0.2); color: white; cursor: pointer; transition: background 0.3s; }
-        .user-info button:hover { background: rgba(255,255,255,0.3); }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: #F8FAFC; color: #1E293B; cursor: pointer; transition: background 0.3s; }
+        .user-info button:hover { background: #F1F5F9; }
 
         .content {
             padding: 30px;
@@ -79,25 +80,30 @@
         }
 
         .summary-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            color: #1E293B;
             padding: 25px;
             border-radius: 10px;
             text-align: center;
         }
 
-        .summary-card.warning {
-            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        .summary-card .value {
+            color: #F06000;
         }
 
-        .summary-card.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        .summary-card.warning .value {
+            color: #DC2626;
+        }
+
+        .summary-card.success .value {
+            color: #16A34A;
         }
 
         .summary-card h3 {
             font-size: 14px;
             margin-bottom: 10px;
-            opacity: 0.9;
+            color: #64748B;
         }
 
         .summary-card .value {
@@ -281,8 +287,8 @@
             border: 1px solid #ddd;
         }
         .summary-by-dates th {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #f8f9fa;
+            color: #333;
         }
         .summary-by-dates th:first-child {
             text-align: left;
@@ -323,13 +329,13 @@
             font-size: 14px;
             font-weight: bold;
             transition: all 0.3s;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #F06000;
             color: white;
         }
 
         .btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 5px 15px rgba(240, 96, 0, 0.35);
         }
 
         @media (max-width: 768px) {

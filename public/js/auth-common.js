@@ -131,7 +131,7 @@
                 </p>
                 <div style="display:flex; gap:12px; justify-content:center;">
                     <button id="auth-stay-btn" style="padding:10px 24px; border:none; border-radius:6px;
-                        background:linear-gradient(135deg,#667eea,#764ba2); color:#fff;
+                        background:#F06000; color:#fff;
                         font-size:15px; cursor:pointer; font-weight:bold;">繼續使用</button>
                     <button id="auth-logout-btn" style="padding:10px 24px; border:none; border-radius:6px;
                         background:#6c757d; color:#fff; font-size:15px; cursor:pointer;">立即登出</button>

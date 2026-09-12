@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Microsoft JhengHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #F8FAFC;
             min-height: 100vh;
             padding: 20px;
         }
@@ -28,8 +28,9 @@
         }
 
         header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
             padding: 40px 30px;
             text-align: center;
             position: relative;
@@ -42,7 +43,7 @@
 
         header p {
             font-size: 1.1em;
-            opacity: 0.9;
+            color: #64748B;
         }
 
         .nav-links {
@@ -54,17 +55,17 @@
         }
 
         .nav-links a {
-            color: white;
+            color: #1E293B;
             text-decoration: none;
             padding: 10px 20px;
             border-radius: 5px;
-            background: rgba(255, 255, 255, 0.2);
+            background: #F8FAFC;
             transition: all 0.3s;
             font-size: 14px;
         }
 
         .nav-links a:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #F1F5F9;
             transform: translateY(-2px);
         }
 
@@ -81,12 +82,12 @@
             padding: 6px 12px;
             border: none;
             border-radius: 5px;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
+            background: #F8FAFC;
+            color: #1E293B;
             cursor: pointer;
             transition: background 0.3s;
         }
-        .user-info button:hover { background: rgba(255, 255, 255, 0.3); }
+        .user-info button:hover { background: #F1F5F9; }
 
         .content {
             padding: 50px 30px;
@@ -117,40 +118,21 @@
         }
 
         .feature-card {
-            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-            border-radius: 15px;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 12px;
             padding: 30px;
             text-align: center;
-            transition: all 0.3s;
+            transition: all 0.2s;
             cursor: pointer;
             text-decoration: none;
-            color: inherit;
+            color: #1E293B;
             display: block;
         }
 
         .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .feature-card.warning {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-        }
-
-        .feature-card.success {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            color: white;
-        }
-
-        .feature-card.info {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-        }
-
-        .feature-card.primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            border-color: #F06000;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
         }
 
         .feature-icon {
@@ -161,11 +143,12 @@
         .feature-card h3 {
             font-size: 1.4em;
             margin-bottom: 10px;
+            color: #1E293B;
         }
 
         .feature-card p {
             font-size: 0.95em;
-            opacity: 0.9;
+            color: #64748B;
             line-height: 1.6;
         }
 
