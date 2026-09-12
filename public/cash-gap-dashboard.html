@@ -479,6 +479,100 @@
             color: #DC2626;
         }
 
+        .ledger-bank-name {
+            display: block;
+            font-weight: normal;
+            font-size: 11px;
+            color: #94A3B8;
+        }
+
+        /* 資金流水帳工具列：定存總額 + 帳戶篩選 */
+        .ledger-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .ledger-stat {
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 12px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .ledger-stat-label {
+            font-size: 13px;
+            color: #64748B;
+        }
+
+        .ledger-stat-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #F06000;
+        }
+
+        .account-filter {
+            position: relative;
+        }
+
+        .account-filter-panel {
+            position: absolute;
+            right: 0;
+            top: calc(100% + 6px);
+            z-index: 10;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+            padding: 12px;
+            min-width: 260px;
+            max-height: 320px;
+            overflow-y: auto;
+        }
+
+        .account-filter-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #E2E8F0;
+        }
+
+        .account-filter-actions button {
+            background: none;
+            border: none;
+            color: #F06000;
+            font-size: 13px;
+            cursor: pointer;
+            padding: 0;
+        }
+
+        .account-filter-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 0;
+            font-size: 13px;
+        }
+
+        .account-filter-item label {
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .account-filter-group-label {
+            font-size: 12px;
+            font-weight: bold;
+            color: #94A3B8;
+            margin-top: 8px;
+        }
+
         @media (max-width: 768px) {
             .account-details {
                 grid-template-columns: 1fr;
@@ -545,12 +639,12 @@
 
             <!-- 檢視方式頁籤 -->
             <div class="view-tabs">
-                <button type="button" class="view-tab active" id="tabCardView" onclick="switchView('card')">📇 帳戶卡片</button>
-                <button type="button" class="view-tab" id="tabLedgerView" onclick="switchView('ledger')">📋 資金流水帳</button>
+                <button type="button" class="view-tab active" id="tabLedgerView" onclick="switchView('ledger')">📋 資金流水帳</button>
+                <button type="button" class="view-tab" id="tabCardView" onclick="switchView('card')">📇 帳戶卡片</button>
             </div>
 
             <!-- 帳戶卡片檢視 -->
-            <div id="cardView">
+            <div id="cardView" style="display: none;">
                 <!-- 摘要卡片 -->
                 <div class="summary-cards" id="summaryCards">
                     <div class="summary-card">
@@ -599,8 +693,26 @@
             </div>
 
             <!-- 資金流水帳檢視 -->
-            <div id="ledgerView" style="display: none;">
+            <div id="ledgerView">
                 <p class="data-source-note">帳戶為欄、交易與結餘檢查點為列，黃底列為每月 15 號、30 號的結餘檢查點。</p>
+
+                <div class="ledger-toolbar">
+                    <div class="ledger-stat">
+                        <span class="ledger-stat-label">定存總額</span>
+                        <span class="ledger-stat-value" id="fixedDepositTotal">$0</span>
+                    </div>
+                    <div class="account-filter">
+                        <button type="button" class="btn" id="accountFilterBtn" onclick="toggleAccountFilterPanel()">🏦 顯示帳戶 ▾</button>
+                        <div class="account-filter-panel" id="accountFilterPanel" style="display: none;">
+                            <div class="account-filter-actions">
+                                <button type="button" onclick="selectAllAccounts(true)">全選</button>
+                                <button type="button" onclick="selectAllAccounts(false)">取消全選</button>
+                            </div>
+                            <div id="accountFilterList"></div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="table-scroll-wrapper" id="ledgerTableContainer">
                     <div class="loading">載入中...</div>
                 </div>
@@ -787,6 +899,10 @@
 
         // ==================== 資金流水帳檢視 ====================
         let ledgerLoaded = false;
+        let cardViewLoaded = false;
+        let ledgerColumns = [];
+        let ledgerRows = [];
+        let selectedAccountIds = null; // null 代表尚未初始化（預設全選）
 
         function switchView(view) {
             const isCard = view === 'card';
@@ -795,6 +911,10 @@
             document.getElementById('tabCardView').classList.toggle('active', isCard);
             document.getElementById('tabLedgerView').classList.toggle('active', !isCard);
 
+            if (isCard && !cardViewLoaded) {
+                cardViewLoaded = true;
+                loadDashboard();
+            }
             if (!isCard && !ledgerLoaded) {
                 loadLedger();
             }
@@ -812,7 +932,11 @@
                         return;
                     }
                     ledgerLoaded = true;
-                    displayLedger(data.columns || [], data.rows || []);
+                    ledgerColumns = data.columns || [];
+                    ledgerRows = data.rows || [];
+                    selectedAccountIds = new Set(ledgerColumns.map(c => c.account_id));
+                    buildAccountFilterPanel();
+                    renderLedger();
                 })
                 .catch(err => {
                     console.error('載入資金流水帳失敗:', err);
@@ -820,11 +944,72 @@
                 });
         }
 
+        // 依目前勾選的帳戶重新計算定存總額並畫表格
+        function renderLedger() {
+            const visibleColumns = ledgerColumns.filter(c => selectedAccountIds.has(c.account_id));
+
+            const fixedDepositTotal = visibleColumns
+                .filter(c => c.account_type === '定存')
+                .reduce((sum, c) => sum + (c.current_balance || 0), 0);
+            document.getElementById('fixedDepositTotal').textContent = formatCurrency(fixedDepositTotal);
+
+            displayLedger(visibleColumns, ledgerRows);
+        }
+
+        // 建立「顯示帳戶」多選選單內容
+        function buildAccountFilterPanel() {
+            const listEl = document.getElementById('accountFilterList');
+            const companyGroups = [];
+            ledgerColumns.forEach((col) => {
+                const last = companyGroups[companyGroups.length - 1];
+                if (last && last.company_name === (col.company_name || '')) {
+                    last.items.push(col);
+                } else {
+                    companyGroups.push({ company_name: col.company_name || '未分類', items: [col] });
+                }
+            });
+
+            listEl.innerHTML = companyGroups.map(g => `
+                <div class="account-filter-group-label">${g.company_name}</div>
+                ${g.items.map(c => `
+                    <div class="account-filter-item">
+                        <input type="checkbox" id="acctFilter_${c.account_id}" checked onchange="onAccountFilterChange(${c.account_id}, this.checked)">
+                        <label for="acctFilter_${c.account_id}">${c.bank_name ? c.bank_name + ' ' : ''}${c.account_name || '未命名帳戶'}</label>
+                    </div>
+                `).join('')}
+            `).join('');
+        }
+
+        function toggleAccountFilterPanel() {
+            const panel = document.getElementById('accountFilterPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        function onAccountFilterChange(accountId, checked) {
+            if (checked) selectedAccountIds.add(accountId);
+            else selectedAccountIds.delete(accountId);
+            renderLedger();
+        }
+
+        function selectAllAccounts(select) {
+            selectedAccountIds = select ? new Set(ledgerColumns.map(c => c.account_id)) : new Set();
+            document.querySelectorAll('#accountFilterList input[type="checkbox"]').forEach(cb => { cb.checked = select; });
+            renderLedger();
+        }
+
+        // 點擊選單外部時關閉篩選面板
+        document.addEventListener('click', (event) => {
+            const filterEl = document.querySelector('.account-filter');
+            if (filterEl && !filterEl.contains(event.target)) {
+                document.getElementById('accountFilterPanel').style.display = 'none';
+            }
+        });
+
         function displayLedger(columns, rows) {
             const container = document.getElementById('ledgerTableContainer');
 
             if (columns.length === 0) {
-                container.innerHTML = '<div class="loading">尚無啟用中的銀行帳戶</div>';
+                container.innerHTML = '<div class="loading">尚無啟用中的銀行帳戶，或已取消勾選所有帳戶</div>';
                 return;
             }
 
@@ -845,8 +1030,9 @@
 
             const accountHeaderRow = columns.map(c => {
                 const label = c.account_type ? `${c.account_name}（${c.account_type}）` : (c.account_name || '未命名帳戶');
+                const bankLine = c.bank_name ? `<span class="ledger-bank-name">${c.bank_name}</span>` : '';
                 const numberLine = c.account_number ? `<span class="ledger-account-number">${c.account_number}</span>` : '';
-                return `<th>${label}${numberLine}</th>`;
+                return `<th>${bankLine}${label}${numberLine}</th>`;
             }).join('');
 
             const bodyRows = rows.map((row) => {
@@ -913,12 +1099,12 @@
             }, 5000);
         }
 
-        // 頁面載入時執行（先檢查登入 → 自動重新計算餘額 → 載入儀表板）
+        // 頁面載入時執行（先檢查登入 → 自動重新計算餘額 → 載入預設頁籤「資金流水帳」）
         document.addEventListener('DOMContentLoaded', async function() {
             const authenticated = await checkAuth();
             if (!authenticated) return;
             await recalculateBalances();
-            loadDashboard();
+            loadLedger();
         });
     </script>
 </body>
