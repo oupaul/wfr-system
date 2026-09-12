@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const path = require('path');
 const fs = require('fs');
 const session = require('express-session');
@@ -25,19 +26,41 @@ const APP_TITLE = process.env.APP_TITLE || '資金週報系統';
 const TRANSACTION_MODE = 'full'; // 原: process.env.TRANSACTION_MODE || 'full'
 const SESSION_TIMEOUT = parseInt(process.env.SESSION_TIMEOUT) || 30 * 60 * 1000; // 預設 30 分鐘
 
+// ==================== 安全性標頭 ====================
+// 前端目前是傳統多頁 + 內嵌 <script> 架構（沒有導入建置流程與 CSP nonce），
+// 所以 script-src/style-src 仍允許 'unsafe-inline'；主要防護是擋掉點擊劫持
+// （frame-ancestors）、限制可連線/可嵌入的來源、以及 helmet 其餘的預設標頭
+// （X-Content-Type-Options、隱藏 X-Powered-By 等）。
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+            // 前端大量使用 onclick="..." 等內嵌事件屬性（非 <script> 標籤本身），
+            // CSP3 的 script-src-attr 是獨立於 script-src 的指令，helmet 預設為
+            // 'none'，若不明確覆寫會把全站的按鈕點擊都擋掉。
+            scriptSrcAttr: ["'unsafe-inline'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            imgSrc: ["'self'", 'data:'],
+            connectSrc: ["'self'"],
+            frameSrc: ['https://login.microsoftonline.com'],
+            objectSrc: ["'none'"],
+            baseUri: ["'self'"],
+            formAction: ["'self'"],
+            frameAncestors: ["'none'"]
+        }
+    },
+    crossOriginEmbedderPolicy: false
+}));
+
 // ==================== Session 持久化設定 ====================
-const SQLiteStore = require('connect-sqlite3')(session);
-const sessionStore = new SQLiteStore({
-    db: 'sessions.db',
-    dir: path.join(__dirname, 'database'),
-    table: 'sessions',
-    cleanupInterval: 60 * 60 * 1000 // 每小時清理過期 session
-});
+const { sessionStore } = require('./utils/sessionStore');
+const { getSessionSecret } = require('./utils/sessionSecret');
 
 // Session 配置
 app.use(session({
     store: sessionStore,
-    secret: process.env.SESSION_SECRET || 'fund-weekly-report-secret-key-change-in-production',
+    secret: getSessionSecret(),
     resave: false,
     saveUninitialized: false,
     name: 'fund-weekly-report.sid',
@@ -51,18 +74,20 @@ app.use(session({
 }));
 
 // ==================== CORS 設定 ====================
+// 前端與 API 都是由同一個伺服器提供，一般情況下完全不需要跨來源存取。
+// 只有在 ALLOWED_ORIGINS 明確設定時才放行清單內的來源；未設定時預設拒絕
+// 所有「真正跨來源」的請求。注意：瀏覽器對同來源的非 GET 請求（例如登入用的
+// POST）也會帶 Origin 標頭，所以不能只看「有沒有 Origin」，必須拿它與當前
+// 請求實際的 host 比對，否則會誤擋掉自己網站的請求。
 const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-    : null;
+    ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim()).filter(Boolean)
+    : [];
 
-app.use(cors({
-    origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (!allowedOrigins) return callback(null, true);
-        if (allowedOrigins.includes(origin)) return callback(null, true);
-        callback(new Error(`CORS 不允許的來源: ${origin}`));
-    },
-    credentials: true
+app.use(cors((req, callback) => {
+    const origin = req.header('Origin');
+    const selfOrigin = `${req.protocol}://${req.get('host')}`;
+    const allow = !origin || origin === selfOrigin || allowedOrigins.includes(origin);
+    callback(null, { origin: allow, credentials: true });
 }));
 
 app.use(express.json());

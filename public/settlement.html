@@ -716,7 +716,7 @@
                             select.innerHTML = '<option value="">尚無公司資料，請先至「公司管理」新增公司</option>';
                         } else {
                             select.innerHTML = '<option value="">請選擇公司</option>' +
-                                companiesListSettlement.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                                companiesListSettlement.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
                         }
                     } else {
                         console.error('找不到companyId元素');
@@ -751,7 +751,7 @@
                             select.innerHTML = '<option value="">請選擇帳戶（選填）</option>' +
                                 bankAccountsListSettlement.map(a => {
                                     const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
-                                    return `<option value="${a.id}">${a.account_name}${bankAndType ? ' (' + bankAndType + ')' : ''}${a.account_number ? ' - ' + a.account_number : ''}${a.company_name ? ' - ' + a.company_name : ''}</option>`;
+                                    return `<option value="${a.id}">${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}</option>`;
                                 }).join('');
                             select.disabled = false;
                         }
@@ -956,7 +956,7 @@
             content.innerHTML = `
                 <div class="calc-row">
                     <span class="calc-label">上一次結算日期：</span>
-                    <span class="calc-value">${calcData.previous_settlement_date || '無（首次結算）'}</span>
+                    <span class="calc-value">${escapeHtml(calcData.previous_settlement_date) || '無（首次結算）'}</span>
                 </div>
                 <div class="calc-row">
                     <span class="calc-label">期初餘額：</span>
@@ -976,7 +976,7 @@
                 </div>
                 <div class="calc-row">
                     <span class="calc-label">結算期間：</span>
-                    <span class="calc-value">${calcData.period_start} 至 ${calcData.period_end}</span>
+                    <span class="calc-value">${escapeHtml(calcData.period_start)} 至 ${escapeHtml(calcData.period_end)}</span>
                 </div>
             `;
             
@@ -1122,9 +1122,9 @@
 
             tbody.innerHTML = settlements.map(s => `
                 <tr>
-                    <td>${s.settlement_date}</td>
-                    <td>${s.company_name || '-'}</td>
-                    <td>${s.account_name || '-'}${s.account_type ? ` <span style="font-size: 11px; color: #64748B; border: 1px solid #E2E8F0; border-radius: 4px; padding: 1px 6px;">${s.account_type}</span>` : ''}${s.bank_name ? `<br><span style="font-size: 12px; color: #94A3B8;">${s.bank_name}</span>` : ''}${s.account_number ? `<br><span style="font-size: 12px; color: #64748B;">${s.account_number}</span>` : ''}</td>
+                    <td>${escapeHtml(s.settlement_date)}</td>
+                    <td>${escapeHtml(s.company_name) || '-'}</td>
+                    <td>${escapeHtml(s.account_name) || '-'}${s.account_type ? ` <span style="font-size: 11px; color: #64748B; border: 1px solid #E2E8F0; border-radius: 4px; padding: 1px 6px;">${escapeHtml(s.account_type)}</span>` : ''}${s.bank_name ? `<br><span style="font-size: 12px; color: #94A3B8;">${escapeHtml(s.bank_name)}</span>` : ''}${s.account_number ? `<br><span style="font-size: 12px; color: #64748B;">${escapeHtml(s.account_number)}</span>` : ''}</td>
                     <td>${formatCurrency(s.opening_balance)}</td>
                     <td class="positive">${formatCurrency(s.total_income)}</td>
                     <td class="negative">${formatCurrency(s.total_expense)}</td>

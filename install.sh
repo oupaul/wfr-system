@@ -352,9 +352,11 @@ echo -e "${GREEN}✓ 資料庫初始化完成${NC}"
 echo ""
 
 # 3.5. 創建預設管理員帳號
+# 密碼隨機產生（而非固定的 admin123）：這個安裝腳本是公開原始碼的一部分，
+# 固定密碼等於任何人都看得到、可以直接嘗試登入公開在網路上的正式環境
 echo "3.5. 創建預設管理員帳號..."
+DEFAULT_ADMIN_PASSWORD=$(node -e "console.log(require('crypto').randomBytes(9).toString('base64').replace(/[+/=]/g, ''))")
 echo "   使用者名稱: admin"
-echo "   密碼: admin123"
 echo "   角色: 管理員"
 
 # 使用 Node.js 直接創建管理員（避免互動式輸入）
@@ -365,7 +367,7 @@ const { db, initDatabase } = require('./database/db');
 async function createDefaultAdmin() {
     try {
         await initDatabase();
-        
+
         // 檢查 admin 帳號是否已存在
         const existingUser = await new Promise((resolve, reject) => {
             db.get('SELECT id FROM users WHERE username = ?', ['admin'], (err, row) => {
@@ -373,20 +375,20 @@ async function createDefaultAdmin() {
                 else resolve(row);
             });
         });
-        
+
         if (existingUser) {
             console.log('⚠ admin 帳號已存在，跳過創建');
             process.exit(0);
         }
-        
+
         // 加密密碼
-        const passwordHash = await argon2.hash('admin123', {
+        const passwordHash = await argon2.hash('$DEFAULT_ADMIN_PASSWORD', {
             type: argon2.argon2id,
             memoryCost: 65536,
             timeCost: 3,
             parallelism: 4
         });
-        
+
         // 創建管理員
         await new Promise((resolve, reject) => {
             db.run(
@@ -398,7 +400,7 @@ async function createDefaultAdmin() {
                 }
             );
         });
-        
+
         console.log('✓ 預設管理員帳號創建成功');
         process.exit(0);
     } catch (error) {
@@ -412,15 +414,18 @@ createDefaultAdmin();
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ 預設管理員帳號已創建${NC}"
-    echo -e "${YELLOW}   重要：首次登入後請立即修改密碼！${NC}"
+    echo -e "${YELLOW}   密碼: $DEFAULT_ADMIN_PASSWORD${NC}"
+    echo -e "${YELLOW}   請立即記下這組密碼（僅此次顯示），並在首次登入後修改！${NC}"
 else
     echo -e "${YELLOW}⚠ 管理員帳號創建失敗，請手動執行：${NC}"
-    echo "   node scripts/create-admin.js admin admin123"
+    echo "   node scripts/create-admin.js admin <您自訂的密碼>"
 fi
 echo ""
 
 # 4. 建立環境配置檔案
 echo "4. 建立環境配置檔案..."
+# 隨機產生 session 簽章密鑰：不寫死在原始碼裡，避免公開 repo 讓密鑰全世界可見
+SESSION_SECRET_VALUE=$(node -e "console.log(require('crypto').randomBytes(48).toString('hex'))")
 cat > .env << EOF
 # 資金週報系統環境配置
 PORT=$INSTALL_PORT
@@ -434,12 +439,19 @@ TRANSACTION_MODE=$TRANSACTION_MODE
 
 # Session 配置
 SESSION_TIMEOUT=$((IDLE_TIMEOUT * 60 * 1000))  # 閒置登出時間（毫秒）
+SESSION_SECRET=$SESSION_SECRET_VALUE
 
 # 資料庫路徑（相對路徑）
 DB_PATH=database/fund_report.db
 
 # 備份路徑（可為應用下 backups 或 /opt 下自訂目錄）
 BACKUP_PATH=$BACKUP_PATH
+
+# 允許跨來源帶憑證存取 API 的網域，以逗號分隔（選用）。
+# 留空時僅允許同來源請求（一般情況下不需要設定這個值，因為前端與 API
+# 都是同一個伺服器提供）；只有當您有獨立架設的前端網域需要呼叫這個 API
+# 時才需要填寫，例如：ALLOWED_ORIGINS=https://your-frontend.example.com
+# ALLOWED_ORIGINS=
 
 # M365 / Entra ID SSO 登入（選用）：兩個值都填了才會啟用，
 # 登入頁才會出現「使用 M365 登入」按鈕。只允許 email 已存在於
@@ -612,7 +624,7 @@ fi
 echo ""
 echo -e "${YELLOW}預設管理員帳號：${NC}"
 echo "  使用者名稱: admin"
-echo "  密碼: admin123"
+echo "  密碼: 請見上方「創建預設管理員帳號」步驟輸出的隨機密碼（僅顯示這一次）"
 echo -e "  ${RED}⚠️  重要：首次登入後請立即修改密碼！${NC}"
 echo ""
 echo "接下來的步驟："

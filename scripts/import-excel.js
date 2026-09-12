@@ -4,8 +4,8 @@ const fs = require('fs');
 const { db, initDatabase, closeDatabase } = require('../database/db');
 const fieldMapping = require('../config/excel-mapping');
 
-// 取得 Excel 檔案路徑（從命令列參數或預設值）
-const excelFilePath = process.argv[2] || path.join(__dirname, '..', 'B公司與A公司-資金週報1141227.xlsx');
+// 取得 Excel 檔案路徑（從命令列參數或預設值，請依實際檔名調整或直接以參數指定）
+const excelFilePath = process.argv[2] || path.join(__dirname, '..', 'import.xlsx');
 
 // 從欄位對應配置中尋找對應的值
 function findFieldValue(row, fieldNames) {

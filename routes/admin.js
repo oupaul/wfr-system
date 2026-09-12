@@ -267,11 +267,20 @@ router.post('/backup/download', requireAuth, requireAdmin, (req, res) => {
 router.post('/restore', requireAuth, requireAdmin, (req, res) => {
     const { filepath } = req.body;
 
-    if (!filepath) {
+    if (!filepath || typeof filepath !== 'string') {
         return res.status(400).json({ error: '請提供備份檔案路徑' });
     }
 
-    if (!fs.existsSync(filepath)) {
+    // 還原來源必須落在設定的備份目錄內，避免任意檔案路徑被拿來覆蓋正式資料庫
+    // （與 /backup/download 使用同一套白名單邏輯）
+    const deployPath = process.env.DEPLOY_PATH || path.join(__dirname, '..');
+    const backupPaths = [];
+    if (process.env.BACKUP_PATH) backupPaths.push(path.resolve(process.env.BACKUP_PATH));
+    backupPaths.push(path.resolve(deployPath, 'backups'));
+    const resolved = path.resolve(filepath);
+    const allowed = backupPaths.some(base => resolved.startsWith(base));
+
+    if (!allowed || !fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
         return res.status(404).json({ error: '找不到備份檔案' });
     }
 
@@ -287,7 +296,7 @@ router.post('/restore', requireAuth, requireAdmin, (req, res) => {
             fs.copyFileSync(dbPath, preRestoreBackup);
         }
 
-        fs.copyFileSync(filepath, dbPath);
+        fs.copyFileSync(resolved, dbPath);
 
         res.json({
             success: true,

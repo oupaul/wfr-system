@@ -723,7 +723,7 @@
                     const select = document.getElementById('modalCompanyId');
                     if (select) {
                         select.innerHTML = '<option value="">請選擇公司</option>' +
-                            companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                            companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
                     }
                 })
                 .catch(err => {
@@ -748,7 +748,7 @@
                     const select = document.getElementById('modalAccountId');
                     if (select) {
                         select.innerHTML = '<option value="">請選擇帳戶</option>' +
-                            bankAccountsList.map(a => `<option value="${a.id}" data-account-number="${a.account_number || ''}">${a.account_name}${a.company_name ? ' (' + a.company_name + ')' : ''}</option>`).join('');
+                            bankAccountsList.map(a => `<option value="${a.id}" data-account-number="${escapeHtml(a.account_number || '')}">${escapeHtml(a.account_name)}${a.company_name ? ' (' + escapeHtml(a.company_name) + ')' : ''}</option>`).join('');
                     }
                 })
                 .catch(err => {
@@ -1058,14 +1058,14 @@
             tbody.innerHTML = transactions.map(t => `
                 <tr>
                     ${canEdit ? `<td><input type="checkbox" class="row-checkbox" value="${t.id}" data-id="${t.id}" onchange="updateBatchDeleteState()"></td>` : ''}
-                    <td>${t.transaction_date}</td>
+                    <td>${escapeHtml(t.transaction_date)}</td>
                     <td><span class="type-${t.type}">${t.type === 'income' ? '💰 收入' : '💸 支出'}</span></td>
                     <td class="amount-${t.type}">${formatCurrency(t.amount)}</td>
-                    <td>${t.category || '-'}</td>
-                    <td>${t.description || '-'}</td>
-                    <td>${t.company_name || '-'}</td>
-                    <td>${t.account_name || '-'}${t.bank_name ? `<br><span style="font-size: 12px; color: #64748B;">${t.bank_name}</span>` : ''}${t.account_number ? `<br><span style="font-size: 12px; color: #94A3B8;">${t.account_number}</span>` : ''}</td>
-                    <td>${t.remarks || '-'}</td>
+                    <td>${escapeHtml(t.category) || '-'}</td>
+                    <td>${escapeHtml(t.description) || '-'}</td>
+                    <td>${escapeHtml(t.company_name) || '-'}</td>
+                    <td>${escapeHtml(t.account_name) || '-'}${t.bank_name ? `<br><span style="font-size: 12px; color: #64748B;">${escapeHtml(t.bank_name)}</span>` : ''}${t.account_number ? `<br><span style="font-size: 12px; color: #94A3B8;">${escapeHtml(t.account_number)}</span>` : ''}</td>
+                    <td>${escapeHtml(t.remarks) || '-'}</td>
                     <td class="actions">
                         ${canEdit ? `
                         <button class="btn btn-edit btn-sm" onclick="editTransaction(${t.id})">編輯</button>

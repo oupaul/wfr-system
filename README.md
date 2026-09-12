@@ -110,7 +110,7 @@ npm run init-db
 將 Excel 檔案匯入到資料庫：
 
 ```bash
-# 匯入預設檔案（B公司與A公司-資金週報1141227.xlsx）
+# 匯入預設檔案（scripts/data/import.xlsx，請依實際 Excel 檔名調整）
 npm run import-excel
 
 # 或指定其他 Excel 檔案路徑
@@ -325,7 +325,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 │   ├── admin-sso-settings.html # M365 SSO 設定（僅管理員）
 │   └── js/auth-common.js      # 全站共用登入檢查、登出、閒置自動登出
 ├── docs/
-│   └── 資金缺口-A公司數值差異說明.md
+│   └── 資金缺口計算邏輯說明.md
 ├── backups/            # 備份目錄（可自訂 BACKUP_PATH）
 ├── install.sh / update.sh / uninstall.sh / backup.sh / restore.sh
 ├── server.js           # Express 主程式（含 API 與操作日誌）

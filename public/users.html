@@ -700,9 +700,9 @@
                 return `
                     <tr>
                         <td>${u.id}</td>
-                        <td>${u.username || '-'}</td>
-                        <td>${u.full_name || '-'}</td>
-                        <td>${u.email || '-'}</td>
+                        <td>${escapeHtml(u.username) || '-'}</td>
+                        <td>${escapeHtml(u.full_name) || '-'}</td>
+                        <td>${escapeHtml(u.email) || '-'}</td>
                         <td><span class="${roleClass}">${roleLabel}</span></td>
                         <td><span class="${u.is_active ? 'status-active' : 'status-inactive'}">${u.is_active ? '啟用' : '停用'}</span></td>
                         <td>${lastLogin}</td>

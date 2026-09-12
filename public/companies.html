@@ -635,12 +635,12 @@
             tbody.innerHTML = companies.map(c => `
                 <tr>
                     <td>${c.id}</td>
-                    <td>${c.name || '-'}</td>
-                    <td>${c.code || '-'}</td>
-                    <td>${c.contact_person || '-'}</td>
-                    <td>${c.contact_phone || '-'}</td>
-                    <td>${c.contact_email || '-'}</td>
-                    <td>${c.address || '-'}</td>
+                    <td>${escapeHtml(c.name) || '-'}</td>
+                    <td>${escapeHtml(c.code) || '-'}</td>
+                    <td>${escapeHtml(c.contact_person) || '-'}</td>
+                    <td>${escapeHtml(c.contact_phone) || '-'}</td>
+                    <td>${escapeHtml(c.contact_email) || '-'}</td>
+                    <td>${escapeHtml(c.address) || '-'}</td>
                     <td><span class="${c.is_active ? 'status-active' : 'status-inactive'}">${c.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
                         ${canEdit ? `

@@ -179,7 +179,24 @@
         });
     }
 
+    // ==================== HTML 跳脫（避免使用者輸入內容造成 XSS） ====================
+
+    /**
+     * 將字串中的 HTML 特殊字元轉為實體，插入 innerHTML 前務必先經過此函式。
+     * 非字串（null/undefined/數字）直接轉成字串處理，避免呼叫端還要另外判斷。
+     */
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return '';
+        return String(value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
     // ==================== 對外暴露 ====================
     window.checkAuth = checkAuth;
     window.handleLogout = handleLogout;
+    window.escapeHtml = escapeHtml;
 })();

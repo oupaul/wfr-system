@@ -2,8 +2,8 @@ const ExcelJS = require('exceljs');
 const path = require('path');
 const fs = require('fs');
 
-// 取得 Excel 檔案路徑
-const excelFilePath = process.argv[2] || path.join(__dirname, '..', 'B公司與A公司-資金週報1141227.xlsx');
+// 取得 Excel 檔案路徑（請依實際檔名調整或直接以參數指定）
+const excelFilePath = process.argv[2] || path.join(__dirname, '..', 'import.xlsx');
 
 async function showExcelStructure() {
     try {

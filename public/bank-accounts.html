@@ -558,7 +558,7 @@
                     companiesList = data.data || [];
                     const select = document.getElementById('modalCompanyId');
                     select.innerHTML = '<option value="">請選擇公司</option>' +
-                        companiesList.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+                        companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
                     if (callback) callback();
                 })
                 .catch(err => {
@@ -767,13 +767,13 @@
                 return `
                 <tr>
                     <td>${a.id}</td>
-                    <td>${a.company_name || '-'}</td>
-                    <td>${a.account_name || '-'}</td>
-                    <td>${a.account_number || '-'}</td>
-                    <td>${a.bank_name || '-'}</td>
-                    <td>${a.branch_name || '-'}</td>
-                    <td>${a.account_type || '-'}</td>
-                    <td>${a.currency || 'TWD'}</td>
+                    <td>${escapeHtml(a.company_name) || '-'}</td>
+                    <td>${escapeHtml(a.account_name) || '-'}</td>
+                    <td>${escapeHtml(a.account_number) || '-'}</td>
+                    <td>${escapeHtml(a.bank_name) || '-'}</td>
+                    <td>${escapeHtml(a.branch_name) || '-'}</td>
+                    <td>${escapeHtml(a.account_type) || '-'}</td>
+                    <td>${escapeHtml(a.currency) || 'TWD'}</td>
                     <td style="text-align: right; font-weight: bold; color: ${isBelowSafety ? '#dc3545' : '#28a745'}">
                         ${formatCurrency(currentBalance)}
                         ${isBelowSafety ? '<br><small style="color: #dc3545;">⚠️ 低於安全水位</small>' : ''}

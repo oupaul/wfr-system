@@ -855,10 +855,10 @@
 
             const renderGroup = (title, rows) => `
                 <div class="breakdown-group">
-                    <h4>${title}</h4>
+                    <h4>${escapeHtml(title)}</h4>
                     ${rows.map(([label, total]) => `
                         <div class="breakdown-row">
-                            <span>${label}</span>
+                            <span>${escapeHtml(label)}</span>
                             <span class="value">${formatCurrency(total)}</span>
                         </div>
                     `).join('')}
@@ -907,9 +907,9 @@
                 <div class="account-card ${hasAnyGap ? 'has-gap' : ''}">
                     <div class="account-header">
                         <div class="account-title">
-                            <h3>${account.account_name || '未命名帳戶'}${account.account_type ? ` <span class="account-type-badge">${account.account_type}</span>` : ''}</h3>
+                            <h3>${escapeHtml(account.account_name) || '未命名帳戶'}${account.account_type ? ` <span class="account-type-badge">${escapeHtml(account.account_type)}</span>` : ''}</h3>
                             <div class="subtitle">
-                                ${account.company_name || ''}${account.bank_name ? ' - ' + account.bank_name : ''}${account.account_number ? ' - ' + account.account_number : ''}
+                                ${escapeHtml(account.company_name) || ''}${account.bank_name ? ' - ' + escapeHtml(account.bank_name) : ''}${account.account_number ? ' - ' + escapeHtml(account.account_number) : ''}
                             </div>
                         </div>
                         ${hasAnyGap ? 
@@ -933,7 +933,7 @@
                         ${account.last_settlement_date ? `
                         <div class="detail-item">
                             <div class="detail-label">上次結算日期</div>
-                            <div class="detail-value" style="font-size: 14px;">${account.last_settlement_date}</div>
+                            <div class="detail-value" style="font-size: 14px;">${escapeHtml(account.last_settlement_date)}</div>
                         </div>
                         ` : ''}
                         ${(account.transaction_count != null) ? `
@@ -1047,13 +1047,13 @@
             });
 
             listEl.innerHTML = companyGroups.map(g => `
-                <div class="account-filter-group-label">${g.company_name}</div>
+                <div class="account-filter-group-label">${escapeHtml(g.company_name)}</div>
                 ${g.items.map(c => `
                     <div class="account-filter-item">
                         <input type="checkbox" id="acctFilter_${c.account_id}" checked onchange="onAccountFilterChange(${c.account_id}, this.checked)">
                         <label for="acctFilter_${c.account_id}">
-                            ${c.bank_name ? c.bank_name + ' ' : ''}${c.account_name || '未命名帳戶'}${c.account_type ? `（${c.account_type}）` : ''}
-                            ${c.account_number ? `<span class="account-filter-item-number">${c.account_number}</span>` : ''}
+                            ${c.bank_name ? escapeHtml(c.bank_name) + ' ' : ''}${escapeHtml(c.account_name) || '未命名帳戶'}${c.account_type ? `（${escapeHtml(c.account_type)}）` : ''}
+                            ${c.account_number ? `<span class="account-filter-item-number">${escapeHtml(c.account_number)}</span>` : ''}
                         </label>
                     </div>
                 `).join('')}
@@ -1105,13 +1105,13 @@
             });
 
             const companyHeaderRow = companyGroups.map(g =>
-                `<th colspan="${g.count}">${g.company_name}</th>`
+                `<th colspan="${g.count}">${escapeHtml(g.company_name)}</th>`
             ).join('');
 
             const accountHeaderRow = columns.map(c => {
-                const label = c.account_type ? `${c.account_name}（${c.account_type}）` : (c.account_name || '未命名帳戶');
-                const bankLine = c.bank_name ? `<span class="ledger-bank-name">${c.bank_name}</span>` : '';
-                const numberLine = c.account_number ? `<span class="ledger-account-number">${c.account_number}</span>` : '';
+                const label = c.account_type ? `${escapeHtml(c.account_name)}（${escapeHtml(c.account_type)}）` : (escapeHtml(c.account_name) || '未命名帳戶');
+                const bankLine = c.bank_name ? `<span class="ledger-bank-name">${escapeHtml(c.bank_name)}</span>` : '';
+                const numberLine = c.account_number ? `<span class="ledger-account-number">${escapeHtml(c.account_number)}</span>` : '';
                 return `<th>${bankLine}${label}${numberLine}</th>`;
             }).join('');
 
@@ -1125,7 +1125,7 @@
                     return `
                         <tr class="ledger-row-balance">
                             <td class="ledger-date-col">${formatDateFull(row.date)}</td>
-                            <td class="ledger-desc-col">${row.label}</td>
+                            <td class="ledger-desc-col">${escapeHtml(row.label)}</td>
                             ${cells}
                         </tr>
                     `;
@@ -1143,7 +1143,7 @@
                 return `
                     <tr>
                         <td class="ledger-date-col">${formatDateFull(row.date)}</td>
-                        <td class="ledger-desc-col">${row.description || ''}</td>
+                        <td class="ledger-desc-col">${escapeHtml(row.description) || ''}</td>
                         ${cells}
                     </tr>
                 `;

@@ -5,6 +5,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireAdmin } = require('../middleware/auth');
+const { revokeSessionsForUser } = require('../utils/sessionStore');
 
 // 人員管理（含設定角色）僅限管理員，server.js 的全域 gate 只檢查有沒有登入，
 // 沒有另外檢查角色，這裡的 requireAdmin 補上才是真正擋住一般使用者的地方。
@@ -156,6 +157,16 @@ router.put('/:id', async (req, res) => {
                         is_active: is_active !== undefined ? is_active : oldRow.is_active
                     };
                     writeOperationLog(req, 'update', 'user', id, oldRow, afterData, '使用者 #' + id + ' ' + (afterData.username || ''));
+
+                    // 角色變更、停用或密碼重設都會讓該使用者既有的登入 session 立即失效，
+                    // 避免權限變更後對方仍能用舊 session 繼續使用系統
+                    const roleChanged = role !== undefined && role !== oldRow.role;
+                    const deactivated = is_active !== undefined && !is_active;
+                    const passwordReset = !!password;
+                    if (roleChanged || deactivated || passwordReset) {
+                        revokeSessionsForUser(parseInt(id, 10));
+                    }
+
                     res.json({ success: true, message: '使用者已更新' });
                 });
             } catch (error) {
@@ -184,6 +195,7 @@ router.delete('/:id', (req, res) => {
             }
             if (this.changes === 0) return res.status(404).json({ error: '找不到使用者' });
             writeOperationLog(req, 'delete', 'user', id, row, null, '使用者 #' + id + ' ' + (row.username || ''));
+            revokeSessionsForUser(parseInt(id, 10));
             res.json({ success: true, message: '使用者已刪除' });
         });
     });
