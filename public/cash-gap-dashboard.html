@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>資金缺口通報儀表板 - 資金週報系統</title>
+    <title>資金預估週報儀表板 - 資金週報系統</title>
     <style>
         * {
             margin: 0;
@@ -357,7 +357,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>⚠️ 資金缺口通報儀表板</h1>
+            <h1>⚠️ 資金預估週報儀表板</h1>
             <div class="nav-links">
                 <a href="/">🏠 首頁</a>
                 <a href="/cash-gap-dashboard.html">⚠️ 資金缺口</a>
@@ -386,7 +386,7 @@
                 <div class="summary-card success">
                     <h3>檢視方式</h3>
                     <div class="value" style="font-size: 18px;">未來三個月</div>
-                    <div style="font-size: 12px; margin-top: 5px;">每個月 10 號、25 號</div>
+                    <div style="font-size: 12px; margin-top: 5px;">每個月 15 號、30 號</div>
                 </div>
             </div>
 
@@ -415,7 +415,7 @@
             </div>
 
             <!-- 說明 -->
-            <p class="data-source-note">以下顯示<strong>未來三個月的每個月 10 號、25 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
+            <p class="data-source-note">以下顯示<strong>未來三個月的每個月 15 號、30 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
 
             <!-- 帳戶列表 -->
             <div id="accountsList">
@@ -461,7 +461,7 @@
                 .catch(() => ({}));
         }
 
-        // 載入儀表板資料（未來三個月 10 號、25 號）
+        // 載入儀表板資料（未來三個月 15 號、30 號）
         function loadDashboard() {
             const loading = document.getElementById('accountsList');
             loading.innerHTML = '<div class="loading">載入中...</div>';

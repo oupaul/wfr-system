@@ -10,6 +10,12 @@ function toLocalDateStr(d) {
     return `${y}-${mo}-${day}`;
 }
 
+// 若該月天數不足（例如 2 月沒有 30 號），改用該月最後一天，避免日期滾動到下個月
+function clampToMonth(year, month, day) {
+    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+    return new Date(year, month, Math.min(day, lastDayOfMonth));
+}
+
 function buildMonthlyTargetDates() {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -17,15 +23,15 @@ function buildMonthlyTargetDates() {
     const m = today.getMonth();
     const out = [];
     for (let i = 0; i < 3; i++) {
-        const d10 = new Date(y, m + i, 10);
-        const d25 = new Date(y, m + i, 25);
-        if (d10 >= today) out.push(toLocalDateStr(d10));
-        if (d25 >= today) out.push(toLocalDateStr(d25));
+        const d15 = clampToMonth(y, m + i, 15);
+        const d30 = clampToMonth(y, m + i, 30);
+        if (d15 >= today) out.push(toLocalDateStr(d15));
+        if (d30 >= today) out.push(toLocalDateStr(d30));
     }
     return out.sort();
 }
 
-// 資金缺口通報儀表板
+// 資金預估週報儀表板
 router.get('/cash-gap-dashboard', (req, res) => {
     const { forecastDays = 28 } = req.query;
     const today = new Date().toISOString().split('T')[0];
@@ -215,7 +221,7 @@ router.get('/cash-gap-dashboard', (req, res) => {
     });
 });
 
-// 資金缺口：未來三個月每月 10 號、25 號
+// 資金缺口：未來三個月每月 15 號、30 號
 router.get('/cash-gap-dashboard-by-dates', (req, res) => {
     const now = new Date();
     const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
