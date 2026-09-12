@@ -49,7 +49,20 @@ echo ""
 
 if [ ! -d ".git" ]; then
     echo -e "${RED}❌ 此目錄不是 git repository，無法自動更新${NC}"
-    echo "請確認部署目錄是透過 git clone 建立的"
+    echo ""
+    echo "舊版 install.sh 部署到 /opt 時會把 .git 排除掉，導致部署目錄"
+    echo "和原本 git clone 的來源目錄分家——這就是「git pull 好像有拉，"
+    echo "但服務沒有真的更新」的原因。一次性修正（不會動到 database/、"
+    echo ".env）："
+    echo ""
+    echo "  cd $CURRENT_DIR"
+    echo "  git init"
+    echo "  git remote add origin https://github.com/oupaul/wfr-system.git"
+    echo "  git fetch origin main"
+    echo "  git checkout -f -b main origin/main"
+    echo ""
+    echo "改完之後這個目錄本身就是完整 git repo，之後直接在這裡執行"
+    echo "./update.sh 即可。"
     exit 1
 fi
 

@@ -248,9 +248,13 @@ if [ "$INSTALL_TO_OPT" = true ]; then
     mkdir -p "$DEPLOY_PATH"
     
     # 使用 rsync 複製檔案（如果有的話）
+    # 注意：刻意「不」排除 .git —— 部署目錄本身就要是可用的 git working
+    # tree，之後 update.sh / git pull 才能直接在 $DEPLOY_PATH 裡更新。
+    # 排除 .git 的話，git pull 只會更新 $SCRIPT_DIR（原本 clone 的來源
+    # 目錄），部署目錄永遠不會真的被更新到。
     if command -v rsync &> /dev/null; then
         echo "使用 rsync 複製檔案..."
-        rsync -av --exclude='.git' --exclude='node_modules' --exclude='*.log' \
+        rsync -av --exclude='node_modules' --exclude='*.log' \
               "$SCRIPT_DIR/" "$DEPLOY_PATH/" 2>&1 | grep -v "sending incremental file list" || true
     else
         echo "使用 cp 複製檔案..."
