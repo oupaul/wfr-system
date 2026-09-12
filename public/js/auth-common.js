@@ -48,8 +48,18 @@
                 el.textContent = `${result.user.full_name || result.user.username} (${roleLabel})`;
             }
 
+            // 非管理員：隱藏導覽列的「人員管理」連結，避免點進去才被擋下來
+            if (result.user && result.user.role !== 'admin') {
+                document.querySelectorAll('a[href="/users.html"]').forEach((link) => {
+                    link.style.display = 'none';
+                });
+            }
+
             // 啟動自動登出計時器
             _startSessionTimers();
+
+            // 認證確認通過才顯示頁面內容，避免未登入/無權限時先閃過一下原本的畫面才跳轉
+            document.body.style.visibility = 'visible';
 
             return result.user;
         } catch (e) {

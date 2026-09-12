@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>餘額結算 - 資金週報系統</title>
     <style>
+        body { visibility: hidden; }
         * {
             margin: 0;
             padding: 0;
@@ -1294,6 +1295,12 @@
                     const saveBtn = document.getElementById('saveSettlementBtn');
                     if (saveBtn) saveBtn.style.display = 'none';
                 }
+                if (result.user && result.user.role !== 'admin') {
+                    document.querySelectorAll('a[href="/users.html"]').forEach((link) => {
+                        link.style.display = 'none';
+                    });
+                }
+                document.body.style.visibility = 'visible';
                 return true;
             } catch (error) {
                 console.error('檢查認證錯誤:', error);
