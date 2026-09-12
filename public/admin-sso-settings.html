@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M365 SSO 設定 - 資金週報系統</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #F8FAFC;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.2em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: #1E293B;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: #F8FAFC;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: #F1F5F9;
+            transform: translateY(-2px);
+        }
+        .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
+        .user-info span { font-size: 0.9em; }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: #F8FAFC; color: #1E293B; cursor: pointer; transition: background 0.3s; }
+        .user-info button:hover { background: #F1F5F9; }
+
+        .content {
+            padding: 30px;
+        }
+
+        .status-badge {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: bold;
+            padding: 4px 12px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+        }
+
+        .status-badge.enabled {
+            background: #DCFCE7;
+            color: #16A34A;
+        }
+
+        .status-badge.disabled {
+            background: #F1F5F9;
+            color: #64748B;
+        }
+
+        .source-note {
+            font-size: 13px;
+            color: #64748B;
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group .hint {
+            font-weight: normal;
+            font-size: 12px;
+            color: #64748B;
+            margin-top: 4px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #F06000;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #1E293B;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(30, 41, 59, 0.35);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .setup-guide {
+            margin-top: 30px;
+            padding: 20px;
+            background: #F8FAFC;
+            border-radius: 10px;
+            font-size: 13px;
+            color: #475569;
+            line-height: 1.8;
+        }
+
+        .setup-guide h3 {
+            font-size: 14px;
+            color: #1E293B;
+            margin-bottom: 10px;
+        }
+
+        .setup-guide code {
+            background: #E2E8F0;
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .message {
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .message.error {
+            display: block;
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .message.success {
+            display: block;
+            background: #d4edda;
+            color: #155724;
+        }
+
+        @media (max-width: 768px) {
+            .user-info {
+                position: static;
+                margin-top: 15px;
+                justify-content: center;
+            }
+        }
+    </style>
+    <script src="/js/auth-common.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔑 M365 SSO 設定</h1>
+            <p>Entra ID 單一登入設定</p>
+            <div class="nav-links">
+                <a href="/admin-dashboard.html">🎛️ 管理儀錶板</a>
+                <a href="/index.html">🏠 首頁</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div id="statusBadge" class="status-badge disabled">尚未啟用</div>
+            <p class="source-note" id="sourceNote"></p>
+
+            <form id="ssoForm" onsubmit="handleSave(event)">
+                <div class="form-group">
+                    <label for="tenantId">Tenant ID（租戶 ID）</label>
+                    <input type="text" id="tenantId" placeholder="例如：00000000-0000-0000-0000-000000000000">
+                </div>
+                <div class="form-group">
+                    <label for="clientId">Client ID（應用程式 ID）
+                        <div class="hint">Client ID 不是機密，SPA 公開用戶端本就設計成可安全放在前端程式碼中</div>
+                    </label>
+                    <input type="text" id="clientId" placeholder="例如：11111111-1111-1111-1111-111111111111">
+                </div>
+                <button type="submit" class="btn btn-primary" id="saveBtn">💾 儲存設定</button>
+            </form>
+
+            <div class="setup-guide">
+                <h3>Entra ID App Registration 設定需求</h3>
+                <p>• 平台類型選「單頁應用程式 (SPA)」</p>
+                <p>• Redirect URI 設為 <code id="redirectUriHint">https://你的網域/login.html</code></p>
+                <p>• API 權限：<code>openid</code>、<code>profile</code>、<code>email</code>（通常免管理員同意）</p>
+                <p>• 儲存後立即生效，不需重啟服務；兩個欄位都留空即可停用 M365 登入，帳號密碼登入不受影響</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        async function verifyPageAuth() {
+            const user = await window.checkAuth({ adminOnly: true });
+            return !!user;
+        }
+
+        function showMessage(text, type) {
+            const box = document.getElementById('message');
+            box.className = `message ${type}`;
+            box.textContent = text;
+            if (type === 'success') {
+                setTimeout(() => { box.className = 'message'; box.textContent = ''; }, 4000);
+            }
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch(`${API_BASE}/admin/sso-settings`, { credentials: 'include' });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '載入失敗');
+
+                document.getElementById('tenantId').value = data.tenantId || '';
+                document.getElementById('clientId').value = data.clientId || '';
+
+                const badge = document.getElementById('statusBadge');
+                badge.textContent = data.enabled ? '已啟用' : '尚未啟用';
+                badge.className = `status-badge ${data.enabled ? 'enabled' : 'disabled'}`;
+
+                const sourceLabel = { database: '目前設定來自後台儲存的值', env: '目前設定來自伺服器 .env（尚未在後台儲存過，儲存後會改用這裡的設定）', none: '尚未設定' };
+                document.getElementById('sourceNote').textContent = sourceLabel[data.source] || '';
+            } catch (error) {
+                console.error('載入 SSO 設定失敗:', error);
+                showMessage(error.message || '載入設定失敗', 'error');
+            }
+        }
+
+        async function handleSave(event) {
+            event.preventDefault();
+            const saveBtn = document.getElementById('saveBtn');
+            saveBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${API_BASE}/admin/sso-settings`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        tenantId: document.getElementById('tenantId').value.trim(),
+                        clientId: document.getElementById('clientId').value.trim()
+                    })
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) throw new Error(data.error || '儲存失敗');
+
+                showMessage('設定已儲存，立即生效', 'success');
+                await loadSettings();
+            } catch (error) {
+                console.error('儲存 SSO 設定失敗:', error);
+                showMessage(error.message || '儲存失敗', 'error');
+            } finally {
+                saveBtn.disabled = false;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            const authenticated = await verifyPageAuth();
+            if (!authenticated) return;
+            document.getElementById('redirectUriHint').textContent = window.location.origin + '/login.html';
+            loadSettings();
+        });
+    </script>
+</body>
+</html>

@@ -149,6 +149,13 @@ const ensureNewTables = () => {
             CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
             CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
             CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+
+            -- 系統設定（key-value），目前用於 M365 / Entra ID SSO 設定
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
         `;
         
         db.exec(migrationSQL, (err) => {

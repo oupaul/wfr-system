@@ -187,6 +187,33 @@
             font-size: 14px;
         }
 
+        .account-type-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: normal;
+            color: #64748B;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 2px 8px;
+            vertical-align: middle;
+        }
+
+        .by-date-details {
+            margin-top: 15px;
+        }
+
+        .by-date-details summary {
+            cursor: pointer;
+            font-weight: bold;
+            color: #1E293B;
+            padding: 10px 0;
+        }
+
+        .by-date-details[open] summary {
+            margin-bottom: 5px;
+        }
+
         .gap-badge {
             background: #dc3545;
             color: white;
@@ -665,7 +692,7 @@
                 <div class="account-card ${hasAnyGap ? 'has-gap' : ''}">
                     <div class="account-header">
                         <div class="account-title">
-                            <h3>${account.account_name || '未命名帳戶'}</h3>
+                            <h3>${account.account_name || '未命名帳戶'}${account.account_type ? ` <span class="account-type-badge">${account.account_type}</span>` : ''}</h3>
                             <div class="subtitle">
                                 ${account.company_name || ''} ${account.account_number ? '- ' + account.account_number : ''}
                             </div>
@@ -702,23 +729,26 @@
                         ` : ''}
                     </div>
                     ${byDate.length ? `
-                    <div class="table-scroll-wrapper">
-                        <table class="by-date-table">
-                            <thead><tr><th>日期</th><th>收入合計</th><th>支出合計</th><th>預計餘額</th><th>資金缺口</th></tr></thead>
-                            <tbody>
-                                ${byDate.map(d => `
-                                    <tr>
-                                        <td>${formatDateFull(d.date)}</td>
-                                        <td>${formatCurrency(d.income_sum != null ? d.income_sum : 0)}</td>
-                                        <td>${formatCurrency(d.expense_sum != null ? d.expense_sum : 0)}</td>
-                                        <td class="${d.projected_balance < account.safety_level ? 'detail-value warning' : ''}">${formatCurrency(d.projected_balance)}</td>
-                                        <td class="gap-cell ${d.gap > 0 ? 'has-gap' : ''}">${d.gap > 0 ? formatCurrency(d.gap) : '-'}</td>
-                                    </tr>
-                                `).join('')}
-                            </tbody>
-                        </table>
-                    </div>
-                    <p class="reconcile-note">預計餘額 = 期初餘額 + 收入合計 − 支出合計。若與 Excel 不符，請確認：① 期初餘額是否在「結算」建立且與 Excel 一致 ② 公司／帳戶／帳號與匯入範本完全一致。</p>
+                    <details class="by-date-details" ${hasAnyGap ? 'open' : ''}>
+                        <summary>未來三個月各檢查日預計餘額${hasAnyGap ? '（含資金缺口）' : ''}</summary>
+                        <div class="table-scroll-wrapper">
+                            <table class="by-date-table">
+                                <thead><tr><th>日期</th><th>收入合計</th><th>支出合計</th><th>預計餘額</th><th>資金缺口</th></tr></thead>
+                                <tbody>
+                                    ${byDate.map(d => `
+                                        <tr>
+                                            <td>${formatDateFull(d.date)}</td>
+                                            <td>${formatCurrency(d.income_sum != null ? d.income_sum : 0)}</td>
+                                            <td>${formatCurrency(d.expense_sum != null ? d.expense_sum : 0)}</td>
+                                            <td class="${d.projected_balance < account.safety_level ? 'detail-value warning' : ''}">${formatCurrency(d.projected_balance)}</td>
+                                            <td class="gap-cell ${d.gap > 0 ? 'has-gap' : ''}">${d.gap > 0 ? formatCurrency(d.gap) : '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="reconcile-note">預計餘額 = 期初餘額 + 收入合計 − 支出合計。若與 Excel 不符，請確認：① 期初餘額是否在「結算」建立且與 Excel 一致 ② 公司／帳戶／帳號與匯入範本完全一致。</p>
+                    </details>
                     ` : ''}
                 </div>
             `}).join('');

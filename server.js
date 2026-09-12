@@ -7,7 +7,8 @@ const logger = require('./utils/logger');
 const { db, initDatabase } = require('./database/db');
 const { OPERATION_LOGS_TABLE_SQL } = require('./utils/operationLog');
 const { requireAuth } = require('./middleware/auth');
-const { isConfigured: ssoConfigured, tenantId: entraTenantId, clientId: entraClientId } = require('./utils/entraAuth');
+const entraAuth = require('./utils/entraAuth');
+const { isConfigured: ssoConfigured, tenantId: entraTenantId, clientId: entraClientId } = entraAuth;
 
 // 載入環境變數（如果存在 .env 檔案）
 if (fs.existsSync('.env')) {
@@ -173,7 +174,10 @@ function ensureOperationLogsAndWriteStartupLog() {
         );
     });
 }
-initDatabase().then(() => ensureOperationLogsAndWriteStartupLog()).catch(console.error);
+initDatabase().then(() => {
+    ensureOperationLogsAndWriteStartupLog();
+    return entraAuth.init();
+}).catch(console.error);
 
 // ==================== 全域錯誤處理中間件 ====================
 app.use((err, req, res, next) => {

@@ -149,3 +149,10 @@ CREATE TABLE IF NOT EXISTS operation_logs (
 CREATE INDEX IF NOT EXISTS idx_operation_logs_created ON operation_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_operation_logs_entity ON operation_logs(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_operation_logs_user ON operation_logs(user_id);
+
+-- 系統設定（key-value），目前用於 M365 / Entra ID SSO 設定，讓管理者可在後台調整而不用改 .env
+CREATE TABLE IF NOT EXISTS system_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);

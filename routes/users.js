@@ -4,6 +4,11 @@ const argon2 = require('argon2');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
+const { requireAdmin } = require('../middleware/auth');
+
+// 人員管理（含設定角色）僅限管理員，server.js 的全域 gate 只檢查有沒有登入，
+// 沒有另外檢查角色，這裡的 requireAdmin 補上才是真正擋住一般使用者的地方。
+router.use(requireAdmin);
 
 // 取得所有使用者
 router.get('/', (req, res) => {

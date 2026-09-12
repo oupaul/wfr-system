@@ -5,7 +5,15 @@ const fs = require('fs');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { requireAuth, requireAdmin } = require('../middleware/auth');
-const { OPERATION_LOGS_TABLE_SQL } = require('../utils/operationLog');
+const { OPERATION_LOGS_TABLE_SQL, writeOperationLog } = require('../utils/operationLog');
+const {
+    isConfigured: ssoConfigured,
+    tenantId: entraTenantId,
+    clientId: entraClientId,
+    saveSettings: saveSsoSettings,
+    isOverriddenInDb,
+    envHasValue
+} = require('../utils/entraAuth');
 
 // 系統健康狀態
 router.get('/health', requireAuth, requireAdmin, (req, res) => {
@@ -297,6 +305,32 @@ router.post('/restore', requireAuth, requireAdmin, (req, res) => {
         }
 
         res.status(500).json({ error: '還原失敗', details: error.message });
+    }
+});
+
+// 取得 M365 / Entra ID SSO 設定
+router.get('/sso-settings', requireAuth, requireAdmin, (req, res) => {
+    res.json({
+        tenantId: entraTenantId(),
+        clientId: entraClientId(),
+        enabled: ssoConfigured(),
+        source: isOverriddenInDb() ? 'database' : (envHasValue() ? 'env' : 'none')
+    });
+});
+
+// 更新 M365 / Entra ID SSO 設定（存入資料庫並立即生效，不需重啟服務）
+router.put('/sso-settings', requireAuth, requireAdmin, async (req, res) => {
+    const tenantId = (req.body.tenantId || '').trim();
+    const clientId = (req.body.clientId || '').trim();
+
+    try {
+        const beforeData = { tenantId: entraTenantId(), clientId: entraClientId() };
+        await saveSsoSettings(tenantId, clientId);
+        writeOperationLog(req, 'update', 'system_settings', 'entra_sso', beforeData, { tenantId, clientId }, 'M365 SSO 設定已更新');
+        res.json({ success: true, message: 'SSO 設定已更新', enabled: ssoConfigured() });
+    } catch (error) {
+        logger.error('更新 SSO 設定失敗:', error);
+        res.status(500).json({ error: '更新失敗', details: error.message });
     }
 });
 

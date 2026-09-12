@@ -726,7 +726,7 @@
 
         // 頁面載入時執行
         document.addEventListener('DOMContentLoaded', async function() {
-            const authenticated = await checkAuth();
+            const authenticated = await checkAuth({ adminOnly: true });
             if (authenticated) {
                 loadUsers();
             }
