@@ -338,6 +338,80 @@
             box-shadow: 0 5px 15px rgba(240, 96, 0, 0.35);
         }
 
+        /* 檢視方式頁籤 */
+        .view-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #E2E8F0;
+        }
+
+        .view-tab {
+            padding: 10px 20px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            color: #64748B;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+        }
+
+        .view-tab.active {
+            color: #F06000;
+            border-bottom-color: #F06000;
+        }
+
+        /* 資金流水帳表格 */
+        .ledger-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .ledger-table th,
+        .ledger-table td {
+            padding: 8px 12px;
+            border: 1px solid #E2E8F0;
+            text-align: right;
+        }
+
+        .ledger-table th.ledger-desc-col,
+        .ledger-table td.ledger-desc-col {
+            text-align: left;
+            white-space: normal;
+            min-width: 220px;
+        }
+
+        .ledger-table th.ledger-date-col,
+        .ledger-table td.ledger-date-col {
+            text-align: left;
+        }
+
+        .ledger-table thead th {
+            background: #F8FAFC;
+            color: #1E293B;
+        }
+
+        .ledger-row-balance td {
+            background: #FEF3C7;
+            font-weight: bold;
+        }
+
+        .ledger-amount-expense {
+            color: #DC2626;
+        }
+
+        .ledger-amount-income {
+            color: #16A34A;
+        }
+
+        .ledger-negative {
+            color: #DC2626;
+        }
+
         @media (max-width: 768px) {
             .account-details {
                 grid-template-columns: 1fr;
@@ -376,50 +450,67 @@
         <div class="content">
             <div id="message"></div>
 
-            <!-- 摘要卡片 -->
-            <div class="summary-cards" id="summaryCards">
-                <div class="summary-card">
-                    <h3>總餘額</h3>
-                    <div class="value" id="totalBalance">$0</div>
-                    <div style="font-size: 12px; margin-top: 5px; opacity: 0.9;" id="balanceDate"></div>
+            <!-- 檢視方式頁籤 -->
+            <div class="view-tabs">
+                <button type="button" class="view-tab active" id="tabCardView" onclick="switchView('card')">📇 帳戶卡片</button>
+                <button type="button" class="view-tab" id="tabLedgerView" onclick="switchView('ledger')">📋 資金流水帳</button>
+            </div>
+
+            <!-- 帳戶卡片檢視 -->
+            <div id="cardView">
+                <!-- 摘要卡片 -->
+                <div class="summary-cards" id="summaryCards">
+                    <div class="summary-card">
+                        <h3>總餘額</h3>
+                        <div class="value" id="totalBalance">$0</div>
+                        <div style="font-size: 12px; margin-top: 5px; opacity: 0.9;" id="balanceDate"></div>
+                    </div>
+                    <div class="summary-card success">
+                        <h3>檢視方式</h3>
+                        <div class="value" style="font-size: 18px;">未來三個月</div>
+                        <div style="font-size: 12px; margin-top: 5px;">每個月 15 號、30 號</div>
+                    </div>
                 </div>
-                <div class="summary-card success">
-                    <h3>檢視方式</h3>
-                    <div class="value" style="font-size: 18px;">未來三個月</div>
-                    <div style="font-size: 12px; margin-top: 5px;">每個月 15 號、30 號</div>
+
+                <!-- 各日總缺口摘要表 -->
+                <div class="summary-by-dates" id="summaryByDatesSection" style="display: none;">
+                    <h3 style="margin-bottom: 12px;">各日資金缺口總計</h3>
+                    <table id="summaryByDatesTable">
+                        <thead><tr><th>日期</th><th>當日總缺口</th></tr></thead>
+                        <tbody id="summaryByDatesBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- 篩選條件 -->
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>顯示選項</label>
+                        <select id="filterType" onchange="filterAccounts()">
+                            <option value="all">全部帳戶</option>
+                            <option value="gap">僅顯示有缺口</option>
+                            <option value="safe">僅顯示安全</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn" onclick="recalculateBalances().then(() => loadDashboard())">🔄 重新整理</button>
+                    </div>
+                </div>
+
+                <!-- 說明 -->
+                <p class="data-source-note">以下顯示<strong>未來三個月的每個月 15 號、30 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
+
+                <!-- 帳戶列表 -->
+                <div id="accountsList">
+                    <div class="loading">載入中...</div>
                 </div>
             </div>
 
-            <!-- 各日總缺口摘要表 -->
-            <div class="summary-by-dates" id="summaryByDatesSection" style="display: none;">
-                <h3 style="margin-bottom: 12px;">各日資金缺口總計</h3>
-                <table id="summaryByDatesTable">
-                    <thead><tr><th>日期</th><th>當日總缺口</th></tr></thead>
-                    <tbody id="summaryByDatesBody"></tbody>
-                </table>
-            </div>
-
-            <!-- 篩選條件 -->
-            <div class="filters">
-                <div class="filter-group">
-                    <label>顯示選項</label>
-                    <select id="filterType" onchange="filterAccounts()">
-                        <option value="all">全部帳戶</option>
-                        <option value="gap">僅顯示有缺口</option>
-                        <option value="safe">僅顯示安全</option>
-                    </select>
+            <!-- 資金流水帳檢視 -->
+            <div id="ledgerView" style="display: none;">
+                <p class="data-source-note">帳戶為欄、交易與結餘檢查點為列，黃底列為每月 15 號、30 號的結餘檢查點。</p>
+                <div class="table-scroll-wrapper" id="ledgerTableContainer">
+                    <div class="loading">載入中...</div>
                 </div>
-                <div>
-                    <button class="btn" onclick="recalculateBalances().then(() => loadDashboard())">🔄 重新整理</button>
-                </div>
-            </div>
-
-            <!-- 說明 -->
-            <p class="data-source-note">以下顯示<strong>未來三個月的每個月 15 號、30 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
-
-            <!-- 帳戶列表 -->
-            <div id="accountsList">
-                <div class="loading">載入中...</div>
             </div>
         </div>
     </div>
@@ -596,6 +687,122 @@
         // 篩選帳戶
         function filterAccounts() {
             displayAccounts(dashboardData);
+        }
+
+        // ==================== 資金流水帳檢視 ====================
+        let ledgerLoaded = false;
+
+        function switchView(view) {
+            const isCard = view === 'card';
+            document.getElementById('cardView').style.display = isCard ? 'block' : 'none';
+            document.getElementById('ledgerView').style.display = isCard ? 'none' : 'block';
+            document.getElementById('tabCardView').classList.toggle('active', isCard);
+            document.getElementById('tabLedgerView').classList.toggle('active', !isCard);
+
+            if (!isCard && !ledgerLoaded) {
+                loadLedger();
+            }
+        }
+
+        function loadLedger() {
+            const container = document.getElementById('ledgerTableContainer');
+            container.innerHTML = '<div class="loading">載入中...</div>';
+
+            fetch(`${API_BASE}/cash-gap-ledger`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        container.innerHTML = `<div class="error">${data.error}</div>`;
+                        return;
+                    }
+                    ledgerLoaded = true;
+                    displayLedger(data.columns || [], data.rows || []);
+                })
+                .catch(err => {
+                    console.error('載入資金流水帳失敗:', err);
+                    container.innerHTML = '<div class="error">載入失敗，請稍後再試</div>';
+                });
+        }
+
+        function displayLedger(columns, rows) {
+            const container = document.getElementById('ledgerTableContainer');
+
+            if (columns.length === 0) {
+                container.innerHTML = '<div class="loading">尚無啟用中的銀行帳戶</div>';
+                return;
+            }
+
+            // 依公司名稱將相鄰欄位分組，用於表頭合併儲存格
+            const companyGroups = [];
+            columns.forEach((col) => {
+                const last = companyGroups[companyGroups.length - 1];
+                if (last && last.company_name === (col.company_name || '')) {
+                    last.count++;
+                } else {
+                    companyGroups.push({ company_name: col.company_name || '未分類', count: 1 });
+                }
+            });
+
+            const companyHeaderRow = companyGroups.map(g =>
+                `<th colspan="${g.count}">${g.company_name}</th>`
+            ).join('');
+
+            const accountHeaderRow = columns.map(c => {
+                const label = c.account_type ? `${c.account_name}（${c.account_type}）` : c.account_name;
+                return `<th>${label || '未命名帳戶'}</th>`;
+            }).join('');
+
+            const bodyRows = rows.map((row) => {
+                if (row.type === 'balance') {
+                    const cells = columns.map(c => {
+                        const val = row.balances[c.account_id];
+                        const negative = val != null && val < 0;
+                        return `<td class="${negative ? 'ledger-negative' : ''}">${formatCurrency(val != null ? val : 0)}</td>`;
+                    }).join('');
+                    return `
+                        <tr class="ledger-row-balance">
+                            <td class="ledger-date-col">${formatDateFull(row.date)}</td>
+                            <td class="ledger-desc-col">${row.label}</td>
+                            ${cells}
+                        </tr>
+                    `;
+                }
+
+                const cells = columns.map(c => {
+                    if (c.account_id !== row.account_id) return '<td></td>';
+                    const cls = row.txn_type === 'income' ? 'ledger-amount-income' : 'ledger-amount-expense';
+                    const text = row.txn_type === 'income'
+                        ? formatCurrency(row.amount)
+                        : `(${formatCurrency(row.amount).replace(/^-/, '')})`;
+                    return `<td class="${cls}">${text}</td>`;
+                }).join('');
+
+                return `
+                    <tr>
+                        <td class="ledger-date-col">${formatDateFull(row.date)}</td>
+                        <td class="ledger-desc-col">${row.description || ''}</td>
+                        ${cells}
+                    </tr>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <table class="ledger-table">
+                    <thead>
+                        <tr>
+                            <th class="ledger-date-col">月份</th>
+                            <th class="ledger-desc-col">收支項目</th>
+                            ${companyHeaderRow}
+                        </tr>
+                        <tr>
+                            <th class="ledger-date-col"></th>
+                            <th class="ledger-desc-col"></th>
+                            ${accountHeaderRow}
+                        </tr>
+                    </thead>
+                    <tbody>${bodyRows}</tbody>
+                </table>
+            `;
         }
 
         // 顯示訊息
