@@ -446,7 +446,14 @@ for file in *.sh; do sed -i 's/\r$//' "$file" && chmod +x "$file"; done
 
 ## 授權
 
-ISC License
+本專案採用 [GNU Affero General Public License v3.0（AGPL-3.0）](https://www.gnu.org/licenses/agpl-3.0.html) 授權。
+
+這代表：
+- 您可以自由使用、修改、散布本軟體
+- 若您修改後透過網路提供服務給他人使用（即使不散布程式碼），也必須依 AGPL-3.0 公開完整原始碼給使用者
+- 衍生作品必須以相同的 AGPL-3.0 授權釋出
+
+完整授權條款請見 [`LICENSE`](LICENSE) 檔案。
 
 ## 聯絡資訊
 
