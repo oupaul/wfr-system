@@ -588,7 +588,7 @@
                             <textarea id="settlementRemarks" placeholder="輸入備註說明..."></textarea>
                         </div>
                         <div style="text-align: right; margin-top: 20px;">
-                            <button class="btn btn-primary" onclick="saveSettlement()">💾 儲存結算記錄</button>
+                            <button class="btn btn-primary" id="saveSettlementBtn" onclick="saveSettlement()">💾 儲存結算記錄</button>
                         </div>
                     </div>
                 </div>
@@ -683,6 +683,7 @@
         let companiesListSettlement = [];
         let bankAccountsListSettlement = [];
         let currentUser = null;
+        let canEdit = false;
 
         // 載入公司列表
         function loadCompaniesSettlement() {
@@ -1074,9 +1075,6 @@
                 return;
             }
 
-            // 檢查是否為管理員
-            const isAdmin = currentUser && currentUser.role === 'admin';
-
             tbody.innerHTML = settlements.map(s => `
                 <tr>
                     <td>${s.settlement_date}</td>
@@ -1089,8 +1087,8 @@
                     <td>${formatCurrency(s.actual_balance)}</td>
                     <td class="${s.difference >= 0 ? 'positive' : 'negative'}">${formatCurrency(s.difference)}</td>
                     <td>
-                        ${isAdmin ? `<button class="btn btn-edit btn-sm" onclick="editSettlement(${s.id})">編輯</button>` : ''}
-                        ${isAdmin ? `<button class="btn btn-danger btn-sm" onclick="deleteSettlement(${s.id})">刪除</button>` : '<span style="color: #999;">-</span>'}
+                        ${canEdit ? `<button class="btn btn-edit btn-sm" onclick="editSettlement(${s.id})">編輯</button>` : ''}
+                        ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteSettlement(${s.id})">刪除</button>` : '<span style="color: #999;">-</span>'}
                     </td>
                 </tr>
             `).join('');
@@ -1242,9 +1240,15 @@
                 }
 
                 currentUser = result.user;
+                canEdit = result.user && (result.user.role === 'admin' || result.user.role === 'finance');
                 const currentUserEl = document.getElementById('currentUser');
                 if (currentUserEl && result.user) {
-                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (${result.user.role === 'admin' ? '管理員' : '使用者'})`;
+                    const roleLabels = { admin: '管理員', finance: '財務人員', user: '一般人員' };
+                    currentUserEl.textContent = `${result.user.full_name || result.user.username} (${roleLabels[result.user.role] || '一般人員'})`;
+                }
+                if (!canEdit) {
+                    const saveBtn = document.getElementById('saveSettlementBtn');
+                    if (saveBtn) saveBtn.style.display = 'none';
                 }
                 return true;
             } catch (error) {

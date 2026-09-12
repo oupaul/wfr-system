@@ -642,8 +642,10 @@
                     <td>${c.address || '-'}</td>
                     <td><span class="${c.is_active ? 'status-active' : 'status-inactive'}">${c.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
+                        ${canEdit ? `
                         <button class="btn btn-edit btn-sm" onclick="editCompany(${c.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteCompany(${c.id})">刪除</button>
+                        ` : '<span style="color: #999;">-</span>'}
                     </td>
                 </tr>
             `).join('');
@@ -669,9 +671,15 @@
         }
 
         // 頁面載入時執行
+        let canEdit = false;
         document.addEventListener('DOMContentLoaded', async function() {
-            const authenticated = await checkAuth();
-            if (!authenticated) return;
+            const user = await checkAuth();
+            if (!user) return;
+            canEdit = user.role === 'admin' || user.role === 'finance';
+            if (!canEdit) {
+                const addBtn = document.querySelector('.page-header .btn-primary');
+                if (addBtn) addBtn.style.display = 'none';
+            }
             loadCompanies();
         });
     </script>

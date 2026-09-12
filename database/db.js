@@ -37,6 +37,7 @@ const initDatabase = () => {
                     // 執行資料庫遷移
                     await migrateBankAccountsCurrentBalance();
                     await ensureOperationLogsTable();
+                    await migrateUserRoleFinanceTier();
                     resolve();
                 } catch (error) {
                     reject(error);
@@ -139,7 +140,7 @@ const ensureNewTables = () => {
                 password_hash TEXT NOT NULL,
                 full_name TEXT,
                 email TEXT,
-                role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+                role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'finance', 'user')),
                 is_active INTEGER DEFAULT 1,
                 last_login DATETIME,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -249,6 +250,56 @@ const migrateBankAccountsCurrentBalance = () => {
             } else {
                 resolve();
             }
+        });
+    });
+};
+
+// 資料庫遷移：users.role 的 CHECK 限制從 ('admin','user') 放寬為
+// ('admin','finance','user')，讓「財務人員」角色可以存在。SQLite 不支援
+// 直接修改 CHECK 限制，只能整張表重建——沒有其他表用 FOREIGN KEY 參考
+// users，重建是安全的。只有偵測到舊限制時才會執行，執行過一次後
+// sqlite_master 裡的 CREATE TABLE 語句就會是新的，之後開機都會跳過。
+const migrateUserRoleFinanceTier = () => {
+    return new Promise((resolve, reject) => {
+        db.get("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'", [], (err, row) => {
+            if (err) {
+                console.error('檢查 users 表結構失敗:', err.message);
+                return reject(err);
+            }
+            if (!row || !row.sql || !row.sql.includes("CHECK(role IN ('admin', 'user'))")) {
+                return resolve();
+            }
+
+            console.log('正在升級 users 表，新增「財務人員」角色...');
+            const rebuildSQL = `
+                ALTER TABLE users RENAME TO users_migrating_role;
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    full_name TEXT,
+                    email TEXT,
+                    role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'finance', 'user')),
+                    is_active INTEGER DEFAULT 1,
+                    last_login DATETIME,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO users (id, username, password_hash, full_name, email, role, is_active, last_login, created_at, updated_at)
+                    SELECT id, username, password_hash, full_name, email, role, is_active, last_login, created_at, updated_at FROM users_migrating_role;
+                DROP TABLE users_migrating_role;
+                CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+                CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active);
+                CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+            `;
+            db.exec(rebuildSQL, (execErr) => {
+                if (execErr) {
+                    console.error('users 表角色升級失敗:', execErr.message);
+                    return reject(execErr);
+                }
+                console.log('✓ users 表已升級，「財務人員」角色可用');
+                resolve();
+            });
         });
     });
 };

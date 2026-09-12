@@ -8,6 +8,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
+const { requireEditor } = require('../middleware/auth');
 
 // 確保上傳目錄存在
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -304,7 +305,7 @@ router.get('/statistics', (req, res) => {
 });
 
 // 批次刪除收支記錄（必須在 /:id 之前）
-router.post('/batch-delete', async (req, res) => {
+router.post('/batch-delete', requireEditor, async (req, res) => {
     const { ids } = req.body;
     if (!Array.isArray(ids) || ids.length === 0) {
         return res.status(400).json({ error: '請提供要刪除的記錄 id 陣列 (ids)' });
@@ -350,7 +351,7 @@ router.post('/batch-delete', async (req, res) => {
 });
 
 // 匯入收支記錄 Excel（必須在 /:id 之前）
-router.post('/import', upload.single('file'), async (req, res) => {
+router.post('/import', requireEditor, upload.single('file'), async (req, res) => {
     if (!req.file) {
         return res.status(400).json({ error: '請選擇要匯入的檔案' });
     }
@@ -570,7 +571,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增收支記錄
-router.post('/', (req, res) => {
+router.post('/', requireEditor, (req, res) => {
     const {
         transaction_date,
         type,
@@ -619,7 +620,7 @@ router.post('/', (req, res) => {
 });
 
 // 更新收支記錄
-router.put('/:id', (req, res) => {
+router.put('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     const {
         transaction_date,
@@ -682,7 +683,7 @@ router.put('/:id', (req, res) => {
 });
 
 // 刪除收支記錄
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM transactions WHERE id = ?', [id], (err, row) => {
         if (err) {

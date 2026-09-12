@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
+const { requireEditor } = require('../middleware/auth');
 
 // 取得所有公司
 router.get('/', (req, res) => {
@@ -43,7 +44,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增公司
-router.post('/', (req, res) => {
+router.post('/', requireEditor, (req, res) => {
     const {
         name,
         code,
@@ -79,7 +80,7 @@ router.post('/', (req, res) => {
 });
 
 // 更新公司
-router.put('/:id', (req, res) => {
+router.put('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     const { name, code, contact_person, contact_phone, contact_email, address, remarks, is_active } = req.body;
     db.get('SELECT * FROM companies WHERE id = ?', [id], (err, oldRow) => {
@@ -105,7 +106,7 @@ router.put('/:id', (req, res) => {
 });
 
 // 刪除公司
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM companies WHERE id = ?', [id], (err, row) => {
         if (err || !row) {

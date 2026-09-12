@@ -121,7 +121,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     full_name TEXT,
     email TEXT,
-    role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
+    role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'finance', 'user')),
     is_active INTEGER DEFAULT 1,
     last_login DATETIME,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
-const { requireAuth, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requireAdmin, requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
@@ -190,7 +190,7 @@ router.post('/calculate', (req, res) => {
 });
 
 // 新增結算記錄
-router.post('/', (req, res) => {
+router.post('/', requireEditor, (req, res) => {
     const {
         settlement_date,
         company_name,
@@ -359,7 +359,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 更新結算記錄（需要管理員權限）
-router.put('/:id', requireAuth, requireAdmin, (req, res) => {
+router.put('/:id', requireAuth, requireEditor, (req, res) => {
     const { id } = req.params;
     const {
         settlement_date,
@@ -536,7 +536,7 @@ router.put('/:id', requireAuth, requireAdmin, (req, res) => {
 });
 
 // 刪除結算記錄
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM balance_settlements WHERE id = ?', [id], (err, row) => {
         if (err || !row) {

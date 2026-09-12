@@ -43,7 +43,8 @@
             // 顯示使用者名稱
             const el = document.getElementById('currentUser');
             if (el && result.user) {
-                const roleLabel = result.user.role === 'admin' ? '管理員' : '使用者';
+                const roleLabels = { admin: '管理員', finance: '財務人員', user: '一般人員' };
+                const roleLabel = roleLabels[result.user.role] || '一般人員';
                 el.textContent = `${result.user.full_name || result.user.username} (${roleLabel})`;
             }
 

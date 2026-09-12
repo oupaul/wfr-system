@@ -511,9 +511,9 @@
                 <div style="display: flex; gap: 10px; align-items: flex-start;">
                     <button class="btn btn-secondary" onclick="downloadTemplate()">📄 下載範本</button>
                     <button class="btn btn-secondary" onclick="exportToExcel()">📥 匯出Excel</button>
-                    <button class="btn btn-secondary" onclick="document.getElementById('importFileInput').click()">📤 匯入Excel</button>
+                    <button class="btn btn-secondary" id="importExcelBtn" onclick="document.getElementById('importFileInput').click()">📤 匯入Excel</button>
                     <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
-                    <button class="btn btn-primary" onclick="openAddModal()">➕ 新增收支記錄</button>
+                    <button class="btn btn-primary" id="addTransactionBtn" onclick="openAddModal()">➕ 新增收支記錄</button>
                 </div>
             </div>
 
@@ -570,7 +570,7 @@
             </div>
 
             <!-- 批次操作列 -->
-            <div class="batch-actions" style="margin-bottom: 15px; display: flex; align-items: center; gap: 12px;">
+            <div class="batch-actions" id="batchActionsBar" style="margin-bottom: 15px; display: flex; align-items: center; gap: 12px;">
                 <button type="button" class="btn btn-danger" id="batchDeleteBtn" onclick="batchDelete()" disabled title="請先勾選要刪除的記錄">
                     🗑️ 批次刪除 (<span id="selectedCount">0</span>)
                 </button>
@@ -581,7 +581,7 @@
                 <table>
                     <thead>
                         <tr>
-                            <th style="width: 42px;">
+                            <th style="width: 42px;" id="selectAllHeader">
                                 <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="全選">
                             </th>
                             <th>日期</th>
@@ -1009,7 +1009,7 @@
 
             tbody.innerHTML = transactions.map(t => `
                 <tr>
-                    <td><input type="checkbox" class="row-checkbox" value="${t.id}" data-id="${t.id}" onchange="updateBatchDeleteState()"></td>
+                    ${canEdit ? `<td><input type="checkbox" class="row-checkbox" value="${t.id}" data-id="${t.id}" onchange="updateBatchDeleteState()"></td>` : ''}
                     <td>${t.transaction_date}</td>
                     <td><span class="type-${t.type}">${t.type === 'income' ? '💰 收入' : '💸 支出'}</span></td>
                     <td class="amount-${t.type}">${formatCurrency(t.amount)}</td>
@@ -1019,8 +1019,10 @@
                     <td>${t.account_name || '-'}</td>
                     <td>${t.remarks || '-'}</td>
                     <td class="actions">
+                        ${canEdit ? `
                         <button class="btn btn-edit btn-sm" onclick="editTransaction(${t.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id})">刪除</button>
+                        ` : '<span style="color: #999;">-</span>'}
                     </td>
                 </tr>
             `).join('');
@@ -1400,9 +1402,21 @@
         }
 
         // 頁面載入時執行
+        let canEdit = false;
         document.addEventListener('DOMContentLoaded', async function() {
-            const authenticated = await checkAuth();
-            if (!authenticated) return;
+            const user = await checkAuth();
+            if (!user) return;
+            canEdit = user.role === 'admin' || user.role === 'finance';
+            if (!canEdit) {
+                const importBtn = document.getElementById('importExcelBtn');
+                const addBtn = document.getElementById('addTransactionBtn');
+                const batchBar = document.getElementById('batchActionsBar');
+                const selectAllHeader = document.getElementById('selectAllHeader');
+                if (importBtn) importBtn.style.display = 'none';
+                if (addBtn) addBtn.style.display = 'none';
+                if (batchBar) batchBar.style.display = 'none';
+                if (selectAllHeader) selectAllHeader.style.display = 'none';
+            }
             await loadConfig();
             loadTransactions();
             loadStatistics();

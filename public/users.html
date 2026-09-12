@@ -363,6 +363,11 @@
             font-weight: bold;
         }
 
+        .role-finance {
+            color: #F06000;
+            font-weight: bold;
+        }
+
         .role-user {
             color: #28a745;
         }
@@ -480,7 +485,8 @@
                     <div class="form-group">
                         <label for="modalRole">角色</label>
                         <select id="modalRole">
-                            <option value="user">一般使用者</option>
+                            <option value="user">一般人員（僅查詢）</option>
+                            <option value="finance">財務人員（可編輯）</option>
                             <option value="admin">系統管理員</option>
                         </select>
                     </div>
@@ -685,15 +691,18 @@
                 return;
             }
 
+            const roleLabels = { admin: ['role-admin', '管理員'], finance: ['role-finance', '財務人員'], user: ['role-user', '一般人員'] };
+
             tbody.innerHTML = users.map(u => {
                 const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('zh-TW') : '從未登入';
+                const [roleClass, roleLabel] = roleLabels[u.role] || roleLabels.user;
                 return `
                     <tr>
                         <td>${u.id}</td>
                         <td>${u.username || '-'}</td>
                         <td>${u.full_name || '-'}</td>
                         <td>${u.email || '-'}</td>
-                        <td><span class="${u.role === 'admin' ? 'role-admin' : 'role-user'}">${u.role === 'admin' ? '管理員' : '一般使用者'}</span></td>
+                        <td><span class="${roleClass}">${roleLabel}</span></td>
                         <td><span class="${u.is_active ? 'status-active' : 'status-inactive'}">${u.is_active ? '啟用' : '停用'}</span></td>
                         <td>${lastLogin}</td>
                         <td class="actions">

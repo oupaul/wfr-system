@@ -4,6 +4,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
+const { requireEditor } = require('../middleware/auth');
 
 // 取得所有銀行帳戶
 router.get('/', (req, res) => {
@@ -81,7 +82,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增銀行帳戶
-router.post('/', (req, res) => {
+router.post('/', requireEditor, (req, res) => {
     const {
         company_id,
         account_name,
@@ -120,7 +121,7 @@ router.post('/', (req, res) => {
 });
 
 // 更新銀行帳戶
-router.put('/:id', (req, res) => {
+router.put('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     const { company_id, account_name, account_number, bank_name, branch_name, account_type, currency, remarks, is_active } = req.body;
     const safety_level = req.body.safety_level !== undefined ? req.body.safety_level : 0;
@@ -147,7 +148,7 @@ router.put('/:id', (req, res) => {
 });
 
 // 刪除銀行帳戶
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM bank_accounts WHERE id = ?', [id], (err, row) => {
         if (err || !row) {
