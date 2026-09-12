@@ -82,7 +82,11 @@ router.post('/login', loginLimiter, async (req, res) => {
                     return res.status(500).json({ error: '登入失敗' });
                 }
 
-                db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+                db.run('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?', [user.id], (updateErr) => {
+                    if (updateErr) {
+                        logger.error('更新 last_login 失敗:', updateErr);
+                    }
+                });
                 logger.info(`登入成功: ${username} from ${req.ip}`);
 
                 res.json({
