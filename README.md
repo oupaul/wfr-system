@@ -221,6 +221,18 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 - 瀏覽器標題配置
 - 環境檢查、依賴安裝、資料庫初始化
 
+### 一鍵更新
+
+```bash
+./update.sh
+```
+
+從 GitHub 拉取最新程式碼並重啟服務，包含：
+- 自動偵測部署路徑與實際的 systemd 服務名稱（含自訂服務名稱）
+- 更新前自動備份資料庫
+- 若有未提交的本地變更會先詢問是否暫存（`git stash`），避免 `git pull` 失敗
+- 更新相依套件並重啟服務，重啟後自動檢查服務是否正常運行
+
 ### 一鍵移除
 
 ```bash
@@ -306,7 +318,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 ├── docs/
 │   └── 資金缺口-A公司數值差異說明.md
 ├── backups/            # 備份目錄（可自訂 BACKUP_PATH）
-├── install.sh / uninstall.sh / backup.sh / restore.sh
+├── install.sh / update.sh / uninstall.sh / backup.sh / restore.sh
 ├── server.js           # Express 主程式（含 API 與操作日誌）
 ├── package.json
 ├── README.md / QUICK-START.md / SYSTEM-ROADMAP.md / FIX-INSTALL.md / SCRIPTS.md / CHANGELOG.md
@@ -367,8 +379,8 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 **解決方法：**
 ```bash
 # 使用 sed 修復換行符
-sed -i 's/\r$//' install.sh uninstall.sh backup.sh restore.sh
-chmod +x install.sh uninstall.sh backup.sh restore.sh
+sed -i 's/\r$//' install.sh update.sh uninstall.sh backup.sh restore.sh
+chmod +x install.sh update.sh uninstall.sh backup.sh restore.sh
 
 # 或一次性修復所有 .sh 文件
 for file in *.sh; do sed -i 's/\r$//' "$file" && chmod +x "$file"; done
