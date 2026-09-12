@@ -575,6 +575,10 @@
                         <label>帳戶</label>
                         <input type="text" id="filterAccount" placeholder="輸入帳戶名稱或帳號">
                     </div>
+                    <div class="form-group">
+                        <label>關鍵字</label>
+                        <input type="text" id="filterKeyword" placeholder="搜尋說明、類別或備註">
+                    </div>
                 </div>
                 <div style="text-align: right;">
                     <button class="btn btn-secondary" onclick="resetFilters()">清除篩選</button>
@@ -992,6 +996,7 @@
             const type = document.getElementById('filterType').value;
             const company = document.getElementById('filterCompany').value;
             const account = document.getElementById('filterAccount').value;
+            const keyword = document.getElementById('filterKeyword').value;
 
             const offset = (currentTransactionsPage - 1) * TRANSACTIONS_PAGE_SIZE;
             let url = `${API_BASE}/transactions?limit=${TRANSACTIONS_PAGE_SIZE}&offset=${offset}`;
@@ -1000,6 +1005,7 @@
             if (type) url += `&type=${type}`;
             if (company) url += `&company=${company}`;
             if (account) url += `&account=${account}`;
+            if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`;
 
             fetch(url)
                 .then(res => res.json())
@@ -1176,6 +1182,7 @@
             document.getElementById('filterType').value = '';
             document.getElementById('filterCompany').value = '';
             document.getElementById('filterAccount').value = '';
+            document.getElementById('filterKeyword').value = '';
             loadTransactions(1);
             loadStatistics();
         }
@@ -1237,6 +1244,7 @@
             const type = document.getElementById('filterType').value;
             const company = document.getElementById('filterCompany').value;
             const account = document.getElementById('filterAccount').value;
+            const keyword = document.getElementById('filterKeyword').value;
 
             let url = `${API_BASE}/transactions/export?`;
             const params = [];
@@ -1245,7 +1253,8 @@
             if (type) params.push(`type=${encodeURIComponent(type)}`);
             if (company) params.push(`company=${encodeURIComponent(company)}`);
             if (account) params.push(`account=${encodeURIComponent(account)}`);
-            
+            if (keyword) params.push(`keyword=${encodeURIComponent(keyword)}`);
+
             url += params.join('&');
 
             // 創建一個臨時的a標籤來觸發下載

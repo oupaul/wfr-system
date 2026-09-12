@@ -37,7 +37,7 @@ const upload = multer({
 // bank_name 透過 company_name/account_name/account_number 比對 bank_accounts 查出來
 // （transactions 本身沒有存 bank_name，用法跟其他頁面比對 balance_settlements 的方式一致）
 router.get('/', (req, res) => {
-    const { startDate, endDate, type, company, account, limit = 1000, offset = 0 } = req.query;
+    const { startDate, endDate, type, company, account, keyword, limit = 1000, offset = 0 } = req.query;
 
     let baseQuery = `
         FROM transactions t
@@ -68,6 +68,10 @@ router.get('/', (req, res) => {
     if (account) {
         baseQuery += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
+    }
+    if (keyword) {
+        baseQuery += ' AND (t.description LIKE ? OR t.category LIKE ? OR t.remarks LIKE ?)';
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     db.get(`SELECT COUNT(*) as total ${baseQuery}`, params, (countErr, countRow) => {
@@ -176,7 +180,7 @@ router.get('/template', async (req, res) => {
 
 // 匯出收支記錄為 Excel（必須在 /:id 之前）
 router.get('/export', (req, res) => {
-    const { startDate, endDate, type, company, account } = req.query;
+    const { startDate, endDate, type, company, account, keyword } = req.query;
 
     let query = `
         SELECT t.*, ba.bank_name
@@ -208,6 +212,10 @@ router.get('/export', (req, res) => {
     if (account) {
         query += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
+    }
+    if (keyword) {
+        query += ' AND (t.description LIKE ? OR t.category LIKE ? OR t.remarks LIKE ?)';
+        params.push(`%${keyword}%`, `%${keyword}%`, `%${keyword}%`);
     }
 
     query += ' ORDER BY t.transaction_date ASC, t.id ASC';
