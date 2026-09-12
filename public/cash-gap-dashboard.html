@@ -382,12 +382,34 @@
         .ledger-table td.ledger-desc-col {
             text-align: left;
             white-space: normal;
+            width: 220px;
             min-width: 220px;
+            max-width: 220px;
         }
 
         .ledger-table th.ledger-date-col,
         .ledger-table td.ledger-date-col {
             text-align: left;
+            width: 90px;
+            min-width: 90px;
+        }
+
+        /* 凍結左側「月份」「收支項目」兩欄，橫向捲動時仍知道這一列是什麼 */
+        .ledger-table th.ledger-date-col,
+        .ledger-table td.ledger-date-col {
+            position: sticky;
+            left: 0;
+            z-index: 2;
+            background: #FFFFFF;
+        }
+
+        .ledger-table th.ledger-desc-col,
+        .ledger-table td.ledger-desc-col {
+            position: sticky;
+            left: 90px;
+            z-index: 2;
+            background: #FFFFFF;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
         }
 
         .ledger-table thead th {
@@ -395,9 +417,27 @@
             color: #1E293B;
         }
 
+        .ledger-table thead th.ledger-date-col,
+        .ledger-table thead th.ledger-desc-col {
+            z-index: 3;
+            background: #F8FAFC;
+        }
+
         .ledger-row-balance td {
             background: #FEF3C7;
             font-weight: bold;
+        }
+
+        .ledger-row-balance td.ledger-date-col,
+        .ledger-row-balance td.ledger-desc-col {
+            background: #FEF3C7;
+        }
+
+        .ledger-account-number {
+            display: block;
+            font-weight: normal;
+            font-size: 11px;
+            color: #64748B;
         }
 
         .ledger-amount-expense {
@@ -748,8 +788,9 @@
             ).join('');
 
             const accountHeaderRow = columns.map(c => {
-                const label = c.account_type ? `${c.account_name}（${c.account_type}）` : c.account_name;
-                return `<th>${label || '未命名帳戶'}</th>`;
+                const label = c.account_type ? `${c.account_name}（${c.account_type}）` : (c.account_name || '未命名帳戶');
+                const numberLine = c.account_number ? `<span class="ledger-account-number">${c.account_number}</span>` : '';
+                return `<th>${label}${numberLine}</th>`;
             }).join('');
 
             const bodyRows = rows.map((row) => {

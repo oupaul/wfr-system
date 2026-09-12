@@ -423,6 +423,7 @@ router.get('/cash-gap-ledger', (req, res) => {
                         account_id: account.id,
                         company_name: account.company_name || '',
                         account_name: account.account_name || '',
+                        account_number: account.account_number || '',
                         account_type: account.account_type || '',
                         opening_balance: openingBalance,
                         current_balance: currentBalance
@@ -476,7 +477,24 @@ router.get('/cash-gap-ledger', (req, res) => {
                             }
                         });
 
-                        res.json({ targetDates, columns, rows: rowsOut });
+                        // 帳戶餘額在整段檢視期間都是 0（沒有結算金額也沒有任何交易）就不顯示，減少表格雜訊
+                        const balanceRows = rowsOut.filter((r) => r.type === 'balance');
+                        const zeroAccountIds = new Set(
+                            columns
+                                .filter((c) => balanceRows.every((r) => (r.balances[c.account_id] || 0) === 0))
+                                .map((c) => c.account_id)
+                        );
+                        const visibleColumns = columns.filter((c) => !zeroAccountIds.has(c.account_id));
+                        const visibleRows = rowsOut
+                            .filter((r) => r.type !== 'transaction' || !zeroAccountIds.has(r.account_id))
+                            .map((r) => {
+                                if (r.type !== 'balance') return r;
+                                const balances = { ...r.balances };
+                                zeroAccountIds.forEach((id) => delete balances[id]);
+                                return { ...r, balances };
+                            });
+
+                        res.json({ targetDates, columns: visibleColumns, rows: visibleRows });
                     }
                 });
             });
