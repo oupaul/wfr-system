@@ -320,6 +320,7 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
                         account_name: account.account_name || '',
                         account_number: account.account_number || '',
                         account_type: account.account_type || '',
+                        bank_name: account.bank_name || '',
                         opening_balance: openingBalance,
                         current_balance: currentBalance,
                         safety_level: safetyLevel,

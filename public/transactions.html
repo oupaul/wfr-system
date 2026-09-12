@@ -1016,7 +1016,7 @@
                     <td>${t.category || '-'}</td>
                     <td>${t.description || '-'}</td>
                     <td>${t.company_name || '-'}</td>
-                    <td>${t.account_name || '-'}</td>
+                    <td>${t.account_name || '-'}${t.bank_name ? `<br><span style="font-size: 12px; color: #64748B;">${t.bank_name}</span>` : ''}${t.account_number ? `<br><span style="font-size: 12px; color: #94A3B8;">${t.account_number}</span>` : ''}</td>
                     <td>${t.remarks || '-'}</td>
                     <td class="actions">
                         ${canEdit ? `

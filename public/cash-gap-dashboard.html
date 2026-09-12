@@ -573,6 +573,37 @@
             margin-top: 8px;
         }
 
+        /* 帳戶卡片檢視：依銀行／帳戶類型分類的餘額小計 */
+        .balance-breakdown {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .breakdown-group h4 {
+            font-size: 14px;
+            color: #64748B;
+            margin-bottom: 10px;
+        }
+
+        .breakdown-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #E2E8F0;
+            font-size: 14px;
+        }
+
+        .breakdown-row:last-child {
+            border-bottom: none;
+        }
+
+        .breakdown-row .value {
+            font-weight: bold;
+            color: #1E293B;
+        }
+
         @media (max-width: 768px) {
             .account-details {
                 grid-template-columns: 1fr;
@@ -658,6 +689,9 @@
                         <div style="font-size: 12px; margin-top: 5px;">每個月 15 號、30 號</div>
                     </div>
                 </div>
+
+                <!-- 依銀行／帳戶類型分類的餘額小計 -->
+                <div class="balance-breakdown" id="balanceBreakdown"></div>
 
                 <!-- 各日總缺口摘要表 -->
                 <div class="summary-by-dates" id="summaryByDatesSection" style="display: none;">
@@ -773,6 +807,7 @@
                     dashboardData = data.data || [];
                     summaryData = data.summary || {};
                     displaySummary(summaryData);
+                    displayBalanceBreakdown(dashboardData);
                     displaySummaryByDates(targetDates, summaryData.totalGapByDate || {});
                     displayAccounts(dashboardData);
                 })
@@ -789,6 +824,41 @@
             if (summary.currentDate) {
                 document.getElementById('balanceDate').textContent = '截至 ' + formatDateFull(summary.currentDate);
             }
+        }
+
+        // 依銀行、依帳戶類型分別加總目前餘額
+        function displayBalanceBreakdown(accounts) {
+            const container = document.getElementById('balanceBreakdown');
+            if (!accounts || accounts.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            function groupSum(keyFn, fallbackLabel) {
+                const totals = new Map();
+                accounts.forEach(a => {
+                    const key = keyFn(a) || fallbackLabel;
+                    totals.set(key, (totals.get(key) || 0) + (a.current_balance || 0));
+                });
+                return Array.from(totals.entries());
+            }
+
+            const byBank = groupSum(a => a.bank_name, '未指定銀行');
+            const byType = groupSum(a => a.account_type, '未分類');
+
+            const renderGroup = (title, rows) => `
+                <div class="breakdown-group">
+                    <h4>${title}</h4>
+                    ${rows.map(([label, total]) => `
+                        <div class="breakdown-row">
+                            <span>${label}</span>
+                            <span class="value">${formatCurrency(total)}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            container.innerHTML = renderGroup('依銀行分類', byBank) + renderGroup('依帳戶類型分類', byType);
         }
 
         // 顯示各日總缺口摘要表
@@ -832,7 +902,7 @@
                         <div class="account-title">
                             <h3>${account.account_name || '未命名帳戶'}${account.account_type ? ` <span class="account-type-badge">${account.account_type}</span>` : ''}</h3>
                             <div class="subtitle">
-                                ${account.company_name || ''} ${account.account_number ? '- ' + account.account_number : ''}
+                                ${account.company_name || ''}${account.bank_name ? ' - ' + account.bank_name : ''}${account.account_number ? ' - ' + account.account_number : ''}
                             </div>
                         </div>
                         ${hasAnyGap ? 

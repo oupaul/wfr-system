@@ -34,34 +34,44 @@ const upload = multer({
 });
 
 // 取得所有收支記錄
+// bank_name 透過 company_name/account_name/account_number 比對 bank_accounts 查出來
+// （transactions 本身沒有存 bank_name，用法跟其他頁面比對 balance_settlements 的方式一致）
 router.get('/', (req, res) => {
     const { startDate, endDate, type, company, account, limit = 1000, offset = 0 } = req.query;
 
-    let query = 'SELECT * FROM transactions WHERE 1=1';
+    let query = `
+        SELECT t.*, ba.bank_name
+        FROM transactions t
+        LEFT JOIN companies c ON c.name = t.company_name
+        LEFT JOIN bank_accounts ba ON ba.company_id = c.id
+            AND ba.account_name = t.account_name
+            AND (ba.account_number = t.account_number OR (ba.account_number IS NULL AND t.account_number IS NULL))
+        WHERE 1=1
+    `;
     const params = [];
 
     if (startDate) {
-        query += ' AND transaction_date >= ?';
+        query += ' AND t.transaction_date >= ?';
         params.push(startDate);
     }
     if (endDate) {
-        query += ' AND transaction_date <= ?';
+        query += ' AND t.transaction_date <= ?';
         params.push(endDate);
     }
     if (type) {
-        query += ' AND type = ?';
+        query += ' AND t.type = ?';
         params.push(type);
     }
     if (company) {
-        query += ' AND company_name LIKE ?';
+        query += ' AND t.company_name LIKE ?';
         params.push(`%${company}%`);
     }
     if (account) {
-        query += ' AND (account_name LIKE ? OR account_number LIKE ?)';
+        query += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
     }
 
-    query += ' ORDER BY transaction_date DESC, id DESC LIMIT ? OFFSET ?';
+    query += ' ORDER BY t.transaction_date DESC, t.id DESC LIMIT ? OFFSET ?';
     params.push(parseInt(limit), parseInt(offset));
 
     db.all(query, params, (err, rows) => {
@@ -162,31 +172,39 @@ router.get('/template', async (req, res) => {
 router.get('/export', (req, res) => {
     const { startDate, endDate, type, company, account } = req.query;
 
-    let query = 'SELECT * FROM transactions WHERE 1=1';
+    let query = `
+        SELECT t.*, ba.bank_name
+        FROM transactions t
+        LEFT JOIN companies c ON c.name = t.company_name
+        LEFT JOIN bank_accounts ba ON ba.company_id = c.id
+            AND ba.account_name = t.account_name
+            AND (ba.account_number = t.account_number OR (ba.account_number IS NULL AND t.account_number IS NULL))
+        WHERE 1=1
+    `;
     const params = [];
 
     if (startDate) {
-        query += ' AND transaction_date >= ?';
+        query += ' AND t.transaction_date >= ?';
         params.push(startDate);
     }
     if (endDate) {
-        query += ' AND transaction_date <= ?';
+        query += ' AND t.transaction_date <= ?';
         params.push(endDate);
     }
     if (type) {
-        query += ' AND type = ?';
+        query += ' AND t.type = ?';
         params.push(type);
     }
     if (company) {
-        query += ' AND company_name LIKE ?';
+        query += ' AND t.company_name LIKE ?';
         params.push(`%${company}%`);
     }
     if (account) {
-        query += ' AND (account_name LIKE ? OR account_number LIKE ?)';
+        query += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
     }
 
-    query += ' ORDER BY transaction_date ASC, id ASC';
+    query += ' ORDER BY t.transaction_date ASC, t.id ASC';
 
     db.all(query, params, async (err, rows) => {
         if (err) {
@@ -205,6 +223,7 @@ router.get('/export', (req, res) => {
                 { header: '類型', key: 'type', width: 10 },
                 { header: '類別', key: 'category', width: 20 },
                 { header: '公司名稱', key: 'company', width: 25 },
+                { header: '銀行名稱', key: 'bankName', width: 20 },
                 { header: '帳戶名稱', key: 'account', width: 25 },
                 { header: '帳號', key: 'accountNumber', width: 20 },
                 { header: '備註', key: 'remarks', width: 30 }
@@ -237,6 +256,7 @@ router.get('/export', (req, res) => {
                     type: row.type === 'income' ? '收入' : '支出',
                     category: row.category || '',
                     company: row.company_name || '',
+                    bankName: row.bank_name || '',
                     account: row.account_name || '',
                     accountNumber: row.account_number || '',
                     remarks: row.remarks || ''
