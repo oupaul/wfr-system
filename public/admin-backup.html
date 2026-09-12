@@ -229,7 +229,7 @@
         const API_BASE = '/api';
 
         // 檢查認證和管理員權限
-        async function checkAuth() {
+        async function verifyPageAuth() {
             const user = await window.checkAuth({ adminOnly: true });
             return !!user;
         }
@@ -388,7 +388,7 @@
 
         // 頁面載入時執行
         window.onload = async function() {
-            const authenticated = await checkAuth();
+            const authenticated = await verifyPageAuth();
             if (authenticated) {
                 loadBackups();
             }

@@ -159,7 +159,7 @@
     </div>
     <script>
         const API_BASE = '/api';
-        async function checkAuth() {
+        async function verifyPageAuth() {
             const user = await window.checkAuth({ adminOnly: true });
             return !!user;
         }
@@ -261,7 +261,7 @@
             if (btn) btn.textContent = isHidden ? '隱藏差異' : '顯示差異';
         }
         window.onload = async function() {
-            const ok = await checkAuth();
+            const ok = await verifyPageAuth();
             if (ok) loadLogs();
         };
     </script>

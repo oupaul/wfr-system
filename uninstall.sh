@@ -151,8 +151,28 @@ echo "開始移除..."
 # 1. 檢查並停止服務
 echo "1. 檢查並停止服務..."
 
-# 檢查是否有 systemd 服務
-SERVICE_NAME="fund-weekly-report"
+# 找出實際對應此部署目錄的 systemd 服務名稱
+# 安裝時服務名稱可能被自訂（例如 cashflow-prod），不能只靠寫死的預設值猜測，
+# 否則自訂名稱的服務會被完全略過而不會有任何錯誤訊息。
+# 優先用 WorkingDirectory 比對實際服務檔案，其次讀 .install-config，最後才用預設值。
+SERVICE_NAME=""
+if [ -d "/etc/systemd/system" ]; then
+    for svc_file in /etc/systemd/system/*.service; do
+        [ -f "$svc_file" ] || continue
+        if grep -q "^WorkingDirectory=${CURRENT_DIR}$" "$svc_file" 2>/dev/null; then
+            SERVICE_NAME=$(basename "$svc_file" .service)
+            echo "  找到對應的 systemd 服務: ${SERVICE_NAME}.service"
+            break
+        fi
+    done
+fi
+
+if [ -z "$SERVICE_NAME" ] && [ -f ".install-config" ]; then
+    SERVICE_NAME=$(grep "^SERVICE_NAME=" .install-config 2>/dev/null | cut -d'=' -f2- | tr -d '"' | tr -d "'" || echo "")
+fi
+
+SERVICE_NAME=${SERVICE_NAME:-fund-weekly-report}
+
 if systemctl list-unit-files | grep -q "${SERVICE_NAME}.service"; then
     if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
         echo -e "${YELLOW}發現 systemd 服務正在運行${NC}"
