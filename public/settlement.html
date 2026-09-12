@@ -1081,7 +1081,7 @@
                 <tr>
                     <td>${s.settlement_date}</td>
                     <td>${s.company_name || '-'}</td>
-                    <td>${s.account_name || '-'}</td>
+                    <td>${s.account_name || '-'}${s.account_number ? `<br><span style="font-size: 12px; color: #64748B;">${s.account_number}</span>` : ''}</td>
                     <td>${formatCurrency(s.opening_balance)}</td>
                     <td class="positive">${formatCurrency(s.total_income)}</td>
                     <td class="negative">${formatCurrency(s.total_expense)}</td>

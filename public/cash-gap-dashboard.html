@@ -491,6 +491,32 @@
                 margin-top: 15px;
                 justify-content: center;
             }
+
+            /* 手機版：凍結欄位縮窄，讓帳戶欄位有機會露出來，避免橫向捲動時看不到任何金額 */
+            .ledger-table {
+                font-size: 11px;
+            }
+
+            .ledger-table th,
+            .ledger-table td {
+                padding: 6px 8px;
+            }
+
+            .ledger-table th.ledger-date-col,
+            .ledger-table td.ledger-date-col {
+                width: 56px;
+                min-width: 56px;
+                white-space: normal;
+                left: 0;
+            }
+
+            .ledger-table th.ledger-desc-col,
+            .ledger-table td.ledger-desc-col {
+                width: 130px;
+                min-width: 130px;
+                max-width: 130px;
+                left: 56px;
+            }
         }
     </style>
     <script src="/js/auth-common.js"></script>
