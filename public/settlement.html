@@ -129,6 +129,19 @@
             margin: 0 3px;
         }
 
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px 0;
+        }
+
+        .pagination-info {
+            font-size: 14px;
+            color: #64748B;
+        }
+
         .error {
             background: #f8d7da;
             color: #721c24;
@@ -620,6 +633,7 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="pagination" id="settlementsPagination"></div>
             </div>
         </div>
     </div>
@@ -734,7 +748,10 @@
                             select.disabled = false;
                         } else {
                             select.innerHTML = '<option value="">請選擇帳戶（選填）</option>' +
-                                bankAccountsListSettlement.map(a => `<option value="${a.id}">${a.account_name}${a.account_number ? ' - ' + a.account_number : ''}${a.company_name ? ' (' + a.company_name + ')' : ''}</option>`).join('');
+                                bankAccountsListSettlement.map(a => {
+                                    const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
+                                    return `<option value="${a.id}">${a.account_name}${bankAndType ? ' (' + bankAndType + ')' : ''}${a.account_number ? ' - ' + a.account_number : ''}${a.company_name ? ' - ' + a.company_name : ''}</option>`;
+                                }).join('');
                             select.disabled = false;
                         }
                     } else {
@@ -1049,21 +1066,48 @@
                 });
         };
 
-        // 載入結算記錄
-        function loadSettlements() {
-            fetch(`${API_BASE}/settlements?limit=100`)
+        // 載入結算記錄（分頁：每頁 50 筆）
+        const SETTLEMENTS_PAGE_SIZE = 50;
+        let currentSettlementsPage = 1;
+        let totalSettlements = 0;
+
+        function loadSettlements(page) {
+            currentSettlementsPage = page || currentSettlementsPage || 1;
+            const offset = (currentSettlementsPage - 1) * SETTLEMENTS_PAGE_SIZE;
+
+            fetch(`${API_BASE}/settlements?limit=${SETTLEMENTS_PAGE_SIZE}&offset=${offset}`)
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) {
                         showMessage(data.error, 'error');
                         return;
                     }
+                    totalSettlements = data.total != null ? data.total : (data.data || []).length;
                     displaySettlements(data.data || []);
+                    renderSettlementsPagination();
                 })
                 .catch(err => {
                     console.error('載入錯誤:', err);
                     showMessage('載入數據失敗', 'error');
                 });
+        }
+
+        // 顯示分頁控制項（上一頁／下一頁 + 頁碼）
+        function renderSettlementsPagination() {
+            const container = document.getElementById('settlementsPagination');
+            if (!container) return;
+
+            const totalPages = Math.max(1, Math.ceil(totalSettlements / SETTLEMENTS_PAGE_SIZE));
+            if (totalSettlements <= SETTLEMENTS_PAGE_SIZE) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <button class="btn btn-secondary btn-sm" onclick="loadSettlements(${currentSettlementsPage - 1})" ${currentSettlementsPage <= 1 ? 'disabled' : ''}>← 上一頁</button>
+                <span class="pagination-info">第 ${currentSettlementsPage} / ${totalPages} 頁（共 ${totalSettlements} 筆）</span>
+                <button class="btn btn-secondary btn-sm" onclick="loadSettlements(${currentSettlementsPage + 1})" ${currentSettlementsPage >= totalPages ? 'disabled' : ''}>下一頁 →</button>
+            `;
         }
 
         // 顯示結算記錄
@@ -1079,7 +1123,7 @@
                 <tr>
                     <td>${s.settlement_date}</td>
                     <td>${s.company_name || '-'}</td>
-                    <td>${s.account_name || '-'}${s.account_number ? `<br><span style="font-size: 12px; color: #64748B;">${s.account_number}</span>` : ''}</td>
+                    <td>${s.account_name || '-'}${s.account_type ? ` <span style="font-size: 11px; color: #64748B; border: 1px solid #E2E8F0; border-radius: 4px; padding: 1px 6px;">${s.account_type}</span>` : ''}${s.bank_name ? `<br><span style="font-size: 12px; color: #94A3B8;">${s.bank_name}</span>` : ''}${s.account_number ? `<br><span style="font-size: 12px; color: #64748B;">${s.account_number}</span>` : ''}</td>
                     <td>${formatCurrency(s.opening_balance)}</td>
                     <td class="positive">${formatCurrency(s.total_income)}</td>
                     <td class="negative">${formatCurrency(s.total_expense)}</td>

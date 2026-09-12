@@ -147,6 +147,19 @@
             margin: 0 3px;
         }
 
+        .pagination {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            padding: 20px 0;
+        }
+
+        .pagination-info {
+            font-size: 14px;
+            color: #64748B;
+        }
+
         .error {
             background: #f8d7da;
             color: #721c24;
@@ -565,7 +578,7 @@
                 </div>
                 <div style="text-align: right;">
                     <button class="btn btn-secondary" onclick="resetFilters()">清除篩選</button>
-                    <button class="btn btn-primary" onclick="loadTransactions()">🔍 查詢</button>
+                    <button class="btn btn-primary" onclick="loadTransactions(1)">🔍 查詢</button>
                 </div>
             </div>
 
@@ -602,6 +615,7 @@
                     </tbody>
                 </table>
             </div>
+            <div class="pagination" id="transactionsPagination"></div>
         </div>
     </div>
 
@@ -965,15 +979,22 @@
                 });
         };
 
-        // 載入收支記錄
-        function loadTransactions() {
+        // 載入收支記錄（分頁：每頁 50 筆）
+        const TRANSACTIONS_PAGE_SIZE = 50;
+        let currentTransactionsPage = 1;
+        let totalTransactions = 0;
+
+        function loadTransactions(page) {
+            currentTransactionsPage = page || currentTransactionsPage || 1;
+
             const startDate = document.getElementById('filterStartDate').value;
             const endDate = document.getElementById('filterEndDate').value;
             const type = document.getElementById('filterType').value;
             const company = document.getElementById('filterCompany').value;
             const account = document.getElementById('filterAccount').value;
 
-            let url = `${API_BASE}/transactions?limit=1000`;
+            const offset = (currentTransactionsPage - 1) * TRANSACTIONS_PAGE_SIZE;
+            let url = `${API_BASE}/transactions?limit=${TRANSACTIONS_PAGE_SIZE}&offset=${offset}`;
             if (startDate) url += `&startDate=${startDate}`;
             if (endDate) url += `&endDate=${endDate}`;
             if (type) url += `&type=${type}`;
@@ -987,12 +1008,32 @@
                         showMessage(data.error, 'error');
                         return;
                     }
+                    totalTransactions = data.total != null ? data.total : (data.data || []).length;
                     displayTransactions(data.data || []);
+                    renderTransactionsPagination();
                 })
                 .catch(err => {
                     console.error('錯誤:', err);
                     showMessage('載入數據失敗', 'error');
                 });
+        }
+
+        // 顯示分頁控制項（上一頁／下一頁 + 頁碼）
+        function renderTransactionsPagination() {
+            const container = document.getElementById('transactionsPagination');
+            if (!container) return;
+
+            const totalPages = Math.max(1, Math.ceil(totalTransactions / TRANSACTIONS_PAGE_SIZE));
+            if (totalTransactions <= TRANSACTIONS_PAGE_SIZE) {
+                container.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = `
+                <button class="btn btn-secondary btn-sm" onclick="loadTransactions(${currentTransactionsPage - 1})" ${currentTransactionsPage <= 1 ? 'disabled' : ''}>← 上一頁</button>
+                <span class="pagination-info">第 ${currentTransactionsPage} / ${totalPages} 頁（共 ${totalTransactions} 筆）</span>
+                <button class="btn btn-secondary btn-sm" onclick="loadTransactions(${currentTransactionsPage + 1})" ${currentTransactionsPage >= totalPages ? 'disabled' : ''}>下一頁 →</button>
+            `;
         }
 
         // 顯示收支記錄
@@ -1135,7 +1176,7 @@
             document.getElementById('filterType').value = '';
             document.getElementById('filterCompany').value = '';
             document.getElementById('filterAccount').value = '';
-            loadTransactions();
+            loadTransactions(1);
             loadStatistics();
         }
 

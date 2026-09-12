@@ -39,47 +39,53 @@ const upload = multer({
 router.get('/', (req, res) => {
     const { startDate, endDate, type, company, account, limit = 1000, offset = 0 } = req.query;
 
-    let query = `
-        SELECT t.*, ba.bank_name
+    let baseQuery = `
         FROM transactions t
         LEFT JOIN companies c ON c.name = t.company_name
         LEFT JOIN bank_accounts ba ON ba.company_id = c.id
             AND ba.account_name = t.account_name
-            AND (ba.account_number = t.account_number OR (ba.account_number IS NULL AND t.account_number IS NULL))
+            AND (ba.account_number = t.account_number OR ba.account_number IS NULL OR t.account_number IS NULL)
         WHERE 1=1
     `;
     const params = [];
 
     if (startDate) {
-        query += ' AND t.transaction_date >= ?';
+        baseQuery += ' AND t.transaction_date >= ?';
         params.push(startDate);
     }
     if (endDate) {
-        query += ' AND t.transaction_date <= ?';
+        baseQuery += ' AND t.transaction_date <= ?';
         params.push(endDate);
     }
     if (type) {
-        query += ' AND t.type = ?';
+        baseQuery += ' AND t.type = ?';
         params.push(type);
     }
     if (company) {
-        query += ' AND t.company_name LIKE ?';
+        baseQuery += ' AND t.company_name LIKE ?';
         params.push(`%${company}%`);
     }
     if (account) {
-        query += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
+        baseQuery += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
     }
 
-    query += ' ORDER BY t.transaction_date DESC, t.id DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            logger.error('查詢錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
+    db.get(`SELECT COUNT(*) as total ${baseQuery}`, params, (countErr, countRow) => {
+        if (countErr) {
+            logger.error('查詢錯誤:', countErr);
+            return res.status(500).json({ error: '查詢失敗', details: countErr.message });
         }
-        res.json({ data: rows, count: rows.length });
+
+        const dataQuery = `SELECT t.*, ba.bank_name ${baseQuery} ORDER BY t.transaction_date DESC, t.id DESC LIMIT ? OFFSET ?`;
+        const dataParams = [...params, parseInt(limit), parseInt(offset)];
+
+        db.all(dataQuery, dataParams, (err, rows) => {
+            if (err) {
+                logger.error('查詢錯誤:', err);
+                return res.status(500).json({ error: '查詢失敗', details: err.message });
+            }
+            res.json({ data: rows, count: rows.length, total: countRow ? countRow.total : rows.length });
+        });
     });
 });
 
@@ -178,7 +184,7 @@ router.get('/export', (req, res) => {
         LEFT JOIN companies c ON c.name = t.company_name
         LEFT JOIN bank_accounts ba ON ba.company_id = c.id
             AND ba.account_name = t.account_name
-            AND (ba.account_number = t.account_number OR (ba.account_number IS NULL AND t.account_number IS NULL))
+            AND (ba.account_number = t.account_number OR ba.account_number IS NULL OR t.account_number IS NULL)
         WHERE 1=1
     `;
     const params = [];

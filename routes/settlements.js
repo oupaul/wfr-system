@@ -7,48 +7,63 @@ const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
 // 取得所有結算記錄
+// bank_name / account_type 透過比對 bank_accounts 查出來（balance_settlements
+// 本身沒有存這兩個欄位，做法跟 transactions 比對的方式一致）
 router.get('/', (req, res) => {
     const { startDate, endDate, company, company_name, account, account_name, account_number, limit = 100, offset = 0, order } = req.query;
 
-    let query = 'SELECT * FROM balance_settlements WHERE 1=1';
+    let baseQuery = `
+        FROM balance_settlements bs
+        LEFT JOIN companies c ON c.name = bs.company_name
+        LEFT JOIN bank_accounts ba ON ba.company_id = c.id
+            AND ba.account_name = bs.account_name
+            AND (ba.account_number = bs.account_number OR ba.account_number IS NULL OR bs.account_number IS NULL)
+        WHERE 1=1
+    `;
     const params = [];
 
     if (startDate) {
-        query += ' AND settlement_date >= ?';
+        baseQuery += ' AND bs.settlement_date >= ?';
         params.push(startDate);
     }
     if (endDate) {
-        query += ' AND settlement_date <= ?';
+        baseQuery += ' AND bs.settlement_date <= ?';
         params.push(endDate);
     }
     const companyParam = company_name || company;
     if (companyParam) {
-        query += ' AND company_name = ?';
+        baseQuery += ' AND bs.company_name = ?';
         params.push(companyParam);
     }
     if (account) {
-        query += ' AND (account_name LIKE ? OR account_number LIKE ?)';
+        baseQuery += ' AND (bs.account_name LIKE ? OR bs.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
     }
     if (account_name) {
-        query += ' AND account_name = ?';
+        baseQuery += ' AND bs.account_name = ?';
         params.push(account_name);
     }
     if (account_number) {
-        query += ' AND account_number = ?';
+        baseQuery += ' AND bs.account_number = ?';
         params.push(account_number);
     }
 
-    query += ' ORDER BY settlement_date DESC, id DESC';
-    query += ' LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), parseInt(offset));
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            logger.error('查詢錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
+    db.get(`SELECT COUNT(*) as total ${baseQuery}`, params, (countErr, countRow) => {
+        if (countErr) {
+            logger.error('查詢錯誤:', countErr);
+            return res.status(500).json({ error: '查詢失敗', details: countErr.message });
         }
-        res.json({ data: rows, count: rows.length });
+
+        const dataQuery = `SELECT bs.*, ba.bank_name, ba.account_type ${baseQuery} ORDER BY bs.settlement_date DESC, bs.id DESC LIMIT ? OFFSET ?`;
+        const dataParams = [...params, parseInt(limit), parseInt(offset)];
+
+        db.all(dataQuery, dataParams, (err, rows) => {
+            if (err) {
+                logger.error('查詢錯誤:', err);
+                return res.status(500).json({ error: '查詢失敗', details: err.message });
+            }
+            res.json({ data: rows, count: rows.length, total: countRow ? countRow.total : rows.length });
+        });
     });
 });
 
