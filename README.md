@@ -11,17 +11,20 @@
 ## 📦 功能特色
 
 ### 當前版本（已上線功能）
-- 🔐 **登入與權限**：Session 認證、管理員／一般使用者角色、全站登出按鈕（含手機版響應式版面）
-- ⚠️ **資金缺口儀表板**：即時監控各帳戶餘額、安全水位、預計支出與缺口預測
-- 💰 **收支記錄管理**：新增／修改／刪除、Excel 匯入與匯出、批次刪除
-- ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳
+- 🔐 **登入與權限**：Session 認證、三種角色（管理員／財務人員／一般人員，一般人員僅能查詢、看不到任何編輯按鈕）、選用 M365 / Entra ID SSO 登入、全站登出按鈕（含手機版響應式版面、閒置自動登出提醒）
+- ⚠️ **資金預估週報儀表板**：兩種檢視方式可切換
+  - **資金流水帳**（預設頁籤）：帳戶為欄、逐筆交易與每月 15、30 號結餘檢查點為列，可勾選要顯示的帳戶、顯示定存總額
+  - **帳戶卡片**：每帳戶餘額、安全水位、缺口預測，並提供依銀行、依帳戶類型分類的餘額小計
+- 💰 **收支記錄管理**：新增／修改／刪除、Excel 匯入與匯出、批次刪除、日期/類型/公司/帳戶/關鍵字（說明、類別、備註）篩選、分頁（每頁 50 筆）
+- ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳、分頁（每頁 50 筆）
 - 🏢 **公司管理**：公司主檔維護
-- 🏦 **銀行帳戶管理**：帳戶主檔、安全水位、即時餘額重算
-- 👥 **人員管理**：使用者帳號與角色（僅管理員）
-- 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角與導覽「管理」
+- 🏦 **銀行帳戶管理**：帳戶主檔（含銀行名稱、帳戶類型：活存/定存/支票/外幣/授信/其他）、安全水位、即時餘額重算
+- 👥 **人員管理**（僅管理員）：使用者帳號與角色設定
+- 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角
   - 系統健康狀態（運行時間、Node 版本、DB 狀態、記錄數）
   - 操作日誌（新增／修改／刪除前後差異、黃標註變更欄位）
   - 備份管理：列出備份、建立備份、還原、下載備份檔
+  - M365 SSO 設定：後台直接設定 Entra ID Tenant ID / Client ID，儲存後立即生效不需重啟服務
 - 📊 Excel 收支匯入與匯出（支援民國年日期如 115/2/10；匯出為單一「金額」欄位）
 - 💾 SQLite 資料庫、RESTful API、現代化 Web 介面
 
@@ -130,6 +133,9 @@ node scripts/import-excel.js --show-structure
 如果安裝時配置了 systemd 服務，服務會自動啟動，無需手動啟動。
 
 **使用 systemd 服務（推薦生產環境）：**
+
+服務名稱由安裝時輸入決定（例如 `cashflow-prod.service`），以下以 `fund-weekly-report.service` 為範例，請替換成您實際的服務名稱：
+
 ```bash
 # 查看服務狀態
 systemctl status fund-weekly-report.service
@@ -166,11 +172,11 @@ npm run dev
 
 ### 使用 Web 介面
 
-1. 開啟瀏覽器，訪問 `http://localhost:3000`（或您配置的端口）
-2. 登入後可使用：資金缺口、收支記錄、餘額結算、公司管理、銀行帳戶、人員管理
-3. 管理員登入後，首頁右下角與導覽列會顯示「管理」入口，可進入管理者儀表板（系統健康、操作日誌、備份管理）
+1. 開啟瀏覽器，訪問 `http://localhost:3000`（或您配置的端口），也可以用「使用 M365 登入」（若已設定 SSO）
+2. 登入後可使用：資金預估週報（資金流水帳／帳戶卡片）、收支記錄、餘額結算、公司管理、銀行帳戶；財務人員與管理員可編輯，一般人員僅能查詢（編輯按鈕會自動隱藏）
+3. 「人員管理」與「管理」入口只有管理員登入後才看得到；管理員可進入管理者儀表板（系統健康、操作日誌、備份管理、M365 SSO 設定）
 
-**注意**：未登入會自動跳轉至登入頁。詳細前端計劃請參考 `FRONTEND-ROADMAP.md`
+**注意**：未登入會直接跳轉至登入頁，不會先閃過已登入畫面。詳細前端計劃請參考 `FRONTEND-ROADMAP.md`
 
 ## API 文檔（摘要）
 
@@ -179,18 +185,19 @@ npm run dev
 - `POST /api/auth/login`：登入（username, password）
 - `POST /api/auth/logout`：登出
 
-### 業務 API（需登入）
-- **收支記錄**：`GET/POST /api/transactions`、`PUT/DELETE /api/transactions/:id`、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）
+### 業務 API（需登入；新增／修改／刪除需財務人員或管理員權限，一般人員僅能查詢）
+- **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁與 `keyword` 搜尋說明/類別/備註）、`PUT/DELETE /api/transactions/:id`、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
-- **餘額結算**：`GET/POST /api/settlements`、`PUT/DELETE /api/settlements/:id`
-- **資金缺口**：`GET /api/cash-gap-dashboard`、`GET /api/cash-gap-reconciliation`
+- **餘額結算**：`GET/POST /api/settlements`（GET 支援 `limit`/`offset` 分頁）、`PUT/DELETE /api/settlements/:id`
+- **資金預估週報**：`GET /api/cash-gap-dashboard`、`GET /api/cash-gap-dashboard-by-dates`、`GET /api/cash-gap-ledger`（資金流水帳，各帳戶期初餘額＋逐筆交易＋每月 15/30 號結餘檢查點）、`GET /api/cash-gap-reconciliation`
 
 ### 管理 API（僅管理員）
 - **使用者**：`GET/POST /api/users`、`GET/PUT/DELETE /api/users/:id`
 - **操作日誌**：`GET /api/admin/operation-logs`（查詢參數：entity_type, action, limit, offset）
 - **系統健康**：`GET /api/admin/health`
 - **備份**：`GET /api/admin/backups`、`POST /api/admin/backup`、`POST /api/admin/backup/download`、`POST /api/admin/restore`
+- **M365 SSO 設定**：`GET/PUT /api/admin/sso-settings`（儲存至資料庫，立即生效不需重啟服務）
 
 ## Excel 檔案格式
 
@@ -304,17 +311,19 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 │   └── show-excel-structure.js # 檢視 Excel 結構
 ├── public/
 │   ├── index.html      # 首頁（登入後顯示功能卡片）
-│   ├── login.html      # 登入頁
-│   ├── cash-gap-dashboard.html  # 資金缺口儀表板
+│   ├── login.html      # 登入頁（含 M365 SSO 登入按鈕，SSO 已設定時顯示）
+│   ├── cash-gap-dashboard.html  # 資金預估週報儀表板（資金流水帳／帳戶卡片兩頁籤）
 │   ├── transactions.html       # 收支記錄管理
 │   ├── settlement.html        # 餘額結算
 │   ├── companies.html         # 公司管理
 │   ├── bank-accounts.html     # 銀行帳戶管理
-│   ├── users.html             # 人員管理
-│   ├── admin-dashboard.html   # 管理者儀表板
+│   ├── users.html             # 人員管理（僅管理員可見）
+│   ├── admin-dashboard.html   # 管理者儀表板（僅管理員）
 │   ├── admin-system-health.html # 系統健康狀態
 │   ├── admin-operation-logs.html # 操作日誌
-│   └── admin-backup.html      # 備份管理
+│   ├── admin-backup.html      # 備份管理
+│   ├── admin-sso-settings.html # M365 SSO 設定（僅管理員）
+│   └── js/auth-common.js      # 全站共用登入檢查、登出、閒置自動登出
 ├── docs/
 │   └── 資金缺口-A公司數值差異說明.md
 ├── backups/            # 備份目錄（可自訂 BACKUP_PATH）
@@ -327,7 +336,17 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ## 資料庫結構
 
-主要資料表：`users`（使用者與角色）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄）、`balance_settlements`（餘額結算）、`operation_logs`（操作日誌，供管理員查詢）。完整定義請見 `database/schema.sql`。
+主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄）、`balance_settlements`（餘額結算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
+
+### 權限模型
+
+| 角色 | 查詢 | 新增／修改／刪除（收支、結算、公司、帳戶） | 人員管理 | 管理者儀表板 |
+|---|---|---|---|---|
+| 一般人員 (user) | ✅ | ❌ | ❌ | ❌ |
+| 財務人員 (finance) | ✅ | ✅ | ❌ | ❌ |
+| 管理員 (admin) | ✅ | ✅ | ✅ | ✅ |
+
+前端會自動隱藏使用者沒有權限的按鈕與連結（如一般人員看不到「新增」「編輯」「刪除」按鈕、非管理員看不到「人員管理」連結），後端 API 也有對應的權限中介層（`requireAuth` / `requireEditor` / `requireAdmin`）二次把關，避免略過前端直接呼叫 API。
 
 ## 配置說明
 
@@ -347,7 +366,12 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ### M365 / Entra ID SSO 登入（選用）
 
-在 `.env` 同時填入 `ENTRA_TENANT_ID` 和 `ENTRA_CLIENT_ID` 後重啟服務，登入頁會自動出現「使用 M365 登入」按鈕；兩者留空則完全不受影響，維持原本的帳號密碼登入。
+有兩種設定方式，擇一即可：
+
+1. **後台設定（推薦，不需重啟服務）**：以管理員登入後，進入「管理者儀表板」→「M365 SSO 設定」，填入 Tenant ID 與 Client ID 並儲存，立即生效。
+2. **`.env` 設定**：同時填入 `ENTRA_TENANT_ID` 和 `ENTRA_CLIENT_ID` 後重啟服務。若後台已儲存過設定，會優先使用後台的值。
+
+登入頁會自動出現「使用 M365 登入」按鈕；兩者都留空則完全不受影響，維持原本的帳號密碼登入。
 
 **運作方式：**
 - 前端用 MSAL.js（瀏覽器端，無需再存任何密鑰）走 Authorization Code + PKCE 流程取得 Entra ID token
@@ -362,11 +386,10 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 - Client ID 不是機密（SPA 公開用戶端本就設計成可以放在前端程式碼中），可以安心寫在 `.env` 裡
 
 **常駐服務說明：**
-- 安裝時可選擇配置 systemd 常駐服務
+- 安裝時可選擇配置 systemd 常駐服務，服務名稱由安裝時輸入決定（無固定名稱，`update.sh`/`uninstall.sh` 會自動偵測部署目錄對應的實際服務名稱）
 - 配置後系統會自動啟動，並在開機時自動啟動
-- 服務名稱：`fund-weekly-report.service`
 - 服務會在崩潰時自動重啟（RestartSec=10秒）
-- 日誌可通過 `journalctl -u fund-weekly-report.service -f` 查看
+- 日誌可通過 `journalctl -u <您的服務名稱>.service -f` 查看
 
 **網路訪問說明：**
 - 預設綁定到 `0.0.0.0`，允許從任何網路介面訪問
