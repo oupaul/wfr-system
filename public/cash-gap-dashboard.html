@@ -487,6 +487,14 @@
             color: #94A3B8;
         }
 
+        /* 帳戶名稱可能很長，讓它在欄位內換行，避免整欄被撐得過寬 */
+        .ledger-account-label {
+            display: block;
+            white-space: normal;
+            max-width: 140px;
+            word-break: break-word;
+        }
+
         /* 資金流水帳工具列：定存總額 + 帳戶篩選 */
         .ledger-toolbar {
             display: flex;
@@ -1112,7 +1120,7 @@
                 const label = c.account_type ? `${escapeHtml(c.account_name)}（${escapeHtml(c.account_type)}）` : (escapeHtml(c.account_name) || '未命名帳戶');
                 const bankLine = c.bank_name ? `<span class="ledger-bank-name">${escapeHtml(c.bank_name)}</span>` : '';
                 const numberLine = c.account_number ? `<span class="ledger-account-number">${escapeHtml(c.account_number)}</span>` : '';
-                return `<th>${bankLine}${label}${numberLine}</th>`;
+                return `<th><span class="ledger-account-label">${label}</span>${bankLine}${numberLine}</th>`;
             }).join('');
 
             const bodyRows = rows.map((row) => {

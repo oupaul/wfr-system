@@ -130,20 +130,72 @@ router.put('/:id', requireEditor, (req, res) => {
             if (!oldRow) return res.status(404).json({ error: '找不到記錄' });
             return res.status(500).json({ error: '更新失敗', details: err && err.message });
         }
-        const afterData = { id: parseInt(id, 10), company_id: company_id || null, account_name, account_number: account_number || null, bank_name: bank_name || null, branch_name: branch_name || null, account_type: account_type || null, currency: currency || 'TWD', safety_level, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1 };
-        db.run(
-            `UPDATE bank_accounts SET company_id = ?, account_name = ?, account_number = ?, bank_name = ?, branch_name = ?, account_type = ?, currency = ?, safety_level = ?, remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [company_id || null, account_name, account_number || null, bank_name || null, branch_name || null, account_type || null, currency || 'TWD', safety_level, remarks || null, is_active !== undefined ? is_active : 1, id],
-            function(updateErr) {
-                if (updateErr) {
-                    logger.error('更新錯誤:', updateErr);
-                    return res.status(500).json({ error: '更新失敗', details: updateErr.message });
-                }
-                if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
-                writeOperationLog(req, 'update', 'bank_account', id, oldRow, afterData, '銀行帳戶 #' + id + ' ' + (account_name || ''));
-                res.json({ success: true, message: '銀行帳戶已更新' });
+
+        // 收支記錄／結算記錄存的是當下複製的 company_name/account_name/account_number
+        // 文字，不是外鍵；改帳戶名稱、帳號或所屬公司前，先查出新舊公司名稱，更新
+        // bank_accounts 後一併把既有收支/結算記錄的對應文字欄位改過去，避免資金流水
+        // 帳等計算用「新名稱」比對「舊文字」而找不到資料、悄悄少算的問題。
+        db.get('SELECT name FROM companies WHERE id = ?', [oldRow.company_id], (oldCompanyErr, oldCompanyRow) => {
+            if (oldCompanyErr) {
+                logger.error('查詢原公司名稱失敗:', oldCompanyErr);
+                return res.status(500).json({ error: '更新失敗', details: oldCompanyErr.message });
             }
-        );
+            const oldCompanyName = oldCompanyRow ? oldCompanyRow.name : null;
+
+            db.get('SELECT name FROM companies WHERE id = ?', [company_id || null], (newCompanyErr, newCompanyRow) => {
+                if (newCompanyErr) {
+                    logger.error('查詢新公司名稱失敗:', newCompanyErr);
+                    return res.status(500).json({ error: '更新失敗', details: newCompanyErr.message });
+                }
+                const newCompanyName = newCompanyRow ? newCompanyRow.name : oldCompanyName;
+
+                const afterData = { id: parseInt(id, 10), company_id: company_id || null, account_name, account_number: account_number || null, bank_name: bank_name || null, branch_name: branch_name || null, account_type: account_type || null, currency: currency || 'TWD', safety_level, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1 };
+                db.run(
+                    `UPDATE bank_accounts SET company_id = ?, account_name = ?, account_number = ?, bank_name = ?, branch_name = ?, account_type = ?, currency = ?, safety_level = ?, remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+                    [company_id || null, account_name, account_number || null, bank_name || null, branch_name || null, account_type || null, currency || 'TWD', safety_level, remarks || null, is_active !== undefined ? is_active : 1, id],
+                    function(updateErr) {
+                        if (updateErr) {
+                            logger.error('更新錯誤:', updateErr);
+                            return res.status(500).json({ error: '更新失敗', details: updateErr.message });
+                        }
+                        if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
+
+                        const identityChanged = oldCompanyName !== newCompanyName
+                            || oldRow.account_name !== account_name
+                            || (oldRow.account_number || null) !== (account_number || null);
+
+                        const finish = () => {
+                            writeOperationLog(req, 'update', 'bank_account', id, oldRow, afterData, '銀行帳戶 #' + id + ' ' + (account_name || ''));
+                            res.json({ success: true, message: '銀行帳戶已更新' });
+                        };
+
+                        if (!identityChanged || !oldCompanyName) {
+                            return finish();
+                        }
+
+                        const matchWhere = `company_name = ? AND account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))`;
+                        const matchParams = [oldCompanyName, oldRow.account_name, oldRow.account_number || null, oldRow.account_number || null];
+                        const setParams = [newCompanyName, account_name, account_number || null];
+
+                        db.run(
+                            `UPDATE transactions SET company_name = ?, account_name = ?, account_number = ? WHERE ${matchWhere}`,
+                            [...setParams, ...matchParams],
+                            function(txnErr) {
+                                if (txnErr) logger.error('同步收支記錄帳戶資訊失敗:', txnErr);
+                                db.run(
+                                    `UPDATE balance_settlements SET company_name = ?, account_name = ?, account_number = ? WHERE ${matchWhere}`,
+                                    [...setParams, ...matchParams],
+                                    function(settleErr) {
+                                        if (settleErr) logger.error('同步結算記錄帳戶資訊失敗:', settleErr);
+                                        finish();
+                                    }
+                                );
+                            }
+                        );
+                    }
+                );
+            });
+        });
     });
 });
 

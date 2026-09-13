@@ -748,7 +748,11 @@
                     const select = document.getElementById('modalAccountId');
                     if (select) {
                         select.innerHTML = '<option value="">請選擇帳戶</option>' +
-                            bankAccountsList.map(a => `<option value="${a.id}" data-account-number="${escapeHtml(a.account_number || '')}">${escapeHtml(a.account_name)}${a.company_name ? ' (' + escapeHtml(a.company_name) + ')' : ''}</option>`).join('');
+                            bankAccountsList.map(a => {
+                                const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
+                                const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
+                                return `<option value="${a.id}" data-account-number="${escapeHtml(a.account_number || '')}">${label}</option>`;
+                            }).join('');
                     }
                 })
                 .catch(err => {
