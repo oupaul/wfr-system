@@ -721,7 +721,7 @@
                     select.innerHTML = '<option value="">（選填）</option>' +
                         bankAccountsList.map(a => {
                             const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
-                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
+                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
                             return `<option value="${a.id}">${label}</option>`;
                         }).join('');
                     if (callback) callback();
