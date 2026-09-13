@@ -103,6 +103,7 @@ const transactionRoutes = require('./routes/transactions');
 const settlementRoutes = require('./routes/settlements');
 const cashGapRoutes = require('./routes/cashGap');
 const adminRoutes = require('./routes/admin');
+const financingRoutes = require('./routes/financing');
 
 // 提供應用標題的 API（無需認證）
 app.get('/api/config', (req, res) => {
@@ -129,6 +130,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/bank-accounts', bankAccountRoutes);
+app.use('/api/financing', financingRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/settlements', settlementRoutes);
 app.use('/api', cashGapRoutes);         // /api/cash-gap-*, /api/import-logs

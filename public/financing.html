@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>借款管理 - 資金週報系統</title>
+    <style>
+        body { visibility: hidden; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #F8FAFC;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: #1E293B;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: #F8FAFC;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: #F1F5F9;
+            transform: translateY(-2px);
+        }
+        .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
+        .user-info span { font-size: 0.9em; }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: #F8FAFC; color: #1E293B; cursor: pointer; transition: background 0.3s; }
+        .user-info button:hover { background: #F1F5F9; }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #1E293B;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(30, 41, 59, 0.35);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* 模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: #64748B;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #F06000;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        /* 額度/借款類型：維持單一中性樣式，不依類型上色 */
+        .type-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: normal;
+            color: #64748B;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 2px 8px;
+        }
+
+        .repayment-section {
+            margin-top: 10px;
+        }
+
+        .repayment-summary {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            padding: 16px 20px;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .repayment-summary .item .label {
+            font-size: 12px;
+            color: #64748B;
+            margin-bottom: 4px;
+        }
+
+        .repayment-summary .item .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1E293B;
+        }
+
+        .repayment-form {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            gap: 10px;
+            align-items: end;
+            margin-bottom: 20px;
+        }
+
+        .repayment-form .form-group {
+            margin-bottom: 0;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .repayment-form {
+                grid-template-columns: 1fr;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .user-info {
+                position: static;
+                margin-top: 15px;
+                justify-content: center;
+            }
+        }
+    </style>
+    <script src="/js/auth-common.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💳 借款管理</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金預估週報</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/financing.html">💳 借款管理</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="page-header">
+                <h2>借款/融資額度管理</h2>
+                <button class="btn btn-primary" onclick="openAddModal()">➕ 新增借款/額度</button>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">載入中...</div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>公司</th>
+                            <th>借款/額度名稱</th>
+                            <th>類型</th>
+                            <th>貸款機構</th>
+                            <th>原始本金/動用額度</th>
+                            <th>目前本金餘額</th>
+                            <th>利率</th>
+                            <th>到期日</th>
+                            <th>下次還款</th>
+                            <th>狀態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="financingTable">
+                        <tr>
+                            <td colspan="11" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯模態框 -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增借款/額度</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="financingForm" onsubmit="saveFinancing(event)">
+                    <input type="hidden" id="recordId" value="">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalCompanyId">所屬公司</label>
+                            <select id="modalCompanyId">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalBankAccountId">撥款/還款帳戶</label>
+                            <select id="modalBankAccountId">
+                                <option value="">（選填）</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalFacilityName">借款/額度名稱 <span class="required">*</span></label>
+                            <input type="text" id="modalFacilityName" required placeholder="例如：合庫周轉金貸款">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalFacilityType">類型</label>
+                            <select id="modalFacilityType">
+                                <option value="短期借款">短期借款</option>
+                                <option value="長期借款">長期借款</option>
+                                <option value="授信額度">授信額度</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalLender">貸款機構</label>
+                            <input type="text" id="modalLender" placeholder="例如：合作金庫">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalInterestRate">年利率 (%)</label>
+                            <input type="number" id="modalInterestRate" step="0.001" placeholder="例如：2.5">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalPrincipalAmount">原始本金/動用金額 <span class="required">*</span></label>
+                            <input type="number" id="modalPrincipalAmount" step="0.01" required placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalTotalLimit">總額度</label>
+                            <input type="number" id="modalTotalLimit" step="0.01" placeholder="授信額度類型可填">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalStartDate">起貸日</label>
+                            <input type="date" id="modalStartDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalMaturityDate">到期日</label>
+                            <input type="date" id="modalMaturityDate">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalNextPaymentDate">下次還款日</label>
+                            <input type="date" id="modalNextPaymentDate">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalNextPaymentAmount">下次還款金額</label>
+                            <input type="number" id="modalNextPaymentAmount" step="0.01" placeholder="0">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalRepaymentMethod">還款方式</label>
+                        <input type="text" id="modalRepaymentMethod" placeholder="例如：按月付息、到期還本">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalRemarks">備註</label>
+                        <textarea id="modalRemarks" placeholder="輸入備註說明..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="modalIsActive" checked>
+                            <label for="modalIsActive">啟用</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 還款記錄模態框 -->
+    <div id="repaymentModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="modal-header">
+                <h2 id="repaymentModalTitle">還款記錄</h2>
+                <button class="close" onclick="closeRepaymentModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="repayment-summary">
+                    <div class="item">
+                        <div class="label">原始本金/動用金額</div>
+                        <div class="value" id="repaySummaryPrincipal">-</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">已還本金</div>
+                        <div class="value" id="repaySummaryPaid">-</div>
+                    </div>
+                    <div class="item">
+                        <div class="label">目前本金餘額</div>
+                        <div class="value" id="repaySummaryRemaining">-</div>
+                    </div>
+                </div>
+
+                <div id="repaymentFormWrap">
+                    <form class="repayment-form" onsubmit="addRepayment(event)">
+                        <div class="form-group">
+                            <label for="repayDate">還款日期 <span class="required">*</span></label>
+                            <input type="date" id="repayDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="repayPrincipal">本金</label>
+                            <input type="number" id="repayPrincipal" step="0.01" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="repayInterest">利息</label>
+                            <input type="number" id="repayInterest" step="0.01" placeholder="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="repayRemarks">備註</label>
+                            <input type="text" id="repayRemarks" placeholder="選填">
+                        </div>
+                        <button type="submit" class="btn btn-primary">新增還款</button>
+                    </form>
+                </div>
+
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>還款日期</th>
+                                <th>本金</th>
+                                <th>利息</th>
+                                <th>備註</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="repaymentsTable">
+                            <tr><td colspan="5" class="loading">載入中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        let companiesList = [];
+        let bankAccountsList = [];
+        let currentFinancingId = null;
+
+        // 格式化金額
+        function formatCurrency(value) {
+            if (value === null || value === undefined || value === '') return '-';
+            const num = parseFloat(value);
+            if (isNaN(num)) return '-';
+
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency',
+                currency: 'TWD',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0
+            }).format(num);
+        }
+
+        const facilityTypeLabels = {
+            '授信額度': '授信額度',
+            '短期借款': '短期借款',
+            '長期借款': '長期借款',
+            '其他': '其他'
+        };
+
+        // 載入公司列表（同時填入新增/編輯表單的公司下拉選單）
+        function loadCompanies(callback) {
+            fetch(`${API_BASE}/companies?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        if (callback) callback();
+                        return;
+                    }
+                    companiesList = data.data || [];
+                    const select = document.getElementById('modalCompanyId');
+                    select.innerHTML = '<option value="">請選擇公司</option>' +
+                        companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+                    if (callback) callback();
+                })
+                .catch(err => {
+                    console.error('載入公司列表錯誤:', err);
+                    if (callback) callback();
+                });
+        }
+
+        // 載入銀行帳戶列表（撥款/還款帳戶下拉選單）
+        function loadBankAccountsForModal(callback) {
+            fetch(`${API_BASE}/bank-accounts?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        if (callback) callback();
+                        return;
+                    }
+                    bankAccountsList = data.data || [];
+                    const select = document.getElementById('modalBankAccountId');
+                    select.innerHTML = '<option value="">（選填）</option>' +
+                        bankAccountsList.map(a => {
+                            const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
+                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
+                            return `<option value="${a.id}">${label}</option>`;
+                        }).join('');
+                    if (callback) callback();
+                })
+                .catch(err => {
+                    console.error('載入銀行帳戶列表錯誤:', err);
+                    if (callback) callback();
+                });
+        }
+
+        // 開啟新增模態框
+        window.openAddModal = function() {
+            document.getElementById('recordId').value = '';
+            document.getElementById('modalTitle').textContent = '新增借款/額度';
+            document.getElementById('financingForm').reset();
+            document.getElementById('modalFacilityType').value = '短期借款';
+            document.getElementById('modalIsActive').checked = true;
+            loadCompanies();
+            loadBankAccountsForModal();
+            document.getElementById('dataModal').style.display = 'block';
+        };
+
+        // 編輯記錄
+        window.editFinancing = function(id) {
+            fetch(`${API_BASE}/financing/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    const record = data.data;
+                    const companyId = record.company_id ? String(record.company_id) : '';
+                    const bankAccountId = record.bank_account_id ? String(record.bank_account_id) : '';
+
+                    loadCompanies(function() {
+                        loadBankAccountsForModal(function() {
+                            document.getElementById('recordId').value = record.id;
+                            document.getElementById('modalTitle').textContent = '編輯借款/額度';
+
+                            document.getElementById('modalCompanyId').value = companyId;
+                            document.getElementById('modalBankAccountId').value = bankAccountId;
+                            document.getElementById('modalFacilityName').value = record.facility_name || '';
+                            document.getElementById('modalFacilityType').value = record.facility_type || '短期借款';
+                            document.getElementById('modalLender').value = record.lender || '';
+                            document.getElementById('modalInterestRate').value = record.interest_rate != null ? record.interest_rate : '';
+                            document.getElementById('modalPrincipalAmount').value = record.principal_amount != null ? record.principal_amount : '';
+                            document.getElementById('modalTotalLimit').value = record.total_limit != null ? record.total_limit : '';
+                            document.getElementById('modalStartDate').value = record.start_date || '';
+                            document.getElementById('modalMaturityDate').value = record.maturity_date || '';
+                            document.getElementById('modalNextPaymentDate').value = record.next_payment_date || '';
+                            document.getElementById('modalNextPaymentAmount').value = record.next_payment_amount != null ? record.next_payment_amount : '';
+                            document.getElementById('modalRepaymentMethod').value = record.repayment_method || '';
+                            document.getElementById('modalRemarks').value = record.remarks || '';
+                            document.getElementById('modalIsActive').checked = record.is_active !== 0;
+
+                            document.getElementById('dataModal').style.display = 'block';
+                        });
+                    });
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('載入記錄失敗', 'error');
+                });
+        };
+
+        // 關閉模態框
+        window.closeModal = function() {
+            document.getElementById('dataModal').style.display = 'none';
+        };
+
+        // 儲存記錄
+        window.saveFinancing = function(event) {
+            event.preventDefault();
+
+            const id = document.getElementById('recordId').value;
+            const companyId = document.getElementById('modalCompanyId').value;
+            const bankAccountId = document.getElementById('modalBankAccountId').value;
+            const data = {
+                company_id: companyId ? parseInt(companyId) : null,
+                bank_account_id: bankAccountId ? parseInt(bankAccountId) : null,
+                facility_name: document.getElementById('modalFacilityName').value,
+                facility_type: document.getElementById('modalFacilityType').value,
+                lender: document.getElementById('modalLender').value,
+                interest_rate: document.getElementById('modalInterestRate').value ? parseFloat(document.getElementById('modalInterestRate').value) : null,
+                principal_amount: document.getElementById('modalPrincipalAmount').value ? parseFloat(document.getElementById('modalPrincipalAmount').value) : 0,
+                total_limit: document.getElementById('modalTotalLimit').value ? parseFloat(document.getElementById('modalTotalLimit').value) : null,
+                start_date: document.getElementById('modalStartDate').value,
+                maturity_date: document.getElementById('modalMaturityDate').value,
+                next_payment_date: document.getElementById('modalNextPaymentDate').value,
+                next_payment_amount: document.getElementById('modalNextPaymentAmount').value ? parseFloat(document.getElementById('modalNextPaymentAmount').value) : null,
+                repayment_method: document.getElementById('modalRepaymentMethod').value,
+                remarks: document.getElementById('modalRemarks').value,
+                is_active: document.getElementById('modalIsActive').checked ? 1 : 0
+            };
+
+            const url = id ? `${API_BASE}/financing/${id}` : `${API_BASE}/financing`;
+            const method = id ? 'PUT' : 'POST';
+
+            fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已儲存', 'success');
+                    closeModal();
+                    loadFinancing();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('儲存失敗', 'error');
+                });
+        };
+
+        // 刪除記錄
+        window.deleteFinancing = function(id) {
+            if (!confirm('確定要刪除此借款/額度嗎？連同的還款記錄也會一併刪除。')) {
+                return;
+            }
+
+            fetch(`${API_BASE}/financing/${id}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '記錄已刪除', 'success');
+                    loadFinancing();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 開啟還款記錄模態框
+        window.openRepaymentModal = function(id, facilityName) {
+            currentFinancingId = id;
+            document.getElementById('repaymentModalTitle').textContent = `還款記錄 - ${facilityName || ''}`;
+            document.getElementById('repaymentFormWrap').style.display = canEdit ? 'block' : 'none';
+            document.getElementById('repayDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('repaymentModal').style.display = 'block';
+            loadRepaymentSummary();
+            loadRepayments();
+        };
+
+        window.closeRepaymentModal = function() {
+            document.getElementById('repaymentModal').style.display = 'none';
+            currentFinancingId = null;
+        };
+
+        function loadRepaymentSummary() {
+            if (!currentFinancingId) return;
+            fetch(`${API_BASE}/financing/${currentFinancingId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) return;
+                    const record = data.data;
+                    const principal = parseFloat(record.principal_amount) || 0;
+                    const remaining = parseFloat(record.remaining_principal) || 0;
+                    document.getElementById('repaySummaryPrincipal').textContent = formatCurrency(principal);
+                    document.getElementById('repaySummaryPaid').textContent = formatCurrency(principal - remaining);
+                    document.getElementById('repaySummaryRemaining').textContent = formatCurrency(remaining);
+                })
+                .catch(err => console.error('載入借款摘要錯誤:', err));
+        }
+
+        function loadRepayments() {
+            if (!currentFinancingId) return;
+            const tbody = document.getElementById('repaymentsTable');
+            fetch(`${API_BASE}/financing/${currentFinancingId}/repayments`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#dc3545;">${escapeHtml(data.error)}</td></tr>`;
+                        return;
+                    }
+                    const rows = data.data || [];
+                    if (rows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#666;">尚無還款記錄</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = rows.map(r => `
+                        <tr>
+                            <td>${escapeHtml(r.payment_date)}</td>
+                            <td>${formatCurrency(r.principal_paid)}</td>
+                            <td>${formatCurrency(r.interest_paid)}</td>
+                            <td>${escapeHtml(r.remarks) || '-'}</td>
+                            <td>
+                                ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteRepayment(${r.id})">刪除</button>` : '<span style="color:#999;">-</span>'}
+                            </td>
+                        </tr>
+                    `).join('');
+                })
+                .catch(err => {
+                    console.error('載入還款記錄錯誤:', err);
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#dc3545;">載入失敗</td></tr>';
+                });
+        }
+
+        window.addRepayment = function(event) {
+            event.preventDefault();
+            if (!currentFinancingId) return;
+
+            const data = {
+                payment_date: document.getElementById('repayDate').value,
+                principal_paid: document.getElementById('repayPrincipal').value ? parseFloat(document.getElementById('repayPrincipal').value) : 0,
+                interest_paid: document.getElementById('repayInterest').value ? parseFloat(document.getElementById('repayInterest').value) : 0,
+                remarks: document.getElementById('repayRemarks').value
+            };
+
+            fetch(`${API_BASE}/financing/${currentFinancingId}/repayments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '還款記錄已新增', 'success');
+                    document.getElementById('repayPrincipal').value = '';
+                    document.getElementById('repayInterest').value = '';
+                    document.getElementById('repayRemarks').value = '';
+                    loadRepaymentSummary();
+                    loadRepayments();
+                    loadFinancing();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('新增失敗', 'error');
+                });
+        };
+
+        window.deleteRepayment = function(repaymentId) {
+            if (!currentFinancingId) return;
+            if (!confirm('確定要刪除此筆還款記錄嗎？')) return;
+
+            fetch(`${API_BASE}/financing/${currentFinancingId}/repayments/${repaymentId}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '還款記錄已刪除', 'success');
+                    loadRepaymentSummary();
+                    loadRepayments();
+                    loadFinancing();
+                })
+                .catch(err => {
+                    console.error('錯誤:', err);
+                    showMessage('刪除失敗', 'error');
+                });
+        };
+
+        // 載入借款/融資額度列表
+        function loadFinancing() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+
+            fetch(`${API_BASE}/financing`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) {
+                        showMessage(data.error, 'error');
+                        return;
+                    }
+                    displayFinancing(data.data || []);
+                    loading.style.display = 'none';
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                    loading.style.display = 'none';
+                });
+        }
+
+        // 顯示借款/融資額度列表
+        function displayFinancing(rows) {
+            const tbody = document.getElementById('financingTable');
+
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 40px; color: #666;">尚無借款/融資額度記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = rows.map(f => {
+                const remaining = parseFloat(f.remaining_principal);
+                const nextPayment = f.next_payment_date
+                    ? `${escapeHtml(f.next_payment_date)}${f.next_payment_amount != null ? '<br><span style="font-size:12px;color:#64748B;">' + formatCurrency(f.next_payment_amount) + '</span>' : ''}`
+                    : '-';
+                return `
+                <tr>
+                    <td>${escapeHtml(f.company_name) || '-'}</td>
+                    <td>${escapeHtml(f.facility_name) || '-'}</td>
+                    <td><span class="type-badge">${escapeHtml(facilityTypeLabels[f.facility_type] || f.facility_type)}</span></td>
+                    <td>${escapeHtml(f.lender) || '-'}</td>
+                    <td style="text-align:right;">${formatCurrency(f.principal_amount)}${f.total_limit != null ? '<br><span style="font-size:12px;color:#64748B;">總額度 ' + formatCurrency(f.total_limit) + '</span>' : ''}</td>
+                    <td style="text-align:right;font-weight:bold;">${formatCurrency(remaining)}</td>
+                    <td>${f.interest_rate != null ? f.interest_rate + '%' : '-'}</td>
+                    <td>${escapeHtml(f.maturity_date) || '-'}</td>
+                    <td>${nextPayment}</td>
+                    <td><span class="${f.is_active ? 'status-active' : 'status-inactive'}">${f.is_active ? '啟用' : '停用'}</span></td>
+                    <td class="actions">
+                        <button class="btn btn-secondary btn-sm" onclick="openRepaymentModal(${f.id}, '${escapeHtml(f.facility_name).replace(/'/g, "\\'")}')">還款記錄</button>
+                        ${canEdit ? `
+                        <button class="btn btn-edit btn-sm" onclick="editFinancing(${f.id})">編輯</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteFinancing(${f.id})">刪除</button>
+                        ` : ''}
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        // 顯示訊息
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => {
+                messageDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 點擊模態框外部關閉
+        window.onclick = function(event) {
+            const dataModal = document.getElementById('dataModal');
+            const repaymentModal = document.getElementById('repaymentModal');
+            if (event.target == dataModal) {
+                closeModal();
+            }
+            if (event.target == repaymentModal) {
+                closeRepaymentModal();
+            }
+        }
+
+        // 頁面載入時執行
+        let canEdit = false;
+        document.addEventListener('DOMContentLoaded', async function() {
+            const user = await checkAuth();
+            if (!user) return;
+            canEdit = user.role === 'admin' || user.role === 'finance';
+            if (!canEdit) {
+                const addBtn = document.querySelector('.page-header .btn-primary');
+                if (addBtn) addBtn.style.display = 'none';
+            }
+            loadFinancing();
+        });
+    </script>
+</body>
+</html>

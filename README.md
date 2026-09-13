@@ -19,6 +19,7 @@
 - ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳、分頁（每頁 50 筆）
 - 🏢 **公司管理**：公司主檔維護
 - 🏦 **銀行帳戶管理**：帳戶主檔（含銀行名稱、帳戶類型：活存/定存/支票/外幣/授信/其他）、安全水位、即時餘額重算
+- 💳 **借款管理**：借款/融資額度主檔（授信額度、短期借款、長期借款、其他）、利率與到期日、下次還款提醒；還款記錄獨立追蹤，目前本金餘額由還款記錄即時加總計算，不需手動維護（目前未與資金流水帳/資金缺口串接）
 - 👥 **人員管理**（僅管理員）：使用者帳號與角色設定
 - 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角
   - 系統健康狀態（運行時間、Node 版本、DB 狀態、記錄數）
@@ -30,7 +31,7 @@
 
 ### 規劃中功能
 - 🔄 **數據整合與自動化**：多幣別匯率、銀行對帳單匯入、ERP 對接
-- 📅 **資金預測與滾動計畫**：4-13 週滾動預測、融資借貸規劃、異常預警
+- 📅 **資金預測與滾動計畫**：4-13 週滾動預測、借款還款排程併入資金流水帳/資金缺口預測、異常預警
 - 📊 **差異分析**：實績 vs. 預測、差異原因標記、趨勢分析
 - 📈 **報表與可視化**：資金結構圖表、現金流走勢圖、PDF/Excel 週報
 
@@ -173,7 +174,7 @@ npm run dev
 ### 使用 Web 介面
 
 1. 開啟瀏覽器，訪問 `http://localhost:3000`（或您配置的端口），也可以用「使用 M365 登入」（若已設定 SSO）
-2. 登入後可使用：資金預估週報（資金流水帳／帳戶卡片）、收支記錄、餘額結算、公司管理、銀行帳戶；財務人員與管理員可編輯，一般人員僅能查詢（編輯按鈕會自動隱藏）
+2. 登入後可使用：資金預估週報（資金流水帳／帳戶卡片）、收支記錄、餘額結算、公司管理、銀行帳戶、借款管理；財務人員與管理員可編輯，一般人員僅能查詢（編輯按鈕會自動隱藏）
 3. 「人員管理」與「管理」入口只有管理員登入後才看得到；管理員可進入管理者儀表板（系統健康、操作日誌、備份管理、M365 SSO 設定）
 
 **注意**：未登入會直接跳轉至登入頁，不會先閃過已登入畫面。詳細前端計劃請參考 `FRONTEND-ROADMAP.md`
@@ -189,6 +190,7 @@ npm run dev
 - **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁與 `keyword` 搜尋說明/類別/備註）、`PUT/DELETE /api/transactions/:id`、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
+- **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
 - **餘額結算**：`GET/POST /api/settlements`（GET 支援 `limit`/`offset` 分頁）、`PUT/DELETE /api/settlements/:id`
 - **資金預估週報**：`GET /api/cash-gap-dashboard`、`GET /api/cash-gap-dashboard-by-dates`、`GET /api/cash-gap-ledger`（資金流水帳，各帳戶期初餘額＋逐筆交易＋每月 15/30 號結餘檢查點）、`GET /api/cash-gap-reconciliation`
 
@@ -317,6 +319,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 │   ├── settlement.html        # 餘額結算
 │   ├── companies.html         # 公司管理
 │   ├── bank-accounts.html     # 銀行帳戶管理
+│   ├── financing.html         # 借款/融資額度管理（含還款記錄）
 │   ├── users.html             # 人員管理（僅管理員可見）
 │   ├── admin-dashboard.html   # 管理者儀表板（僅管理員）
 │   ├── admin-system-health.html # 系統健康狀態
@@ -336,7 +339,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ## 資料庫結構
 
-主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄）、`balance_settlements`（餘額結算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
+主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
 
 ### 權限模型
 

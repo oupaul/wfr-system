@@ -157,6 +157,43 @@ const ensureNewTables = () => {
                 value TEXT,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
+
+            -- 借款/融資額度主檔
+            CREATE TABLE IF NOT EXISTS financing (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                company_id INTEGER,
+                bank_account_id INTEGER,
+                facility_name TEXT NOT NULL,
+                facility_type TEXT NOT NULL DEFAULT '短期借款'
+                    CHECK(facility_type IN ('授信額度', '短期借款', '長期借款', '其他')),
+                lender TEXT,
+                total_limit DECIMAL(15, 2),
+                principal_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                interest_rate DECIMAL(6, 3),
+                start_date DATE,
+                maturity_date DATE,
+                repayment_method TEXT,
+                next_payment_date DATE,
+                next_payment_amount DECIMAL(15, 2),
+                remarks TEXT,
+                is_active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_financing_company ON financing(company_id);
+            CREATE INDEX IF NOT EXISTS idx_financing_active ON financing(is_active);
+
+            -- 還款記錄
+            CREATE TABLE IF NOT EXISTS financing_repayments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                financing_id INTEGER NOT NULL,
+                payment_date DATE NOT NULL,
+                principal_paid DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                interest_paid DECIMAL(15, 2) NOT NULL DEFAULT 0,
+                remarks TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_financing_repayments_financing ON financing_repayments(financing_id);
         `;
         
         db.exec(migrationSQL, (err) => {

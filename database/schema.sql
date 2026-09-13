@@ -156,3 +156,43 @@ CREATE TABLE IF NOT EXISTS system_settings (
     value TEXT,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 借款/融資額度主檔
+CREATE TABLE IF NOT EXISTS financing (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id INTEGER,
+    bank_account_id INTEGER,              -- 撥款/還款帳戶（選填）
+    facility_name TEXT NOT NULL,          -- 借款/額度名稱
+    facility_type TEXT NOT NULL DEFAULT '短期借款'
+        CHECK(facility_type IN ('授信額度', '短期借款', '長期借款', '其他')),
+    lender TEXT,                          -- 貸款機構
+    total_limit DECIMAL(15, 2),           -- 總額度（授信額度類型適用，選填）
+    principal_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,  -- 原始本金/動用金額
+    interest_rate DECIMAL(6, 3),          -- 年利率 (%)
+    start_date DATE,
+    maturity_date DATE,
+    repayment_method TEXT,                -- 還款方式說明文字
+    next_payment_date DATE,
+    next_payment_amount DECIMAL(15, 2),
+    remarks TEXT,
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE SET NULL,
+    FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_financing_company ON financing(company_id);
+CREATE INDEX IF NOT EXISTS idx_financing_active ON financing(is_active);
+
+-- 還款記錄：目前本金餘額 = principal_amount - SUM(principal_paid)，即時計算不存欄位
+CREATE TABLE IF NOT EXISTS financing_repayments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    financing_id INTEGER NOT NULL,
+    payment_date DATE NOT NULL,
+    principal_paid DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    interest_paid DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    remarks TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (financing_id) REFERENCES financing(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_financing_repayments_financing ON financing_repayments(financing_id);
