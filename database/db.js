@@ -38,6 +38,7 @@ const initDatabase = () => {
                     await migrateBankAccountsCurrentBalance();
                     await ensureOperationLogsTable();
                     await migrateUserRoleFinanceTier();
+                    await migrateFinancingRepaymentFrequency();
                     resolve();
                 } catch (error) {
                     reject(error);
@@ -175,6 +176,8 @@ const ensureNewTables = () => {
                 repayment_method TEXT,
                 next_payment_date DATE,
                 next_payment_amount DECIMAL(15, 2),
+                repayment_frequency TEXT DEFAULT NULL
+                    CHECK(repayment_frequency IN ('monthly', 'quarterly') OR repayment_frequency IS NULL),
                 remarks TEXT,
                 is_active INTEGER DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -255,6 +258,35 @@ const ensureOperationLogsTable = () => {
         db.exec(sql, (err) => {
             if (err) reject(err);
             else resolve();
+        });
+    });
+};
+
+// 資料庫遷移：為 financing 表添加 repayment_frequency 欄位（用於資金流水帳/
+// 資金缺口把借款未來還款自動投影進現金流預測；ALTER TABLE 路徑不含 CHECK
+// 限制，避免相容性風險，驗證交給 API 層）
+const migrateFinancingRepaymentFrequency = () => {
+    return new Promise((resolve, reject) => {
+        db.all("PRAGMA table_info(financing)", [], (err, columns) => {
+            if (err) {
+                console.error('檢查 financing 表結構失敗:', err.message);
+                return reject(err);
+            }
+            const hasColumn = columns.some(col => col.name === 'repayment_frequency');
+            if (hasColumn) {
+                return resolve();
+            }
+            db.run("ALTER TABLE financing ADD COLUMN repayment_frequency TEXT DEFAULT NULL", (alterErr) => {
+                if (alterErr) {
+                    if (!alterErr.message.includes('duplicate column')) {
+                        console.error('添加 repayment_frequency 欄位失敗:', alterErr.message);
+                        return reject(alterErr);
+                    }
+                } else {
+                    console.log('✓ repayment_frequency 欄位已添加到 financing 表');
+                }
+                resolve();
+            });
         });
     });
 };

@@ -480,6 +480,12 @@
             color: #DC2626;
         }
 
+        /* 借款投影出來的未來還款，跟真實交易用字體區分（不額外用顏色，維持極簡配色） */
+        .ledger-projected {
+            font-style: italic;
+            opacity: 0.85;
+        }
+
         .ledger-bank-name {
             display: block;
             font-weight: normal;
@@ -1140,9 +1146,10 @@
                     `;
                 }
 
+                const projectedCls = row.is_projected ? ' ledger-projected' : '';
                 const cells = columns.map(c => {
                     if (c.account_id !== row.account_id) return '<td></td>';
-                    const cls = row.txn_type === 'income' ? 'ledger-amount-income' : 'ledger-amount-expense';
+                    const cls = (row.txn_type === 'income' ? 'ledger-amount-income' : 'ledger-amount-expense') + projectedCls;
                     const text = row.txn_type === 'income'
                         ? formatCurrency(row.amount)
                         : `(${formatCurrency(row.amount).replace(/^-/, '')})`;
@@ -1152,7 +1159,7 @@
                 return `
                     <tr>
                         <td class="ledger-date-col">${formatDateFull(row.date)}</td>
-                        <td class="ledger-desc-col">${escapeHtml(row.description) || ''}</td>
+                        <td class="ledger-desc-col${projectedCls}">${escapeHtml(row.description) || ''}</td>
                         ${cells}
                     </tr>
                 `;

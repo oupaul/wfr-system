@@ -76,7 +76,7 @@ router.post('/', requireEditor, (req, res) => {
     const {
         company_id, bank_account_id, facility_name, facility_type, lender,
         total_limit, principal_amount, interest_rate, start_date, maturity_date,
-        repayment_method, next_payment_date, next_payment_amount, remarks, is_active
+        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active
     } = req.body;
 
     if (!facility_name) {
@@ -87,14 +87,15 @@ router.post('/', requireEditor, (req, res) => {
         `INSERT INTO financing
          (company_id, bank_account_id, facility_name, facility_type, lender, total_limit,
           principal_amount, interest_rate, start_date, maturity_date, repayment_method,
-          next_payment_date, next_payment_amount, remarks, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             company_id || null, bank_account_id || null, facility_name, facility_type || '短期借款',
             lender || null, total_limit != null && total_limit !== '' ? total_limit : null,
             principal_amount || 0, interest_rate != null && interest_rate !== '' ? interest_rate : null,
             start_date || null, maturity_date || null, repayment_method || null,
             next_payment_date || null, next_payment_amount != null && next_payment_amount !== '' ? next_payment_amount : null,
+            repayment_frequency || null,
             remarks || null, is_active !== undefined ? is_active : 1
         ],
         function (err) {
@@ -116,7 +117,7 @@ router.put('/:id', requireEditor, (req, res) => {
     const {
         company_id, bank_account_id, facility_name, facility_type, lender,
         total_limit, principal_amount, interest_rate, start_date, maturity_date,
-        repayment_method, next_payment_date, next_payment_amount, remarks, is_active
+        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active
     } = req.body;
 
     if (!facility_name) {
@@ -137,19 +138,21 @@ router.put('/:id', requireEditor, (req, res) => {
             start_date: start_date || null, maturity_date: maturity_date || null,
             repayment_method: repayment_method || null, next_payment_date: next_payment_date || null,
             next_payment_amount: next_payment_amount != null && next_payment_amount !== '' ? next_payment_amount : null,
+            repayment_frequency: repayment_frequency || null,
             remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1
         };
         db.run(
             `UPDATE financing SET company_id = ?, bank_account_id = ?, facility_name = ?, facility_type = ?,
                 lender = ?, total_limit = ?, principal_amount = ?, interest_rate = ?, start_date = ?,
                 maturity_date = ?, repayment_method = ?, next_payment_date = ?, next_payment_amount = ?,
-                remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+                repayment_frequency = ?, remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [
                 afterData.company_id, afterData.bank_account_id, afterData.facility_name, afterData.facility_type,
                 afterData.lender, afterData.total_limit, afterData.principal_amount, afterData.interest_rate,
                 afterData.start_date, afterData.maturity_date, afterData.repayment_method,
-                afterData.next_payment_date, afterData.next_payment_amount, afterData.remarks, afterData.is_active,
+                afterData.next_payment_date, afterData.next_payment_amount, afterData.repayment_frequency,
+                afterData.remarks, afterData.is_active,
                 id
             ],
             function (updateErr) {

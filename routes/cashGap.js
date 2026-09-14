@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
+const { getProjectedRepaymentRows } = require('../utils/financingProjection');
 
 function toLocalDateStr(d) {
     const y = d.getFullYear();
@@ -294,58 +295,65 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
                         logger.error('查詢交易錯誤:', err);
                     }
                     const safetyLevel = parseFloat(account.safety_level) || 0;
-                    const byDate = targetDates.map((dateStr) => {
-                        let income = 0, expense = 0;
+
+                    getProjectedRepaymentRows(db, account.id, today, maxDate).then((projectedRows) => {
+                        // 「未來預測」的檢查點才併入借款投影；current_balance/
+                        // transaction_count 維持只用真實交易，確保「目前」的數字
+                        // 永遠是真實資料
+                        const allRows = (rows || []).concat(projectedRows);
+                        const byDate = targetDates.map((dateStr) => {
+                            let income = 0, expense = 0;
+                            allRows.forEach((r) => {
+                                if (r.transaction_date > dateStr) return;
+                                const amt = parseFloat(r.amount) || 0;
+                                if (r.type === 'income') income += amt;
+                                else expense += amt;
+                            });
+                            const projectedBalance = openingBalance + income - expense;
+                            const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
+                            return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
+                        });
+                        let currentBalance = openingBalance;
                         (rows || []).forEach((r) => {
-                            if (r.transaction_date > dateStr) return;
+                            if (r.transaction_date > today) return;
                             const amt = parseFloat(r.amount) || 0;
-                            if (r.type === 'income') income += amt;
-                            else expense += amt;
+                            if (r.type === 'income') currentBalance += amt;
+                            else currentBalance -= amt;
                         });
-                        const projectedBalance = openingBalance + income - expense;
-                        const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
-                        return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
-                    });
-                    let currentBalance = openingBalance;
-                    (rows || []).forEach((r) => {
-                        if (r.transaction_date > today) return;
-                        const amt = parseFloat(r.amount) || 0;
-                        if (r.type === 'income') currentBalance += amt;
-                        else currentBalance -= amt;
-                    });
 
-                    dashboardData.push({
-                        account_id: account.id,
-                        company_name: account.company_name || '',
-                        account_name: account.account_name || '',
-                        account_number: account.account_number || '',
-                        account_type: account.account_type || '',
-                        bank_name: account.bank_name || '',
-                        opening_balance: openingBalance,
-                        current_balance: currentBalance,
-                        safety_level: safetyLevel,
-                        last_settlement_date: settlement?.settlement_date || null,
-                        transaction_count: (rows || []).length,
-                        by_date: byDate
-                    });
+                        dashboardData.push({
+                            account_id: account.id,
+                            company_name: account.company_name || '',
+                            account_name: account.account_name || '',
+                            account_number: account.account_number || '',
+                            account_type: account.account_type || '',
+                            bank_name: account.bank_name || '',
+                            opening_balance: openingBalance,
+                            current_balance: currentBalance,
+                            safety_level: safetyLevel,
+                            last_settlement_date: settlement?.settlement_date || null,
+                            transaction_count: (rows || []).length,
+                            by_date: byDate
+                        });
 
-                    processedCount++;
-                    if (processedCount === accounts.length) {
-                        const totalBalance = dashboardData.reduce((s, d) => s + (d.current_balance || 0), 0);
-                        const totalGapByDate = {};
-                        targetDates.forEach((d) => {
-                            totalGapByDate[d] = dashboardData.reduce((s, a) => s + (a.by_date.find((x) => x.date === d)?.gap || 0), 0);
-                        });
-                        res.json({
-                            targetDates,
-                            data: dashboardData,
-                            summary: {
-                                totalBalance,
-                                totalGapByDate,
-                                currentDate: today
-                            }
-                        });
-                    }
+                        processedCount++;
+                        if (processedCount === accounts.length) {
+                            const totalBalance = dashboardData.reduce((s, d) => s + (d.current_balance || 0), 0);
+                            const totalGapByDate = {};
+                            targetDates.forEach((d) => {
+                                totalGapByDate[d] = dashboardData.reduce((s, a) => s + (a.by_date.find((x) => x.date === d)?.gap || 0), 0);
+                            });
+                            res.json({
+                                targetDates,
+                                data: dashboardData,
+                                summary: {
+                                    totalBalance,
+                                    totalGapByDate,
+                                    currentDate: today
+                                }
+                            });
+                        }
+                    });
                 });
             });
         });
@@ -421,6 +429,7 @@ router.get('/cash-gap-ledger', (req, res) => {
                         currentBalance += (r.type === 'income' ? amt : -amt);
                     });
 
+                    getProjectedRepaymentRows(db, account.id, today, maxDate).then((projectedRows) => {
                     columns.push({
                         account_id: account.id,
                         company_name: account.company_name || '',
@@ -431,7 +440,11 @@ router.get('/cash-gap-ledger', (req, res) => {
                         opening_balance: openingBalance,
                         current_balance: currentBalance
                     });
-                    accountFutureTxns[account.id] = (rows || []).filter((r) => r.transaction_date > today);
+                    // 真實未來交易 + 借款投影還款合併成同一份「未來事件」清單，
+                    // 下面的 eventDateSet 建立與逐日累加餘額邏輯對兩者一視同仁
+                    accountFutureTxns[account.id] = (rows || [])
+                        .filter((r) => r.transaction_date > today)
+                        .concat(projectedRows);
 
                     processedCount++;
                     if (processedCount === accounts.length) {
@@ -468,7 +481,8 @@ router.get('/cash-gap-ledger', (req, res) => {
                                             account_id: c.account_id,
                                             description: t.description || '',
                                             txn_type: t.type,
-                                            amount: amt
+                                            amount: amt,
+                                            is_projected: !!t.is_projected
                                         });
                                     });
                             });
@@ -499,6 +513,7 @@ router.get('/cash-gap-ledger', (req, res) => {
 
                         res.json({ targetDates, columns: visibleColumns, rows: visibleRows });
                     }
+                    });
                 });
             });
         });

@@ -568,6 +568,18 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="modalRepaymentFrequency">還款頻率</label>
+                        <select id="modalRepaymentFrequency">
+                            <option value="">不重複（只有上面這一筆）</option>
+                            <option value="monthly">每月</option>
+                            <option value="quarterly">每季</option>
+                        </select>
+                        <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                            設定頻率後，資金流水帳/資金缺口會從下次還款日開始，以同樣金額自動往後投影到到期日，不用每期手動更新
+                        </small>
+                    </div>
+
+                    <div class="form-group">
                         <label for="modalRepaymentMethod">還款方式</label>
                         <input type="text" id="modalRepaymentMethod" placeholder="例如：按月付息、到期還本">
                     </div>
@@ -774,6 +786,7 @@
                             document.getElementById('modalMaturityDate').value = record.maturity_date || '';
                             document.getElementById('modalNextPaymentDate').value = record.next_payment_date || '';
                             document.getElementById('modalNextPaymentAmount').value = record.next_payment_amount != null ? record.next_payment_amount : '';
+                            document.getElementById('modalRepaymentFrequency').value = record.repayment_frequency || '';
                             document.getElementById('modalRepaymentMethod').value = record.repayment_method || '';
                             document.getElementById('modalRemarks').value = record.remarks || '';
                             document.getElementById('modalIsActive').checked = record.is_active !== 0;
@@ -813,6 +826,7 @@
                 maturity_date: document.getElementById('modalMaturityDate').value,
                 next_payment_date: document.getElementById('modalNextPaymentDate').value,
                 next_payment_amount: document.getElementById('modalNextPaymentAmount').value ? parseFloat(document.getElementById('modalNextPaymentAmount').value) : null,
+                repayment_frequency: document.getElementById('modalRepaymentFrequency').value || null,
                 repayment_method: document.getElementById('modalRepaymentMethod').value,
                 remarks: document.getElementById('modalRemarks').value,
                 is_active: document.getElementById('modalIsActive').checked ? 1 : 0
@@ -1018,10 +1032,14 @@
                 return;
             }
 
+            const frequencyLabels = { monthly: '每月', quarterly: '每季' };
+
             tbody.innerHTML = rows.map(f => {
                 const remaining = parseFloat(f.remaining_principal);
+                const frequencyNote = f.repayment_frequency && frequencyLabels[f.repayment_frequency]
+                    ? ` <span class="type-badge">${escapeHtml(frequencyLabels[f.repayment_frequency])}</span>` : '';
                 const nextPayment = f.next_payment_date
-                    ? `${escapeHtml(f.next_payment_date)}${f.next_payment_amount != null ? '<br><span style="font-size:12px;color:#64748B;">' + formatCurrency(f.next_payment_amount) + '</span>' : ''}`
+                    ? `${escapeHtml(f.next_payment_date)}${frequencyNote}${f.next_payment_amount != null ? '<br><span style="font-size:12px;color:#64748B;">' + formatCurrency(f.next_payment_amount) + '</span>' : ''}`
                     : '-';
                 return `
                 <tr>

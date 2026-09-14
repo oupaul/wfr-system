@@ -174,6 +174,11 @@ CREATE TABLE IF NOT EXISTS financing (
     repayment_method TEXT,                -- 還款方式說明文字
     next_payment_date DATE,
     next_payment_amount DECIMAL(15, 2),
+    repayment_frequency TEXT DEFAULT NULL
+        CHECK(repayment_frequency IN ('monthly', 'quarterly') OR repayment_frequency IS NULL),
+        -- 還款頻率：NULL=不重複（只投影 next_payment_date 這一筆）、monthly=每月、
+        -- quarterly=每季。有設定時，資金流水帳/資金缺口會從 next_payment_date 開始
+        -- 以同樣的 next_payment_amount 自動往後投影到 maturity_date 或預測窗口結束
     remarks TEXT,
     is_active INTEGER DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
