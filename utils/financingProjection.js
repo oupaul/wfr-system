@@ -3,6 +3,11 @@
 //
 // 只投影未來（含今天）的還款，不會把 financing_repayments 的歷史還款回填成流水帳
 // 交易——避免跟使用者之後可能另外記錄的真實收支記錄重複計算。
+//
+// 投影金額不會超過目前實際剩餘本金（principal_amount - 已還本金總和）：本金已經
+// 還清的借款完全不投影；還在還款中的借款，累加投影金額一旦會超過剩餘本金就停止
+// 產生後續期數。這是把 next_payment_amount 整筆當本金處理的保守近似（實際還款
+// 通常還含利息，真正能投影的期數可能更少），但已足以避免長期分期貸款被嚴重高估。
 
 const MAX_OCCURRENCES = 60; // 安全上限（例如每月投影最多 5 年），避免資料異常造成無限迴圈
 
@@ -30,10 +35,14 @@ function addMonthsClamped(dateStr, months) {
  * @param {object} loan { facility_name, next_payment_date, next_payment_amount, repayment_frequency, maturity_date }
  * @param {string} todayStr 今天日期（YYYY-MM-DD）
  * @param {string} maxDateStr 投影上限日期（YYYY-MM-DD），通常是預測窗口的最後一天
+ * @param {number} remainingPrincipal 目前實際剩餘本金；<= 0 代表已還清，不投影
  * @returns {Array} 還款事件陣列
  */
-function projectRepaymentOccurrences(loan, todayStr, maxDateStr) {
+function projectRepaymentOccurrences(loan, todayStr, maxDateStr, remainingPrincipal) {
     if (!loan || !loan.next_payment_date || loan.next_payment_amount == null || loan.next_payment_amount === '') {
+        return [];
+    }
+    if (remainingPrincipal != null && remainingPrincipal <= 0) {
         return [];
     }
 
@@ -57,13 +66,17 @@ function projectRepaymentOccurrences(loan, todayStr, maxDateStr) {
     const amount = parseFloat(loan.next_payment_amount) || 0;
     if (amount <= 0) return [];
 
+    const hasPrincipalCap = remainingPrincipal != null;
     const occurrences = [];
+    let cumulative = 0;
     let iterations = 0;
     while (
         cursor <= maxDateStr &&
         (!loan.maturity_date || cursor <= loan.maturity_date) &&
         iterations < MAX_OCCURRENCES
     ) {
+        if (hasPrincipalCap && cumulative + amount > remainingPrincipal) break;
+        cumulative += amount;
         occurrences.push({
             transaction_date: cursor,
             type: 'expense',
@@ -87,8 +100,12 @@ function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
     return new Promise((resolve) => {
         if (!bankAccountId) return resolve([]);
         db.all(
-            `SELECT facility_name, next_payment_date, next_payment_amount, repayment_frequency, maturity_date
-             FROM financing WHERE bank_account_id = ? AND is_active = 1`,
+            `SELECT f.facility_name, f.next_payment_date, f.next_payment_amount, f.repayment_frequency, f.maturity_date,
+                    (f.principal_amount - COALESCE((
+                        SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
+                    ), 0)) as remaining_principal
+             FROM financing f
+             WHERE f.bank_account_id = ? AND f.is_active = 1`,
             [bankAccountId],
             (err, loans) => {
                 if (err) {
@@ -97,7 +114,7 @@ function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
                 }
                 const rows = [];
                 (loans || []).forEach((loan) => {
-                    rows.push(...projectRepaymentOccurrences(loan, todayStr, maxDateStr));
+                    rows.push(...projectRepaymentOccurrences(loan, todayStr, maxDateStr, loan.remaining_principal));
                 });
                 resolve(rows);
             }
@@ -105,4 +122,4 @@ function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
     });
 }
 
-module.exports = { getProjectedRepaymentRows, projectRepaymentOccurrences };
+module.exports = { getProjectedRepaymentRows, projectRepaymentOccurrences, addMonthsClamped };

@@ -504,6 +504,9 @@
                             <select id="modalBankAccountId">
                                 <option value="">（選填）</option>
                             </select>
+                            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                                不填的話，這筆借款不會出現在資金流水帳/資金缺口的未來預測裡
+                            </small>
                         </div>
                     </div>
 
@@ -575,7 +578,7 @@
                             <option value="quarterly">每季</option>
                         </select>
                         <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
-                            設定頻率後，資金流水帳/資金缺口會從下次還款日開始，以同樣金額自動往後投影到到期日，不用每期手動更新
+                            設定頻率後，資金流水帳/資金缺口會從下次還款日開始往後投影；每次在下方「還款記錄」新增一筆還款，下次還款日會自動往後跳一期，不用手動改；但金額固定沿用同一個「下次還款金額」，若之後每期金額有變化（例如本息攤還遞減），請自行調整這個欄位。投影也不會超過目前實際剩餘本金，還清後就不會再投影
                         </small>
                     </div>
 
