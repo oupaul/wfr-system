@@ -4,6 +4,7 @@ const ExcelJS = require('exceljs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
@@ -307,7 +308,8 @@ router.get('/export', (req, res) => {
 router.get('/statistics', (req, res) => {
     const { startDate, endDate, company, account } = req.query;
 
-    let query = 'SELECT type, SUM(amount) as total_amount FROM transactions WHERE 1=1';
+    // 帳戶間轉帳（transfer_group_id 不為 NULL）不是真正的營業收支，排除在統計之外
+    let query = 'SELECT type, SUM(amount) as total_amount FROM transactions WHERE transfer_group_id IS NULL';
     const params = [];
 
     if (startDate) {
@@ -588,6 +590,66 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
     }
 });
 
+// 帳戶間轉帳（必須在 /:id 之前）：一次寫入兩筆收支記錄（轉出帳戶支出 +
+// 轉入帳戶收入），共用同一個 transfer_group_id，讓 /statistics 可以把它們
+// 排除在真正的營業收支統計之外。轉帳記錄只能整組刪除、不支援編輯，見下方
+// PUT/DELETE /:id 的處理。
+router.post('/transfer', requireEditor, async (req, res) => {
+    const { transfer_date, amount, from, to, category, remarks } = req.body;
+
+    if (!transfer_date || !amount || amount <= 0) {
+        return res.status(400).json({ error: 'transfer_date 和 amount（須大於 0）為必填欄位' });
+    }
+    if (!from || !from.account_name || !to || !to.account_name) {
+        return res.status(400).json({ error: '轉出帳戶與轉入帳戶皆為必填' });
+    }
+    const isSameAccount = (from.company_name || null) === (to.company_name || null)
+        && (from.account_name || null) === (to.account_name || null)
+        && (from.account_number || null) === (to.account_number || null);
+    if (isSameAccount) {
+        return res.status(400).json({ error: '轉出帳戶與轉入帳戶不能是同一個帳戶' });
+    }
+
+    const transferGroupId = crypto.randomUUID();
+    const transferCategory = category || '轉帳';
+
+    const insertOne = (type, companyName, accountName, accountNumber, description) => new Promise((resolve, reject) => {
+        db.run(
+            `INSERT INTO transactions
+             (transaction_date, type, amount, category, description, company_name, account_name, account_number, remarks, transfer_group_id)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [transfer_date, type, amount, transferCategory, description,
+             companyName || null, accountName || null, accountNumber || null, remarks || null, transferGroupId],
+            function (err) {
+                if (err) return reject(err);
+                resolve(this.lastID);
+            }
+        );
+    });
+
+    try {
+        const fromId = await insertOne('expense', from.company_name, from.account_name, from.account_number, `轉帳至 ${to.account_name}`);
+        const toId = await insertOne('income', to.company_name, to.account_name, to.account_number, `轉帳自 ${from.account_name}`);
+
+        const fromAfter = { id: fromId, transaction_date: transfer_date, type: 'expense', amount, category: transferCategory, company_name: from.company_name || null, account_name: from.account_name, account_number: from.account_number || null, transfer_group_id: transferGroupId };
+        const toAfter = { id: toId, transaction_date: transfer_date, type: 'income', amount, category: transferCategory, company_name: to.company_name || null, account_name: to.account_name, account_number: to.account_number || null, transfer_group_id: transferGroupId };
+        writeOperationLog(req, 'create', 'transaction', fromId, null, fromAfter, `轉帳 #${fromId} 轉出 ${from.account_name} → ${to.account_name}`);
+        writeOperationLog(req, 'create', 'transaction', toId, null, toAfter, `轉帳 #${toId} 轉入 ${to.account_name} ← ${from.account_name}`);
+
+        try {
+            await updateBankAccountBalance(from.account_name, from.account_number, from.company_name || null);
+            await updateBankAccountBalance(to.account_name, to.account_number, to.company_name || null);
+        } catch (balanceErr) {
+            logger.error('更新帳戶餘額失敗:', balanceErr);
+        }
+
+        res.json({ success: true, fromId, toId, message: '轉帳已完成' });
+    } catch (err) {
+        logger.error('轉帳錯誤:', err);
+        res.status(500).json({ error: '轉帳失敗', details: err.message });
+    }
+});
+
 // 取得單一收支記錄
 router.get('/:id', (req, res) => {
     const { id } = req.params;
@@ -680,6 +742,9 @@ router.put('/:id', requireEditor, (req, res) => {
         if (!oldRow) {
             return res.status(404).json({ error: '找不到記錄' });
         }
+        if (oldRow.transfer_group_id) {
+            return res.status(400).json({ error: '轉帳記錄不支援編輯，請刪除後重新建立' });
+        }
         const oldTransaction = oldRow;
         const afterData = { id: parseInt(id, 10), transaction_date, type, amount, category: category || null, description: description || null, company_name: company_name || null, account_name: account_name || null, account_number: account_number || null, remarks: remarks || null };
         db.run(
@@ -716,7 +781,43 @@ router.put('/:id', requireEditor, (req, res) => {
     });
 });
 
-// 刪除收支記錄
+// 刪除某次轉帳的兩筆記錄（轉出+轉入視為不可分割的單位，一起刪除、一起重算兩邊餘額）
+async function deleteTransferGroup(req, res, transferGroupId) {
+    try {
+        const rows = await new Promise((resolve, reject) => {
+            db.all('SELECT * FROM transactions WHERE transfer_group_id = ?', [transferGroupId], (err, r) => (err ? reject(err) : resolve(r || [])));
+        });
+
+        for (const row of rows) {
+            await new Promise((resolve, reject) => {
+                db.run('DELETE FROM transactions WHERE id = ?', [row.id], function (err) {
+                    if (err) return reject(err);
+                    if (this.changes > 0) {
+                        writeOperationLog(req, 'delete', 'transaction', row.id, row, null, '轉帳 #' + row.id + '（一併刪除）');
+                    }
+                    resolve();
+                });
+            });
+        }
+
+        for (const row of rows) {
+            try {
+                if (row.account_name) {
+                    await updateBankAccountBalance(row.account_name, row.account_number, row.company_name || null);
+                }
+            } catch (balanceErr) {
+                logger.error('更新帳戶餘額失敗:', balanceErr);
+            }
+        }
+
+        res.json({ success: true, message: `轉帳記錄已刪除（共 ${rows.length} 筆）` });
+    } catch (err) {
+        logger.error('刪除轉帳記錄錯誤:', err);
+        res.status(500).json({ error: '刪除失敗', details: err.message });
+    }
+}
+
+// 刪除收支記錄（轉帳記錄會連同另一半一起刪除，見下方 transferGroupId 分支）
 router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM transactions WHERE id = ?', [id], (err, row) => {
@@ -727,6 +828,11 @@ router.delete('/:id', requireEditor, (req, res) => {
         if (!row) {
             return res.status(404).json({ error: '找不到記錄' });
         }
+
+        if (row.transfer_group_id) {
+            return deleteTransferGroup(req, res, row.transfer_group_id);
+        }
+
         const transaction = row;
         db.run('DELETE FROM transactions WHERE id = ?', [id], async function(err) {
             if (err) {

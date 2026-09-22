@@ -420,6 +420,17 @@
             font-weight: bold;
         }
 
+        .type-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: normal;
+            color: #64748B;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 2px 8px;
+        }
+
         .amount-income {
             color: #28a745;
             font-weight: bold;
@@ -528,6 +539,7 @@
                     <button class="btn btn-secondary" onclick="exportToExcel()">📥 匯出Excel</button>
                     <button class="btn btn-secondary" id="importExcelBtn" onclick="document.getElementById('importFileInput').click()">📤 匯入Excel</button>
                     <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
+                    <button class="btn btn-secondary" id="transferBtn" onclick="openTransferModal()">🔁 轉帳</button>
                     <button class="btn btn-primary" id="addTransactionBtn" onclick="openAddModal()">➕ 新增收支記錄</button>
                 </div>
             </div>
@@ -705,6 +717,78 @@
         </div>
     </div>
 
+    <!-- 轉帳模態框：一次寫入轉出帳戶支出 + 轉入帳戶收入兩筆記錄，共用同一個
+         transfer_group_id，排除在總收入/總支出統計之外；轉帳記錄只能整組刪除，
+         不支援編輯 -->
+    <div id="transferModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔁 帳戶間轉帳</h2>
+                <button class="close" onclick="closeTransferModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="transferForm" onsubmit="saveTransfer(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="transferDate">轉帳日期 <span class="required">*</span></label>
+                            <input type="date" id="transferDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="transferAmount">金額 <span class="required">*</span></label>
+                            <input type="number" id="transferAmount" step="0.01" min="0.01" required placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="transferFromCompanyId">轉出公司</label>
+                            <select id="transferFromCompanyId" onchange="onTransferCompanyChange('from')">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="transferFromAccountId">轉出帳戶 <span class="required">*</span></label>
+                            <select id="transferFromAccountId" required>
+                                <option value="">請選擇帳戶</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="transferToCompanyId">轉入公司</label>
+                            <select id="transferToCompanyId" onchange="onTransferCompanyChange('to')">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="transferToAccountId">轉入帳戶 <span class="required">*</span></label>
+                            <select id="transferToAccountId" required>
+                                <option value="">請選擇帳戶</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="transferCategory">類別</label>
+                            <input type="text" id="transferCategory" placeholder="轉帳">
+                        </div>
+                        <div class="form-group">
+                            <label for="transferRemarks">備註</label>
+                            <input type="text" id="transferRemarks" placeholder="選填">
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeTransferModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">確認轉帳</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api';
         
@@ -760,6 +844,107 @@
                     console.error('載入銀行帳戶列表錯誤:', err);
                 });
         }
+
+        // ==================== 轉帳 ====================
+        // 轉出/轉入各自獨立的帳戶快取，避免跟新增收支記錄表單共用的 bankAccountsList 互相覆蓋
+        let transferAccountsCache = { from: [], to: [] };
+
+        function populateTransferAccountSelect(side, companyId) {
+            const select = document.getElementById(side === 'from' ? 'transferFromAccountId' : 'transferToAccountId');
+            let url = `${API_BASE}/bank-accounts?active=true`;
+            if (companyId) url += `&company_id=${companyId}`;
+            return fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) return;
+                    transferAccountsCache[side] = data.data || [];
+                    select.innerHTML = '<option value="">請選擇帳戶</option>' +
+                        transferAccountsCache[side].map(a => {
+                            const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
+                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
+                            return `<option value="${a.id}">${label}</option>`;
+                        }).join('');
+                })
+                .catch(err => console.error('載入轉帳帳戶列表錯誤:', err));
+        }
+
+        window.onTransferCompanyChange = function(side) {
+            const companyId = document.getElementById(side === 'from' ? 'transferFromCompanyId' : 'transferToCompanyId').value;
+            populateTransferAccountSelect(side, companyId || null);
+        };
+
+        window.openTransferModal = function() {
+            document.getElementById('transferForm').reset();
+            document.getElementById('transferDate').value = new Date().toISOString().slice(0, 10);
+
+            const fromCompanySelect = document.getElementById('transferFromCompanyId');
+            const toCompanySelect = document.getElementById('transferToCompanyId');
+            const companyOptions = '<option value="">請選擇公司</option>' +
+                companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+            fromCompanySelect.innerHTML = companyOptions;
+            toCompanySelect.innerHTML = companyOptions;
+
+            populateTransferAccountSelect('from', null);
+            populateTransferAccountSelect('to', null);
+
+            document.getElementById('transferModal').style.display = 'block';
+        };
+
+        window.closeTransferModal = function() {
+            document.getElementById('transferModal').style.display = 'none';
+        };
+
+        window.saveTransfer = function(event) {
+            event.preventDefault();
+
+            const fromAccountId = document.getElementById('transferFromAccountId').value;
+            const toAccountId = document.getElementById('transferToAccountId').value;
+            if (!fromAccountId || !toAccountId) {
+                showMessage('請選擇轉出與轉入帳戶', 'error');
+                return;
+            }
+
+            const fromAccount = transferAccountsCache.from.find(a => String(a.id) === fromAccountId);
+            const toAccount = transferAccountsCache.to.find(a => String(a.id) === toAccountId);
+            if (!fromAccount || !toAccount) {
+                showMessage('帳戶資料載入異常，請重新開啟轉帳視窗', 'error');
+                return;
+            }
+            if (fromAccount.id === toAccount.id) {
+                showMessage('轉出帳戶與轉入帳戶不能是同一個帳戶', 'error');
+                return;
+            }
+
+            const data = {
+                transfer_date: document.getElementById('transferDate').value,
+                amount: parseFloat(document.getElementById('transferAmount').value),
+                from: { company_name: fromAccount.company_name, account_name: fromAccount.account_name, account_number: fromAccount.account_number },
+                to: { company_name: toAccount.company_name, account_name: toAccount.account_name, account_number: toAccount.account_number },
+                category: document.getElementById('transferCategory').value,
+                remarks: document.getElementById('transferRemarks').value
+            };
+
+            fetch(`${API_BASE}/transactions/transfer`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    showMessage(result.message || '轉帳已完成', 'success');
+                    closeTransferModal();
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch(err => {
+                    console.error('轉帳錯誤:', err);
+                    showMessage('轉帳失敗', 'error');
+                });
+        };
 
         // 公司選擇變更時
         window.onCompanyChange = function() {
@@ -965,8 +1150,11 @@
         };
 
         // 刪除記錄
-        window.deleteTransaction = function(id) {
-            if (!confirm('確定要刪除此記錄嗎？')) {
+        window.deleteTransaction = function(id, isTransfer) {
+            const confirmText = isTransfer
+                ? '這是轉帳記錄，刪除後另一側的記錄也會一併刪除，確定要刪除嗎？'
+                : '確定要刪除此記錄嗎？';
+            if (!confirm(confirmText)) {
                 return;
             }
 
@@ -1060,25 +1248,28 @@
                 return;
             }
 
-            tbody.innerHTML = transactions.map(t => `
+            tbody.innerHTML = transactions.map(t => {
+                const isTransfer = !!t.transfer_group_id;
+                return `
                 <tr>
                     ${canEdit ? `<td><input type="checkbox" class="row-checkbox" value="${t.id}" data-id="${t.id}" onchange="updateBatchDeleteState()"></td>` : ''}
                     <td>${escapeHtml(t.transaction_date)}</td>
                     <td><span class="type-${t.type}">${t.type === 'income' ? '💰 收入' : '💸 支出'}</span></td>
                     <td class="amount-${t.type}">${formatCurrency(t.amount)}</td>
                     <td>${escapeHtml(t.category) || '-'}</td>
-                    <td>${escapeHtml(t.description) || '-'}</td>
+                    <td>${isTransfer ? '<span class="type-badge">🔁 轉帳</span> ' : ''}${escapeHtml(t.description) || '-'}</td>
                     <td>${escapeHtml(t.company_name) || '-'}</td>
                     <td>${escapeHtml(t.account_name) || '-'}${t.bank_name ? `<br><span style="font-size: 12px; color: #64748B;">${escapeHtml(t.bank_name)}</span>` : ''}${t.account_number ? `<br><span style="font-size: 12px; color: #94A3B8;">${escapeHtml(t.account_number)}</span>` : ''}</td>
                     <td>${escapeHtml(t.remarks) || '-'}</td>
                     <td class="actions">
                         ${canEdit ? `
-                        <button class="btn btn-edit btn-sm" onclick="editTransaction(${t.id})">編輯</button>
-                        <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id})">刪除</button>
+                        ${isTransfer ? '' : `<button class="btn btn-edit btn-sm" onclick="editTransaction(${t.id})">編輯</button>`}
+                        <button class="btn btn-danger btn-sm" onclick="deleteTransaction(${t.id}, ${isTransfer})">刪除</button>
                         ` : '<span style="color: #999;">-</span>'}
                     </td>
                 </tr>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // 全選/取消全選
@@ -1340,6 +1531,10 @@
             if (event.target == modal) {
                 closeModal();
             }
+            const transferModal = document.getElementById('transferModal');
+            if (event.target == transferModal) {
+                closeTransferModal();
+            }
         }
 
         // 載入配置
@@ -1466,10 +1661,12 @@
             if (!canEdit) {
                 const importBtn = document.getElementById('importExcelBtn');
                 const addBtn = document.getElementById('addTransactionBtn');
+                const transferBtn = document.getElementById('transferBtn');
                 const batchBar = document.getElementById('batchActionsBar');
                 const selectAllHeader = document.getElementById('selectAllHeader');
                 if (importBtn) importBtn.style.display = 'none';
                 if (addBtn) addBtn.style.display = 'none';
+                if (transferBtn) transferBtn.style.display = 'none';
                 if (batchBar) batchBar.style.display = 'none';
                 if (selectAllHeader) selectAllHeader.style.display = 'none';
             }

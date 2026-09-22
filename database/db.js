@@ -39,6 +39,7 @@ const initDatabase = () => {
                     await ensureOperationLogsTable();
                     await migrateUserRoleFinanceTier();
                     await migrateFinancingRepaymentFrequency();
+                    await migrateTransactionsTransferGroup();
                     resolve();
                 } catch (error) {
                     reject(error);
@@ -64,13 +65,17 @@ const ensureNewTables = () => {
                 account_name TEXT,
                 account_number TEXT,
                 remarks TEXT,
+                transfer_group_id TEXT DEFAULT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
-            
+
             CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
             CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
             CREATE INDEX IF NOT EXISTS idx_transactions_company ON transactions(company_name);
+            -- idx_transactions_transfer_group 同樣不能放這裡，理由跟 schema.sql 一樣
+            -- （這段 CREATE TABLE IF NOT EXISTS 對既有安裝是 no-op，欄位還不存在），
+            -- 改成只在下面的 migrateTransactionsTransferGroup() 裡建立。
             
             -- 餘額結算記錄表（注意：UNIQUE約束在schema.sql中定義，這裡僅創建表結構）
             CREATE TABLE IF NOT EXISTS balance_settlements (
@@ -258,6 +263,41 @@ const ensureOperationLogsTable = () => {
         db.exec(sql, (err) => {
             if (err) reject(err);
             else resolve();
+        });
+    });
+};
+
+// 資料庫遷移：為 transactions 表添加 transfer_group_id 欄位（帳戶間轉帳：
+// 同一次轉帳產生的兩筆收支記錄共用同一個 id，一般收支記錄為 NULL）
+const migrateTransactionsTransferGroup = () => {
+    return new Promise((resolve, reject) => {
+        // 欄位存在後才建立索引（不管是這次全新安裝就有，還是既有資料庫剛用
+        // ALTER TABLE 補上），確保索引一定會建立，同時避免對還沒有這個欄位的
+        // 舊資料庫建索引而噴 SQLITE_ERROR
+        const ensureIndex = () => {
+            db.run("CREATE INDEX IF NOT EXISTS idx_transactions_transfer_group ON transactions(transfer_group_id)", (idxErr) => {
+                if (idxErr) console.error('建立 idx_transactions_transfer_group 索引失敗:', idxErr.message);
+                resolve();
+            });
+        };
+
+        db.all("PRAGMA table_info(transactions)", [], (err, columns) => {
+            if (err) {
+                console.error('檢查 transactions 表結構失敗:', err.message);
+                return reject(err);
+            }
+            const hasColumn = columns.some(col => col.name === 'transfer_group_id');
+            if (hasColumn) {
+                return ensureIndex();
+            }
+            db.run("ALTER TABLE transactions ADD COLUMN transfer_group_id TEXT DEFAULT NULL", (alterErr) => {
+                if (alterErr && !alterErr.message.includes('duplicate column')) {
+                    console.error('添加 transfer_group_id 欄位失敗:', alterErr.message);
+                    return reject(alterErr);
+                }
+                if (!alterErr) console.log('✓ transfer_group_id 欄位已添加到 transactions 表');
+                ensureIndex();
+            });
         });
     });
 };

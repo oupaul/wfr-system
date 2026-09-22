@@ -38,11 +38,17 @@ CREATE TABLE IF NOT EXISTS transactions (
     account_name TEXT,
     account_number TEXT,
     remarks TEXT,
+    transfer_group_id TEXT DEFAULT NULL,  -- 帳戶間轉帳：同一次轉帳的兩筆記錄共用同一個 id，一般收支記錄為 NULL
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 建立索引
+-- 注意：idx_transactions_transfer_group 不能加在這裡。這個 CREATE TABLE IF NOT
+-- EXISTS 對「已經存在的 transactions 表」（也就是所有既有安裝）是 no-op，不會
+-- 補上 transfer_group_id 欄位；若在這裡對這個欄位建索引，既有資料庫每次啟動都
+-- 會直接噴 SQLITE_ERROR: no such column。這個索引改成只在
+-- database/db.js 的 migrateTransactionsTransferGroup() 裡、確認欄位存在之後才建立。
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_company ON transactions(company_name);

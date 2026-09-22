@@ -16,6 +16,7 @@
   - **資金流水帳**（預設頁籤）：帳戶為欄、逐筆交易與每月 15、30 號結餘檢查點為列，可勾選要顯示的帳戶、顯示定存總額
   - **帳戶卡片**：每帳戶餘額、安全水位、缺口預測，並提供依銀行、依帳戶類型分類的餘額小計
 - 💰 **收支記錄管理**：新增／修改／刪除、Excel 匯入與匯出、批次刪除、日期/類型/公司/帳戶/關鍵字（說明、類別、備註）篩選、分頁（每頁 50 筆）
+  - 🔁 **帳戶間轉帳**：一次操作在轉出帳戶記一筆支出、轉入帳戶記一筆收入，自動排除在「總收入/總支出」統計之外；轉帳記錄以徽章標示、只能整組刪除（不支援編輯，需重新建立）
 - ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳、分頁（每頁 50 筆）
 - 🏢 **公司管理**：公司主檔維護
 - 🏦 **銀行帳戶管理**：帳戶主檔（含銀行名稱、帳戶類型：活存/定存/支票/外幣/授信/其他）、安全水位、即時餘額重算
@@ -187,7 +188,7 @@ npm run dev
 - `POST /api/auth/logout`：登出
 
 ### 業務 API（需登入；新增／修改／刪除需財務人員或管理員權限，一般人員僅能查詢）
-- **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁與 `keyword` 搜尋說明/類別/備註）、`PUT/DELETE /api/transactions/:id`、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`
+- **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁與 `keyword` 搜尋說明/類別/備註）、`PUT/DELETE /api/transactions/:id`（轉帳記錄 `PUT` 會回 400，`DELETE` 會連同另一半一起刪除）、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`、`POST /api/transactions/transfer`（帳戶間轉帳，一次寫入兩筆並排除在 `GET /api/transactions/statistics` 統計之外）
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
 - **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
@@ -339,7 +340,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ## 資料庫結構
 
-主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
+主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄；`transfer_group_id` 欄位標記帳戶間轉帳，同一次轉帳的兩筆記錄共用同一個值，一般收支記錄為 NULL）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
 
 ### 權限模型
 
