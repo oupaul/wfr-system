@@ -748,9 +748,10 @@
                         </div>
                         <div class="form-group">
                             <label for="transferFromAccountId">轉出帳戶 <span class="required">*</span></label>
-                            <select id="transferFromAccountId" required>
+                            <select id="transferFromAccountId" required onchange="onTransferAccountChange('from')">
                                 <option value="">請選擇帳戶</option>
                             </select>
+                            <small id="transferFromBalance" style="color: #64748B; display: block; margin-top: 6px;"></small>
                         </div>
                     </div>
 
@@ -763,9 +764,10 @@
                         </div>
                         <div class="form-group">
                             <label for="transferToAccountId">轉入帳戶 <span class="required">*</span></label>
-                            <select id="transferToAccountId" required>
+                            <select id="transferToAccountId" required onchange="onTransferAccountChange('to')">
                                 <option value="">請選擇帳戶</option>
                             </select>
+                            <small id="transferToBalance" style="color: #64748B; display: block; margin-top: 6px;"></small>
                         </div>
                     </div>
 
@@ -864,9 +866,23 @@
                             const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
                             return `<option value="${a.id}">${label}</option>`;
                         }).join('');
+                    updateTransferBalanceDisplay(side); // 選單重新載入後，帳戶已重設為未選擇，餘額顯示要跟著清空
                 })
                 .catch(err => console.error('載入轉帳帳戶列表錯誤:', err));
         }
+
+        // 顯示目前選定帳戶的即時餘額，比照網銀轉帳頁面「可用餘額」的作法，
+        // 讓使用者不用先跳去銀行帳戶管理頁查
+        function updateTransferBalanceDisplay(side) {
+            const accountId = document.getElementById(side === 'from' ? 'transferFromAccountId' : 'transferToAccountId').value;
+            const balanceEl = document.getElementById(side === 'from' ? 'transferFromBalance' : 'transferToBalance');
+            const account = transferAccountsCache[side].find(a => String(a.id) === accountId);
+            balanceEl.textContent = account ? `目前餘額：${formatCurrency(account.current_balance)}` : '';
+        }
+
+        window.onTransferAccountChange = function(side) {
+            updateTransferBalanceDisplay(side);
+        };
 
         window.onTransferCompanyChange = function(side) {
             const companyId = document.getElementById(side === 'from' ? 'transferFromCompanyId' : 'transferToCompanyId').value;
