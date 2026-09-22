@@ -679,6 +679,8 @@
         let companiesList = [];
         let bankAccountsList = [];
         let currentFinancingId = null;
+        let financingListCache = []; // 目前列表資料的快取，讓 openRepaymentModal 用 id 查名稱，
+                                      // 不用把使用者輸入的借款名稱塞進 onclick="" 屬性字串裡
 
         // 格式化金額
         function formatCurrency(value) {
@@ -882,9 +884,10 @@
         };
 
         // 開啟還款記錄模態框
-        window.openRepaymentModal = function(id, facilityName) {
+        window.openRepaymentModal = function(id) {
             currentFinancingId = id;
-            document.getElementById('repaymentModalTitle').textContent = `還款記錄 - ${facilityName || ''}`;
+            const record = financingListCache.find(f => f.id === id);
+            document.getElementById('repaymentModalTitle').textContent = `還款記錄 - ${(record && record.facility_name) || ''}`;
             document.getElementById('repaymentFormWrap').style.display = canEdit ? 'block' : 'none';
             document.getElementById('repayDate').value = new Date().toISOString().slice(0, 10);
             document.getElementById('repaymentModal').style.display = 'block';
@@ -1016,7 +1019,8 @@
                         showMessage(data.error, 'error');
                         return;
                     }
-                    displayFinancing(data.data || []);
+                    financingListCache = data.data || [];
+                    displayFinancing(financingListCache);
                     loading.style.display = 'none';
                 })
                 .catch(err => {
@@ -1057,7 +1061,7 @@
                     <td>${nextPayment}</td>
                     <td><span class="${f.is_active ? 'status-active' : 'status-inactive'}">${f.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
-                        <button class="btn btn-secondary btn-sm" onclick="openRepaymentModal(${f.id}, '${escapeHtml(f.facility_name).replace(/'/g, "\\'")}')">還款記錄</button>
+                        <button class="btn btn-secondary btn-sm" onclick="openRepaymentModal(${f.id})">還款記錄</button>
                         ${canEdit ? `
                         <button class="btn btn-edit btn-sm" onclick="editFinancing(${f.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteFinancing(${f.id})">刪除</button>
