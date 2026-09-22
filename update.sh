@@ -47,6 +47,12 @@ CURRENT_DIR=$(pwd)
 echo "部署目錄: $CURRENT_DIR"
 echo ""
 
+# 避免以不同使用者執行本腳本（例如直接用 root 執行，但檔案是用其他帳號部署的）
+# 時，git 2.35+ 的「detected dubious ownership」保護機制擋下所有 git 指令
+if ! git config --global --get-all safe.directory 2>/dev/null | grep -qx "$CURRENT_DIR"; then
+    git config --global --add safe.directory "$CURRENT_DIR"
+fi
+
 if [ ! -d ".git" ]; then
     echo -e "${RED}❌ 此目錄不是 git repository，無法自動更新${NC}"
     echo ""
@@ -68,11 +74,13 @@ fi
 
 # 2. 找出實際對應的 systemd 服務名稱（服務名稱安裝時可能被自訂，例如 cashflow-prod）
 SERVICE_NAME=""
+SERVICE_USER=""
 if [ -d "/etc/systemd/system" ]; then
     for svc_file in /etc/systemd/system/*.service; do
         [ -f "$svc_file" ] || continue
         if grep -q "^WorkingDirectory=${CURRENT_DIR}$" "$svc_file" 2>/dev/null; then
             SERVICE_NAME=$(basename "$svc_file" .service)
+            SERVICE_USER=$(grep "^User=" "$svc_file" 2>/dev/null | head -1 | cut -d'=' -f2-)
             break
         fi
     done
@@ -144,6 +152,17 @@ if [ -f "package.json" ]; then
     echo -e "${GREEN}✓ 相依套件已更新${NC}"
 fi
 echo ""
+
+# 若以 root 執行本腳本，上面的 git pull / npm install 會把新增/修改的檔案變成
+# root 所有，但服務實際上是用 systemd 設定的 User= 帳號在跑——這正是先前正式
+# 環境發生過的問題（root 擁有的 fund_report.db 讓以 itadmin 執行的服務寫入失敗、
+# 502 crash loop）。重啟服務前先把目錄擁有者改回服務帳號，避免重蹈覆轍。
+if [ "$EUID" -eq 0 ] && [ -n "$SERVICE_USER" ] && [ "$SERVICE_USER" != "root" ]; then
+    echo "修正檔案擁有者為 ${SERVICE_USER}（避免服務因權限不足而寫入失敗）..."
+    chown -R "${SERVICE_USER}:${SERVICE_USER}" "$CURRENT_DIR"
+    echo -e "${GREEN}✓ 已修正${NC}"
+    echo ""
+fi
 
 # 7. 重啟服務
 if [ "$HAS_SERVICE" = true ]; then
