@@ -200,6 +200,11 @@ router.put('/:id', requireEditor, (req, res) => {
 });
 
 // 刪除銀行帳戶
+// financing.bank_account_id 是真正的數字外鍵（不像 transactions/settlements 用複製
+// 的文字比對），這個專案又沒開 PRAGMA foreign_keys，刪除前沒檢查的話，刪掉帳戶會
+// 讓借款留著一個指向不存在資料的 ID：借款列表該筆會悄悄顯示空白、資金流水帳/
+// 資金缺口的還款投影也會沒有任何警示地消失。刪除前先擋下來，讓使用者自己決定
+// 要先改掉借款的撥款/還款帳戶設定，還是連借款一起處理。
 router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM bank_accounts WHERE id = ?', [id], (err, row) => {
@@ -207,14 +212,27 @@ router.delete('/:id', requireEditor, (req, res) => {
             if (!row) return res.status(404).json({ error: '找不到記錄' });
             return res.status(500).json({ error: '刪除失敗', details: err && err.message });
         }
-        db.run('DELETE FROM bank_accounts WHERE id = ?', [id], function(delErr) {
-            if (delErr) {
-                logger.error('刪除錯誤:', delErr);
-                return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+        db.all('SELECT facility_name FROM financing WHERE bank_account_id = ?', [id], (finErr, financingRows) => {
+            if (finErr) {
+                logger.error('查詢關聯借款錯誤:', finErr);
+                return res.status(500).json({ error: '刪除失敗', details: finErr.message });
             }
-            if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
-            writeOperationLog(req, 'delete', 'bank_account', id, row, null, '銀行帳戶 #' + id + ' ' + (row.account_name || ''));
-            res.json({ success: true, message: '銀行帳戶已刪除' });
+            if (financingRows && financingRows.length > 0) {
+                const names = financingRows.slice(0, 3).map(f => f.facility_name).join('、');
+                const more = financingRows.length > 3 ? ` 等共 ${financingRows.length} 筆` : '';
+                return res.status(400).json({
+                    error: `此銀行帳戶仍被借款「${names}」${more}設為撥款/還款帳戶，請先到借款管理修改這些借款的撥款/還款帳戶，或刪除這些借款，再刪除此帳戶。`
+                });
+            }
+            db.run('DELETE FROM bank_accounts WHERE id = ?', [id], function(delErr) {
+                if (delErr) {
+                    logger.error('刪除錯誤:', delErr);
+                    return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+                }
+                if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
+                writeOperationLog(req, 'delete', 'bank_account', id, row, null, '銀行帳戶 #' + id + ' ' + (row.account_name || ''));
+                res.json({ success: true, message: '銀行帳戶已刪除' });
+            });
         });
     });
 });

@@ -106,6 +106,9 @@ router.put('/:id', requireEditor, (req, res) => {
 });
 
 // 刪除公司
+// financing.company_id 是真正的數字外鍵，這個專案沒開 PRAGMA foreign_keys，刪除前
+// 沒檢查的話會讓借款留著一個指向不存在公司的 ID，悄悄從借款列表/資金流水帳失去
+// 正確的公司資訊。刪除前先擋下來，比照銀行帳戶刪除的做法。
 router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM companies WHERE id = ?', [id], (err, row) => {
@@ -113,14 +116,27 @@ router.delete('/:id', requireEditor, (req, res) => {
             if (!row) return res.status(404).json({ error: '找不到記錄' });
             return res.status(500).json({ error: '刪除失敗', details: err && err.message });
         }
-        db.run('DELETE FROM companies WHERE id = ?', [id], function(delErr) {
-            if (delErr) {
-                logger.error('刪除錯誤:', delErr);
-                return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+        db.all('SELECT facility_name FROM financing WHERE company_id = ?', [id], (finErr, financingRows) => {
+            if (finErr) {
+                logger.error('查詢關聯借款錯誤:', finErr);
+                return res.status(500).json({ error: '刪除失敗', details: finErr.message });
             }
-            if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
-            writeOperationLog(req, 'delete', 'company', id, row, null, '公司 #' + id + ' ' + (row.name || ''));
-            res.json({ success: true, message: '公司已刪除' });
+            if (financingRows && financingRows.length > 0) {
+                const names = financingRows.slice(0, 3).map(f => f.facility_name).join('、');
+                const more = financingRows.length > 3 ? ` 等共 ${financingRows.length} 筆` : '';
+                return res.status(400).json({
+                    error: `此公司仍有借款「${names}」${more}設定在名下，請先到借款管理修改這些借款的所屬公司，或刪除這些借款，再刪除此公司。`
+                });
+            }
+            db.run('DELETE FROM companies WHERE id = ?', [id], function(delErr) {
+                if (delErr) {
+                    logger.error('刪除錯誤:', delErr);
+                    return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+                }
+                if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
+                writeOperationLog(req, 'delete', 'company', id, row, null, '公司 #' + id + ' ' + (row.name || ''));
+                res.json({ success: true, message: '公司已刪除' });
+            });
         });
     });
 });
