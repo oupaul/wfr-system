@@ -406,6 +406,27 @@
             background: #f8f9fa;
         }
 
+        .sortable-th {
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .sortable-th:hover {
+            color: #1E293B;
+        }
+
+        .sort-arrow {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 11px;
+            color: #94A3B8;
+        }
+
+        .sortable-th.sort-active .sort-arrow {
+            color: #F06000;
+        }
+
         .actions {
             white-space: nowrap;
         }
@@ -617,14 +638,14 @@
                             <th style="width: 42px;" id="selectAllHeader">
                                 <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" title="全選">
                             </th>
-                            <th>日期</th>
-                            <th>類型</th>
-                            <th>金額</th>
-                            <th>類別</th>
-                            <th>說明</th>
-                            <th>公司名稱</th>
-                            <th>帳戶</th>
-                            <th>備註</th>
+                            <th class="sortable-th" data-sort="date" onclick="setTransactionsSort('date')">日期<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="type" onclick="setTransactionsSort('type')">類型<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="amount" onclick="setTransactionsSort('amount')">金額<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="category" onclick="setTransactionsSort('category')">類別<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="description" onclick="setTransactionsSort('description')">說明<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="company" onclick="setTransactionsSort('company')">公司名稱<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="account" onclick="setTransactionsSort('account')">帳戶<span class="sort-arrow"></span></th>
+                            <th class="sortable-th" data-sort="remarks" onclick="setTransactionsSort('remarks')">備註<span class="sort-arrow"></span></th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -1254,6 +1275,32 @@
         const TRANSACTIONS_PAGE_SIZE = 50;
         let currentTransactionsPage = 1;
         let totalTransactions = 0;
+        let transactionsSortBy = 'date';
+        let transactionsSortDir = 'desc';
+
+        function setTransactionsSort(column) {
+            if (transactionsSortBy === column) {
+                transactionsSortDir = transactionsSortDir === 'asc' ? 'desc' : 'asc';
+            } else {
+                transactionsSortBy = column;
+                transactionsSortDir = 'desc';
+            }
+            updateSortArrows();
+            loadTransactions(1);
+        }
+
+        function updateSortArrows() {
+            document.querySelectorAll('.sortable-th').forEach(th => {
+                const arrow = th.querySelector('.sort-arrow');
+                if (th.dataset.sort === transactionsSortBy) {
+                    th.classList.add('sort-active');
+                    arrow.textContent = transactionsSortDir === 'asc' ? '▲' : '▼';
+                } else {
+                    th.classList.remove('sort-active');
+                    arrow.textContent = '';
+                }
+            });
+        }
 
         function loadTransactions(page) {
             currentTransactionsPage = page || currentTransactionsPage || 1;
@@ -1266,7 +1313,7 @@
             const keyword = document.getElementById('filterKeyword').value;
 
             const offset = (currentTransactionsPage - 1) * TRANSACTIONS_PAGE_SIZE;
-            let url = `${API_BASE}/transactions?limit=${TRANSACTIONS_PAGE_SIZE}&offset=${offset}`;
+            let url = `${API_BASE}/transactions?limit=${TRANSACTIONS_PAGE_SIZE}&offset=${offset}&sortBy=${transactionsSortBy}&sortDir=${transactionsSortDir}`;
             if (startDate) url += `&startDate=${startDate}`;
             if (endDate) url += `&endDate=${endDate}`;
             if (type) url += `&type=${type}`;
@@ -1751,6 +1798,7 @@
             }
 
             await loadConfig();
+            updateSortArrows();
             loadTransactions();
             loadStatistics();
             loadCompanies();

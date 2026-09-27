@@ -37,8 +37,21 @@ const upload = multer({
 // 取得所有收支記錄
 // bank_name 透過 company_name/account_name/account_number 比對 bank_accounts 查出來
 // （transactions 本身沒有存 bank_name，用法跟其他頁面比對 balance_settlements 的方式一致）
+const SORTABLE_COLUMNS = {
+    date: 't.transaction_date',
+    type: 't.type',
+    amount: 't.amount',
+    category: 't.category',
+    description: 't.description',
+    company: 't.company_name',
+    account: 't.account_name',
+    remarks: 't.remarks'
+};
+
 router.get('/', (req, res) => {
-    const { startDate, endDate, type, company, account, keyword, limit = 1000, offset = 0 } = req.query;
+    const { startDate, endDate, type, company, account, keyword, limit = 1000, offset = 0, sortBy, sortDir } = req.query;
+    const sortColumn = SORTABLE_COLUMNS[sortBy] || SORTABLE_COLUMNS.date;
+    const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
     let baseQuery = `
         FROM transactions t
@@ -81,7 +94,7 @@ router.get('/', (req, res) => {
             return res.status(500).json({ error: '查詢失敗', details: countErr.message });
         }
 
-        const dataQuery = `SELECT t.*, ba.bank_name ${baseQuery} ORDER BY t.transaction_date DESC, t.id DESC LIMIT ? OFFSET ?`;
+        const dataQuery = `SELECT t.*, ba.bank_name ${baseQuery} ORDER BY ${sortColumn} ${sortDirection}, t.id ${sortDirection} LIMIT ? OFFSET ?`;
         const dataParams = [...params, parseInt(limit), parseInt(offset)];
 
         db.all(dataQuery, dataParams, (err, rows) => {
