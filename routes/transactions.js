@@ -200,7 +200,7 @@ router.get('/template', async (req, res) => {
 
 // 匯出收支記錄為 Excel（必須在 /:id 之前）
 router.get('/export', (req, res) => {
-    const { startDate, endDate, type, company, account, keyword } = req.query;
+    const { startDate, endDate, type, company, account, accountNumber, keyword } = req.query;
 
     let query = `
         SELECT t.*, ba.bank_name
@@ -232,6 +232,10 @@ router.get('/export', (req, res) => {
     if (account) {
         query += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
+    }
+    if (accountNumber) {
+        query += ' AND (t.account_number = ? OR t.account_number IS NULL)';
+        params.push(accountNumber);
     }
     if (keyword) {
         query += ' AND (t.description LIKE ? OR t.category LIKE ? OR t.remarks LIKE ?)';
