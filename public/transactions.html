@@ -623,7 +623,7 @@
                 </div>
                 <div style="text-align: right;">
                     <button class="btn btn-secondary" onclick="resetFilters()">清除篩選</button>
-                    <button class="btn btn-primary" onclick="loadTransactions(1)">🔍 查詢</button>
+                    <button class="btn btn-primary" onclick="applyTransactionFilters()">🔍 查詢</button>
                 </div>
             </div>
 
@@ -910,25 +910,40 @@
                 .catch(err => console.error('載入篩選帳戶列表錯誤:', err));
         }
 
-        // 查詢區選的公司變更時，帳戶下拉選單要跟著重新載入（只顯示該公司的帳戶）
+        // 查詢區選的公司變更時，帳戶下拉選單要跟著重新載入（只顯示該公司的帳戶），並立即套用篩選
         function onFilterCompanyChange() {
             const companyName = document.getElementById('filterCompany').value;
             const company = companyName ? companiesList.find(c => c.name === companyName) : null;
             loadFilterBankAccounts(company ? company.id : null).then(() => {
                 document.getElementById('filterAccount').value = '';
                 linkedAccountNumber = null;
+                applyTransactionFilters();
             });
         }
 
-        // 查詢區選的帳戶變更時，記錄該帳戶的帳號，讓查詢/統計都能精準鎖定（避免同名帳戶混在一起）
+        // 查詢區選的帳戶變更時，記錄該帳戶的帳號讓查詢/統計都能精準鎖定（避免同名帳戶混在一起），並立即套用篩選
         function onFilterAccountChange() {
             const accountId = document.getElementById('filterAccount').value;
             if (!accountId) {
                 linkedAccountNumber = null;
-                return;
+            } else {
+                const account = filterBankAccountsCache.find(a => String(a.id) === accountId);
+                linkedAccountNumber = account && account.account_number ? account.account_number : null;
+                // 公司下拉還停在「全部公司」時，直接從帳戶下拉選（可能跨公司）選了一個帳戶：
+                // 這裡把公司欄位同步成該帳戶實際所屬的公司，畫面上的篩選條件才會誠實反映實際查詢範圍，
+                // 也才能避免不同公司但同名的帳戶（例如都叫「活存」）被一起算進去
+                if (account && account.company_name) {
+                    document.getElementById('filterCompany').value = account.company_name;
+                }
             }
-            const account = filterBankAccountsCache.find(a => String(a.id) === accountId);
-            linkedAccountNumber = account && account.account_number ? account.account_number : null;
+            applyTransactionFilters();
+        }
+
+        // 套用目前的查詢區篩選條件：清單跟上面的統計卡片（總收入/總支出/淨收支）要一起重新查詢
+        // 「🔍 查詢」按鈕跟公司/帳戶下拉選單的 onchange 都共用這個，避免只更新清單漏了統計
+        function applyTransactionFilters() {
+            loadTransactions(1);
+            loadStatistics();
         }
 
         // 依目前查詢區選定的帳戶 id，取得對應的帳戶名稱（給查詢/統計/匯出的 account 參數用）
@@ -1572,8 +1587,7 @@
             linkedAccountNumber = null;
             loadFilterBankAccounts(null).then(() => {
                 document.getElementById('filterAccount').value = '';
-                loadTransactions(1);
-                loadStatistics();
+                applyTransactionFilters();
             });
         }
 
