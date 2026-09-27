@@ -396,6 +396,7 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
     const errors = [];
     let importedCount = 0;
     let skippedCount = 0;
+    const importedRows = []; // 記錄每筆成功匯入的帳戶/日期，供匯入完後重算餘額、檢查是否早於結算
 
     try {
         const workbook = new ExcelJS.Workbook();
@@ -567,6 +568,7 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
                 });
 
                 importedCount++;
+                importedRows.push({ transaction_date: transactionDate, company_name: companyName || null, account_name: accountName || null, account_number: accountNumber || null });
             } catch (rowError) {
                 errors.push(`第 ${rowNumber} 行: ${rowError.message}`);
             }
@@ -574,9 +576,46 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
 
         fs.unlinkSync(filePath);
 
+        // 匯入迴圈本身不會即時重算帳戶餘額，這裡針對本次匯入涉及到的每個帳戶各
+        // 重算一次；同時比對每個帳戶最近一次結算日期，統計有幾筆匯入資料日期早於
+        // 結算（這些交易雖然會正常留在收支記錄，但不會被算進目前計算的帳戶餘額）
+        let backdatedCount = 0;
+        const distinctAccounts = new Map();
+        importedRows.forEach((r) => {
+            if (!r.account_name) return;
+            const key = `${r.company_name || ''}|${r.account_name}|${r.account_number || ''}`;
+            if (!distinctAccounts.has(key)) distinctAccounts.set(key, { ...r, dates: [] });
+            distinctAccounts.get(key).dates.push(r.transaction_date);
+        });
+        for (const acc of distinctAccounts.values()) {
+            try {
+                await updateBankAccountBalance(acc.account_name, acc.account_number, acc.company_name);
+            } catch (balanceErr) {
+                logger.error('更新帳戶餘額失敗:', balanceErr);
+            }
+            try {
+                const settleWhere = acc.company_name
+                    ? 'company_name = ? AND account_name = ?' + (acc.account_number ? ' AND (account_number = ? OR account_number IS NULL)' : '')
+                    : 'account_name = ?' + (acc.account_number ? ' AND account_number = ?' : '');
+                const settleParams = acc.company_name
+                    ? (acc.account_number ? [acc.company_name, acc.account_name, acc.account_number] : [acc.company_name, acc.account_name])
+                    : (acc.account_number ? [acc.account_name, acc.account_number] : [acc.account_name]);
+                const settlement = await new Promise((resolve, reject) => {
+                    db.get(`SELECT settlement_date FROM balance_settlements WHERE ${settleWhere} ORDER BY settlement_date DESC LIMIT 1`, settleParams, (err, row) => (err ? reject(err) : resolve(row)));
+                });
+                if (settlement && settlement.settlement_date) {
+                    backdatedCount += acc.dates.filter((d) => d < settlement.settlement_date).length;
+                }
+            } catch (settleErr) {
+                logger.error('檢查結算日期失敗:', settleErr);
+            }
+        }
+
         res.json({
             success: true,
-            message: `匯入完成：成功 ${importedCount} 筆，跳過 ${skippedCount} 筆`,
+            message: `匯入完成：成功 ${importedCount} 筆，跳過 ${skippedCount} 筆`
+                + (backdatedCount > 0 ? `；其中 ${backdatedCount} 筆交易日期早於該帳戶最近一次結算，不會影響目前計算的帳戶餘額，請確認結算金額是否已包含` : ''),
+            backdatedCount,
             importedCount,
             skippedCount,
             errors: errors.length > 0 ? errors : undefined

@@ -653,7 +653,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="modalTransactionDate">交易日期 <span class="required">*</span></label>
-                            <input type="date" id="modalTransactionDate" required>
+                            <input type="date" id="modalTransactionDate" required onchange="checkBackdatedWarning()">
                         </div>
                         <div class="form-group">
                             <label for="modalType">類型 <span class="required">*</span></label>
@@ -700,7 +700,9 @@
                         <label for="modalAccountNumber">帳號（可自動帶入或手動輸入）</label>
                         <input type="text" id="modalAccountNumber" placeholder="銀行帳號">
                     </div>
-                    
+
+                    <small id="backdatedWarning" style="color: #F06000; display: none; margin: -12px 0 20px; font-weight: bold;"></small>
+
                     <!-- 隱藏欄位用於儲存原始值 -->
                     <input type="hidden" id="modalCompanyName">
                     <input type="hidden" id="modalAccountName">
@@ -733,7 +735,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="transferDate">轉帳日期 <span class="required">*</span></label>
-                            <input type="date" id="transferDate" required>
+                            <input type="date" id="transferDate" required onchange="checkTransferBackdatedWarning()">
                         </div>
                         <div class="form-group">
                             <label for="transferAmount">金額 <span class="required">*</span></label>
@@ -754,6 +756,7 @@
                                 <option value="">請選擇帳戶</option>
                             </select>
                             <small id="transferFromBalance" style="color: #64748B; display: block; margin-top: 6px;"></small>
+                            <small id="transferBackdatedWarning" style="color: #F06000; display: none; font-weight: bold; margin-top: 6px;"></small>
                         </div>
                     </div>
 
@@ -884,6 +887,20 @@
 
         window.onTransferAccountChange = function(side) {
             updateTransferBalanceDisplay(side);
+            if (side === 'from') checkTransferBackdatedWarning();
+        };
+
+        // 轉帳只檢查「轉出帳戶」這一腿——真正會扣款、影響餘額計算的是這一側
+        window.checkTransferBackdatedWarning = function() {
+            const accountId = document.getElementById('transferFromAccountId').value;
+            const account = transferAccountsCache.from.find(a => String(a.id) === accountId);
+            showBackdatedWarningIfNeeded(
+                'transferBackdatedWarning',
+                document.getElementById('transferDate').value,
+                account ? account.company_name : '',
+                account ? account.account_name : '',
+                account ? account.account_number : ''
+            );
         };
 
         window.onTransferCompanyChange = function(side) {
@@ -993,7 +1010,45 @@
                 document.getElementById('modalAccountName').value = '';
                 document.getElementById('modalCompanyName').value = '';
             }
+            checkBackdatedWarning();
         };
+
+        // 交易日期早於該帳戶最近一次結算時顯示提醒（不阻擋送出）：結算之後的交易
+        // 才會被算進目前計算的帳戶餘額（見 utils/bankAccountBalance.js），日期早於
+        // 結算的交易雖然會正常記錄，但不會讓餘額再往下扣，容易被誤以為系統算錯
+        function showBackdatedWarningIfNeeded(warningElId, date, company, account, accountNumber) {
+            const warningEl = document.getElementById(warningElId);
+            if (!warningEl || !date || !account) {
+                if (warningEl) warningEl.style.display = 'none';
+                return;
+            }
+            let url = `${API_BASE}/settlements/last?account_name=${encodeURIComponent(account)}`;
+            if (company) url += `&company=${encodeURIComponent(company)}`;
+            if (accountNumber) url += `&account_number=${encodeURIComponent(accountNumber)}`;
+
+            fetch(url, { credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    const settlement = data && data.data;
+                    if (settlement && settlement.settlement_date && date < settlement.settlement_date) {
+                        warningEl.textContent = `⚠️ 這筆交易日期早於該帳戶最近一次結算（${settlement.settlement_date}），不會影響目前計算的帳戶餘額，請確認結算金額是否已包含此筆`;
+                        warningEl.style.display = 'block';
+                    } else {
+                        warningEl.style.display = 'none';
+                    }
+                })
+                .catch(err => console.error('檢查結算日期失敗:', err));
+        }
+
+        function checkBackdatedWarning() {
+            showBackdatedWarningIfNeeded(
+                'backdatedWarning',
+                document.getElementById('modalTransactionDate').value,
+                document.getElementById('modalCompanyName').value,
+                document.getElementById('modalAccountName').value,
+                document.getElementById('modalAccountNumber').value
+            );
+        }
 
         // 開啟新增模態框
         window.openAddModal = function() {
@@ -1688,6 +1743,13 @@
                 if (batchBar) batchBar.style.display = 'none';
                 if (selectAllHeader) selectAllHeader.style.display = 'none';
             }
+            // 從銀行帳戶管理的「交易明細」連結過來時，網址帶 ?account= 自動套用篩選
+            const urlParams = new URLSearchParams(window.location.search);
+            const accountParam = urlParams.get('account');
+            if (accountParam) {
+                document.getElementById('filterAccount').value = accountParam;
+            }
+
             await loadConfig();
             loadTransactions();
             loadStatistics();

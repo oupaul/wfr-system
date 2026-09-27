@@ -86,7 +86,7 @@ router.get('/last', (req, res) => {
         params.push(account_name);
     }
     if (account_number) {
-        query += ' AND account_number = ?';
+        query += ' AND (account_number = ? OR account_number IS NULL)';
         params.push(account_number);
     }
 

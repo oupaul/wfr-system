@@ -533,6 +533,8 @@
         const API_BASE = '/api';
 
         let companiesList = [];
+        let bankAccountsListCache = []; // 目前列表資料的快取，讓「交易明細」用 id 查帳戶名稱，
+                                         // 不用把使用者輸入的帳戶名稱塞進 onclick="" 屬性字串裡
 
         // 格式化金額
         function formatCurrency(value) {
@@ -684,6 +686,13 @@
         };
 
         // 刪除記錄
+        // 查看此帳戶的所有交易明細：跳轉到收支記錄並帶入帳戶篩選條件
+        window.viewTransactionDetails = function(id) {
+            const account = bankAccountsListCache.find(a => a.id === id);
+            if (!account || !account.account_name) return;
+            window.location.href = '/transactions.html?account=' + encodeURIComponent(account.account_name);
+        };
+
         window.deleteBankAccount = function(id) {
             if (!confirm('確定要刪除此銀行帳戶嗎？')) {
                 return;
@@ -742,7 +751,8 @@
                         showMessage(data.error, 'error');
                         return;
                     }
-                    displayBankAccounts(data.data || []);
+                    bankAccountsListCache = data.data || [];
+                    displayBankAccounts(bankAccountsListCache);
                     loading.style.display = 'none';
                 })
                 .catch(err => {
@@ -783,10 +793,11 @@
                     <td style="text-align: right;">${safetyLevel > 0 ? formatCurrency(safetyLevel) : '-'}</td>
                     <td><span class="${a.is_active ? 'status-active' : 'status-inactive'}">${a.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
+                        <button class="btn btn-secondary btn-sm" onclick="viewTransactionDetails(${a.id})">交易明細</button>
                         ${canEdit ? `
                         <button class="btn btn-edit btn-sm" onclick="editBankAccount(${a.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteBankAccount(${a.id})">刪除</button>
-                        ` : '<span style="color: #999;">-</span>'}
+                        ` : ''}
                     </td>
                 </tr>
             `;
