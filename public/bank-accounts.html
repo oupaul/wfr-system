@@ -692,6 +692,7 @@
             if (!account || !account.account_name) return;
             let url = '/transactions.html?account=' + encodeURIComponent(account.account_name);
             if (account.company_name) url += '&company=' + encodeURIComponent(account.company_name);
+            if (account.account_number) url += '&accountNumber=' + encodeURIComponent(account.account_number);
             window.location.href = url;
         };
 

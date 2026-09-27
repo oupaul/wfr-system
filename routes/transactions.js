@@ -49,7 +49,7 @@ const SORTABLE_COLUMNS = {
 };
 
 router.get('/', (req, res) => {
-    const { startDate, endDate, type, company, account, keyword, limit = 1000, offset = 0, sortBy, sortDir } = req.query;
+    const { startDate, endDate, type, company, account, accountNumber, keyword, limit = 1000, offset = 0, sortBy, sortDir } = req.query;
     const sortColumn = SORTABLE_COLUMNS[sortBy] || SORTABLE_COLUMNS.date;
     const sortDirection = sortDir === 'asc' ? 'ASC' : 'DESC';
 
@@ -82,6 +82,12 @@ router.get('/', (req, res) => {
     if (account) {
         baseQuery += ' AND (t.account_name LIKE ? OR t.account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
+    }
+    if (accountNumber) {
+        // 精確比對帳號（容許舊資料沒填帳號），用於銀行帳戶管理「交易明細」連結時精準鎖定單一帳戶
+        // （同公司、同帳戶名稱但不同帳號的情況，光靠上面的 account 模糊比對無法區分）
+        baseQuery += ' AND (t.account_number = ? OR t.account_number IS NULL)';
+        params.push(accountNumber);
     }
     if (keyword) {
         baseQuery += ' AND (t.description LIKE ? OR t.category LIKE ? OR t.remarks LIKE ?)';
