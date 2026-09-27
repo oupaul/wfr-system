@@ -531,7 +531,10 @@
 
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="accountId">🏦 帳戶名稱 <span style="color: #666; font-weight: normal;">（選填）</span></label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                            <label for="accountId" style="margin-bottom: 0;">🏦 帳戶名稱 <span style="color: #666; font-weight: normal;">（選填）</span></label>
+                            <button type="button" id="quickAddAccountBtn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px; white-space: nowrap;" onclick="openQuickAddAccountModal()" disabled>➕ 快速新增帳戶</button>
+                        </div>
                         <div class="select-wrapper">
                             <select id="accountId" onchange="onAccountChangeSettlement()" disabled>
                                 <option value="">請先選擇公司</option>
@@ -694,6 +697,63 @@
         </div>
     </div>
 
+    <!-- 快速新增銀行帳戶模態框：只收最必要的欄位，其餘（分行、幣別、安全水位等）之後可到銀行帳戶管理補齊 -->
+    <div id="quickAddAccountModal" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <h2>快速新增銀行帳戶</h2>
+                <button class="close" onclick="closeQuickAddAccountModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="quickAddAccountForm" onsubmit="saveQuickAddAccount(event)">
+                    <div class="form-group">
+                        <label>所屬公司</label>
+                        <input type="text" id="quickAddCompanyDisplay" readonly style="background-color: #f5f5f5;">
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quickAddAccountName">帳戶名稱 <span class="required">*</span></label>
+                            <input type="text" id="quickAddAccountName" required placeholder="例如：台新銀行活存">
+                        </div>
+                        <div class="form-group">
+                            <label for="quickAddAccountNumber">帳號</label>
+                            <input type="text" id="quickAddAccountNumber" placeholder="銀行帳號">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="quickAddBankName">銀行名稱</label>
+                            <input type="text" id="quickAddBankName" placeholder="例如：台新銀行">
+                        </div>
+                        <div class="form-group">
+                            <label for="quickAddAccountType">帳戶類型</label>
+                            <select id="quickAddAccountType">
+                                <option value="">請選擇</option>
+                                <option value="活存">活存</option>
+                                <option value="定存">定存</option>
+                                <option value="支票">支票</option>
+                                <option value="外幣">外幣</option>
+                                <option value="授信">授信</option>
+                                <option value="其他">其他</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <small style="color: #666; font-size: 12px; display: block; margin-bottom: 10px;">
+                        分行、幣別、安全水位等其他設定，之後可到「銀行帳戶管理」補齊
+                    </small>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeQuickAddAccountModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存並選用</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api';
         
@@ -771,7 +831,8 @@
             const companyId = document.getElementById('companyId').value;
             const selectedCompany = companiesListSettlement.find(c => String(c.id) === String(companyId));
             const accountSelect = document.getElementById('accountId');
-            
+            const quickAddBtn = document.getElementById('quickAddAccountBtn');
+
             if (selectedCompany) {
                 document.getElementById('companyName').value = selectedCompany.name;
                 // 啟用帳戶選擇
@@ -779,6 +840,7 @@
                     accountSelect.disabled = false;
                     accountSelect.innerHTML = '<option value="">載入中...</option>';
                 }
+                if (quickAddBtn) quickAddBtn.disabled = false;
                 // 載入該公司的帳戶列表
                 loadBankAccountsSettlement(companyId ? parseInt(companyId) : null).then(() => {
                     // 帳戶列表載入完成後，立即載入上一期結算資訊（此時還沒有選擇帳戶，所以只會顯示公司的結算資訊）
@@ -791,6 +853,7 @@
                     accountSelect.disabled = true;
                     accountSelect.innerHTML = '<option value="">請先選擇公司</option>';
                 }
+                if (quickAddBtn) quickAddBtn.disabled = true;
             }
             // 清空帳戶選擇
             if (accountSelect) accountSelect.value = '';
@@ -815,6 +878,59 @@
                 // 清空帳戶資訊後，重新載入（只使用公司資訊）
                 loadPreviousSettlement();
             }
+        };
+
+        // 開啟快速新增銀行帳戶模態框（公司沿用結算表單目前已選的公司，不用重選）
+        window.openQuickAddAccountModal = function() {
+            const companyId = document.getElementById('companyId').value;
+            if (!companyId) return;
+            const selectedCompany = companiesListSettlement.find(c => String(c.id) === String(companyId));
+            document.getElementById('quickAddAccountForm').reset();
+            document.getElementById('quickAddCompanyDisplay').value = selectedCompany ? selectedCompany.name : '';
+            document.getElementById('quickAddAccountModal').style.display = 'block';
+        };
+
+        window.closeQuickAddAccountModal = function() {
+            document.getElementById('quickAddAccountModal').style.display = 'none';
+        };
+
+        // 送出快速新增：新增成功後重新載入帳戶下拉選單，並自動選中剛新增的帳戶
+        window.saveQuickAddAccount = function(event) {
+            event.preventDefault();
+            const companyId = document.getElementById('companyId').value;
+            if (!companyId) return;
+
+            const data = {
+                company_id: parseInt(companyId),
+                account_name: document.getElementById('quickAddAccountName').value,
+                account_number: document.getElementById('quickAddAccountNumber').value,
+                bank_name: document.getElementById('quickAddBankName').value,
+                account_type: document.getElementById('quickAddAccountType').value
+            };
+
+            fetch(`${API_BASE}/bank-accounts`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        return;
+                    }
+                    closeQuickAddAccountModal();
+                    loadBankAccountsSettlement(parseInt(companyId)).then(() => {
+                        const accountSelect = document.getElementById('accountId');
+                        accountSelect.value = String(result.id);
+                        onAccountChangeSettlement();
+                    });
+                    showMessage('銀行帳戶已新增', 'success');
+                })
+                .catch(err => {
+                    console.error('新增銀行帳戶錯誤:', err);
+                    showMessage('新增銀行帳戶失敗', 'error');
+                });
         };
 
         // 載入上一期結算資訊
