@@ -1470,6 +1470,7 @@
             if (endDate) params.push(`endDate=${endDate}`);
             if (company) params.push(`company=${company}`);
             if (account) params.push(`account=${account}`);
+            if (linkedAccountNumber) params.push(`accountNumber=${encodeURIComponent(linkedAccountNumber)}`);
             if (params.length > 0) url += '?' + params.join('&');
 
             fetch(url)

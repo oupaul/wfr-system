@@ -325,7 +325,7 @@ router.get('/export', (req, res) => {
 
 // 取得收支統計（必須在 /:id 之前）
 router.get('/statistics', (req, res) => {
-    const { startDate, endDate, company, account } = req.query;
+    const { startDate, endDate, company, account, accountNumber } = req.query;
 
     // 帳戶間轉帳（transfer_group_id 不為 NULL）不是真正的營業收支，排除在統計之外
     let query = 'SELECT type, SUM(amount) as total_amount FROM transactions WHERE transfer_group_id IS NULL';
@@ -346,6 +346,10 @@ router.get('/statistics', (req, res) => {
     if (account) {
         query += ' AND (account_name LIKE ? OR account_number LIKE ?)';
         params.push(`%${account}%`, `%${account}%`);
+    }
+    if (accountNumber) {
+        query += ' AND (account_number = ? OR account_number IS NULL)';
+        params.push(accountNumber);
     }
 
     query += ' GROUP BY type';
