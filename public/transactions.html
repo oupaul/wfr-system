@@ -1790,11 +1790,16 @@
                 if (batchBar) batchBar.style.display = 'none';
                 if (selectAllHeader) selectAllHeader.style.display = 'none';
             }
-            // 從銀行帳戶管理的「交易明細」連結過來時，網址帶 ?account= 自動套用篩選
+            // 從銀行帳戶管理的「交易明細」連結過來時，網址帶 ?account=&company= 自動套用篩選
+            // company 一併帶入是必要的：不同公司可能有同名帳戶（例如都叫「活存」），只篩帳戶名稱會混到別家公司的交易
             const urlParams = new URLSearchParams(window.location.search);
             const accountParam = urlParams.get('account');
+            const companyParam = urlParams.get('company');
             if (accountParam) {
                 document.getElementById('filterAccount').value = accountParam;
+            }
+            if (companyParam) {
+                document.getElementById('filterCompany').value = companyParam;
             }
 
             await loadConfig();

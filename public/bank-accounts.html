@@ -690,7 +690,9 @@
         window.viewTransactionDetails = function(id) {
             const account = bankAccountsListCache.find(a => a.id === id);
             if (!account || !account.account_name) return;
-            window.location.href = '/transactions.html?account=' + encodeURIComponent(account.account_name);
+            let url = '/transactions.html?account=' + encodeURIComponent(account.account_name);
+            if (account.company_name) url += '&company=' + encodeURIComponent(account.company_name);
+            window.location.href = url;
         };
 
         window.deleteBankAccount = function(id) {
