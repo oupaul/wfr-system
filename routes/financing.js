@@ -4,7 +4,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
-const { addMonthsClamped } = require('../utils/financingProjection');
+const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 
 // 目前本金餘額 = 原始本金 - 已還本金總額，即時計算不存欄位，避免跟還款記錄兜不起來
 const REMAINING_PRINCIPAL_SQL = `
@@ -170,7 +170,8 @@ router.put('/:id', requireEditor, (req, res) => {
 });
 
 // 刪除借款/融資額度（先刪還款記錄——這個專案沒有開啟 PRAGMA foreign_keys，
-// ON DELETE CASCADE 不會真的生效，必須手動清掉子記錄）
+// ON DELETE CASCADE 不會真的生效，必須手動清掉子記錄）。刪除前也要檢查有沒有
+// 週期性範本連結到這筆借款，比照銀行帳戶/公司刪除前檢查借款的做法。
 router.delete('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM financing WHERE id = ?', [id], (err, row) => {
@@ -178,19 +179,30 @@ router.delete('/:id', requireEditor, (req, res) => {
             if (!row) return res.status(404).json({ error: '找不到記錄' });
             return res.status(500).json({ error: '刪除失敗', details: err && err.message });
         }
-        db.run('DELETE FROM financing_repayments WHERE financing_id = ?', [id], (repayDelErr) => {
-            if (repayDelErr) {
-                logger.error('刪除還款記錄錯誤:', repayDelErr);
-                return res.status(500).json({ error: '刪除失敗', details: repayDelErr.message });
+        db.all('SELECT description, category FROM recurring_transactions WHERE financing_id = ?', [id], (rtErr, rtRows) => {
+            if (rtErr) {
+                logger.error('查詢關聯範本錯誤:', rtErr);
+                return res.status(500).json({ error: '刪除失敗', details: rtErr.message });
             }
-            db.run('DELETE FROM financing WHERE id = ?', [id], function (delErr) {
-                if (delErr) {
-                    logger.error('刪除錯誤:', delErr);
-                    return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+            if (rtRows && rtRows.length > 0) {
+                return res.status(400).json({
+                    error: `此借款仍有 ${rtRows.length} 筆週期性範本連結，請先到「週期範本」頁面取消連結或刪除這些範本，再刪除此借款。`
+                });
+            }
+            db.run('DELETE FROM financing_repayments WHERE financing_id = ?', [id], (repayDelErr) => {
+                if (repayDelErr) {
+                    logger.error('刪除還款記錄錯誤:', repayDelErr);
+                    return res.status(500).json({ error: '刪除失敗', details: repayDelErr.message });
                 }
-                if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
-                writeOperationLog(req, 'delete', 'financing', id, row, null, '借款/額度 #' + id + ' ' + (row.facility_name || ''));
-                res.json({ success: true, message: '借款/額度已刪除' });
+                db.run('DELETE FROM financing WHERE id = ?', [id], function (delErr) {
+                    if (delErr) {
+                        logger.error('刪除錯誤:', delErr);
+                        return res.status(500).json({ error: '刪除失敗', details: delErr.message });
+                    }
+                    if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
+                    writeOperationLog(req, 'delete', 'financing', id, row, null, '借款/額度 #' + id + ' ' + (row.facility_name || ''));
+                    res.json({ success: true, message: '借款/額度已刪除' });
+                });
             });
         });
     });
@@ -215,7 +227,7 @@ router.get('/:id/repayments', (req, res) => {
 });
 
 // 新增一筆還款記錄
-router.post('/:id/repayments', requireEditor, (req, res) => {
+router.post('/:id/repayments', requireEditor, async (req, res) => {
     const { id } = req.params;
     const { payment_date, principal_paid, interest_paid, remarks } = req.body;
 
@@ -223,58 +235,18 @@ router.post('/:id/repayments', requireEditor, (req, res) => {
         return res.status(400).json({ error: 'payment_date 為必填欄位' });
     }
 
-    db.get('SELECT id, facility_name, next_payment_date, repayment_frequency FROM financing WHERE id = ?', [id], (err, financingRow) => {
-        if (err || !financingRow) {
-            if (!financingRow) return res.status(404).json({ error: '找不到借款記錄' });
-            return res.status(500).json({ error: '新增失敗', details: err && err.message });
+    try {
+        const { repaymentId, facilityName } = await recordRepaymentAndSync(db, id, { payment_date, principal_paid, interest_paid, remarks });
+        const afterData = { id: repaymentId, financing_id: parseInt(id, 10), payment_date, principal_paid: principal_paid || 0, interest_paid: interest_paid || 0, remarks: remarks || null };
+        writeOperationLog(req, 'create', 'financing_repayment', repaymentId, null, afterData, '還款記錄 #' + repaymentId + '（' + (facilityName || '') + '）');
+        res.json({ success: true, id: repaymentId, message: '還款記錄已新增' });
+    } catch (error) {
+        if (error.message === '找不到借款記錄') {
+            return res.status(404).json({ error: error.message });
         }
-
-        db.run(
-            `INSERT INTO financing_repayments (financing_id, payment_date, principal_paid, interest_paid, remarks)
-             VALUES (?, ?, ?, ?, ?)`,
-            [id, payment_date, principal_paid || 0, interest_paid || 0, remarks || null],
-            function (insertErr) {
-                if (insertErr) {
-                    logger.error('新增還款記錄錯誤:', insertErr);
-                    return res.status(500).json({ error: '新增失敗', details: insertErr.message });
-                }
-                const newId = this.lastID;
-                const afterData = { id: newId, financing_id: parseInt(id, 10), payment_date, principal_paid: principal_paid || 0, interest_paid: interest_paid || 0, remarks: remarks || null };
-                writeOperationLog(req, 'create', 'financing_repayment', newId, null, afterData, '還款記錄 #' + newId + '（' + (financingRow.facility_name || '') + '）');
-
-                // 這筆還款涵蓋了原本排定的「下次還款日」（或更晚），自動把排程同步
-                // 過去，避免使用者忘記手動更新、讓資金流水帳/資金缺口繼續投影一筆
-                // 其實已經繳過的款項。補登較早期間的歷史資料（payment_date 早於
-                // next_payment_date）則不動，避免誤動到目前排定的下一筆。
-                if (financingRow.next_payment_date && payment_date >= financingRow.next_payment_date) {
-                    let newNextDate = null;
-                    if (financingRow.repayment_frequency === 'monthly' || financingRow.repayment_frequency === 'quarterly') {
-                        const stepMonths = financingRow.repayment_frequency === 'quarterly' ? 3 : 1;
-                        let cursor = financingRow.next_payment_date;
-                        let guard = 0;
-                        while (cursor <= payment_date && guard < 60) {
-                            cursor = addMonthsClamped(cursor, stepMonths);
-                            guard++;
-                        }
-                        newNextDate = cursor;
-                    }
-                    if (newNextDate) {
-                        // 有頻率：往後跳到下一期，金額維持原值，交由使用者視實際情況自行調整
-                        db.run('UPDATE financing SET next_payment_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [newNextDate, id], (syncErr) => {
-                            if (syncErr) logger.error('同步下次還款日失敗:', syncErr);
-                        });
-                    } else {
-                        // 沒有頻率（一次性下一筆）：這筆待繳款項已經處理完了，日期與金額一併清空
-                        db.run('UPDATE financing SET next_payment_date = NULL, next_payment_amount = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], (syncErr) => {
-                            if (syncErr) logger.error('清空下次還款排程失敗:', syncErr);
-                        });
-                    }
-                }
-
-                res.json({ success: true, id: newId, message: '還款記錄已新增' });
-            }
-        );
-    });
+        logger.error('新增還款記錄錯誤:', error);
+        res.status(500).json({ error: '新增失敗', details: error.message });
+    }
 });
 
 // 刪除一筆還款記錄

@@ -202,6 +202,30 @@ const ensureNewTables = () => {
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             );
             CREATE INDEX IF NOT EXISTS idx_financing_repayments_financing ON financing_repayments(financing_id);
+
+            -- 週期性收支範本
+            CREATE TABLE IF NOT EXISTS recurring_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
+                amount DECIMAL(15, 2) NOT NULL,
+                category TEXT,
+                description TEXT,
+                company_name TEXT,
+                account_name TEXT,
+                account_number TEXT,
+                remarks TEXT,
+                frequency TEXT NOT NULL CHECK(frequency IN ('monthly', 'quarterly', 'yearly')),
+                next_run_date DATE,
+                end_date DATE,
+                financing_id INTEGER,
+                principal_amount DECIMAL(15, 2),
+                interest_amount DECIMAL(15, 2),
+                is_active INTEGER DEFAULT 1,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            );
+            CREATE INDEX IF NOT EXISTS idx_recurring_transactions_active ON recurring_transactions(is_active);
+            CREATE INDEX IF NOT EXISTS idx_recurring_transactions_financing ON recurring_transactions(financing_id);
         `;
         
         db.exec(migrationSQL, (err) => {

@@ -21,6 +21,7 @@
 - 🏢 **公司管理**：公司主檔維護
 - 🏦 **銀行帳戶管理**：帳戶主檔（含銀行名稱、帳戶類型：活存/定存/支票/外幣/授信/其他）、安全水位、即時餘額重算
 - 💳 **借款管理**：借款/融資額度主檔（授信額度、短期借款、長期借款、其他）、利率與到期日、下次還款提醒；還款記錄獨立追蹤，目前本金餘額由還款記錄即時加總計算，不需手動維護。設定「撥款/還款帳戶」與「還款頻率」（不重複/每月/每季）後，未來還款會自動投影進資金流水帳與帳戶卡片的現金流預測（以「（預計）」文字與斜體樣式跟真實交易區隔，只投影未來、不回填歷史還款，避免跟日後實際入帳的收支記錄重複計算）。投影跟還款記錄會互相同步：新增一筆涵蓋「下次還款日」的還款記錄時，該日期會自動往後跳一期（無頻率的一次性還款則清空，不再視為待繳），投影金額加總也不會超過目前實際剩餘本金，還清後自動停止投影（金額本身不會自動遞減，若每期金額有變化仍需自行調整「下次還款金額」）
+- 🔁 **週期範本**：收支記錄裡固定重複的項目（房租、保費、借款還款等）建成範本，按「產生下一筆」才實際寫入一筆收支記錄（不做全自動排程，保留人工確認），頻率支援每月/每季/每年，可設到期日讓範本自動停用。範本可選填連結到某筆借款，連結後「產生下一筆」會一次做完三件事：收支記錄記一筆支出、借款管理記一筆對應還款記錄（本金/利息分開）、借款的「下次還款日」自動同步往後推一期——直接透過收支記錄反映帳戶餘額變化，不需要再手動記兩次
 - 👥 **人員管理**（僅管理員）：使用者帳號與角色設定
 - 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角
   - 系統健康狀態（運行時間、Node 版本、DB 狀態、記錄數）
@@ -175,7 +176,7 @@ npm run dev
 ### 使用 Web 介面
 
 1. 開啟瀏覽器，訪問 `http://localhost:3000`（或您配置的端口），也可以用「使用 M365 登入」（若已設定 SSO）
-2. 登入後可使用：資金預估週報（資金流水帳／帳戶卡片）、收支記錄、餘額結算、公司管理、銀行帳戶、借款管理；財務人員與管理員可編輯，一般人員僅能查詢（編輯按鈕會自動隱藏）
+2. 登入後可使用：資金預估週報（資金流水帳／帳戶卡片）、收支記錄、餘額結算、公司管理、銀行帳戶、借款管理、週期範本；財務人員與管理員可編輯，一般人員僅能查詢（編輯按鈕會自動隱藏）
 3. 「人員管理」與「管理」入口只有管理員登入後才看得到；管理員可進入管理者儀表板（系統健康、操作日誌、備份管理、M365 SSO 設定）
 
 **注意**：未登入會直接跳轉至登入頁，不會先閃過已登入畫面。詳細前端計劃請參考 `FRONTEND-ROADMAP.md`
@@ -191,7 +192,8 @@ npm run dev
 - **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁與 `keyword` 搜尋說明/類別/備註）、`PUT/DELETE /api/transactions/:id`（轉帳記錄 `PUT` 會回 400，`DELETE` 會連同另一半一起刪除）、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`、`POST /api/transactions/transfer`（帳戶間轉帳，一次寫入兩筆並排除在 `GET /api/transactions/statistics` 統計之外）
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
-- **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
+- **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額；刪除前會檢查是否有週期範本連結，有的話回 400）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
+- **週期性收支範本**：`GET/POST /api/recurring-transactions`、`PUT/DELETE /api/recurring-transactions/:id`、`POST /api/recurring-transactions/:id/generate`（產生下一筆：寫入收支記錄、更新帳戶餘額、連結借款時一併寫入還款記錄並同步下次還款日、把範本的下次產生日往後推一期或超過到期日時自動停用）
 - **餘額結算**：`GET/POST /api/settlements`（GET 支援 `limit`/`offset` 分頁）、`PUT/DELETE /api/settlements/:id`
 - **資金預估週報**：`GET /api/cash-gap-dashboard`、`GET /api/cash-gap-dashboard-by-dates`、`GET /api/cash-gap-ledger`（資金流水帳，各帳戶期初餘額＋逐筆交易＋每月 15/30 號結餘檢查點）、`GET /api/cash-gap-reconciliation`
 
@@ -321,6 +323,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 │   ├── companies.html         # 公司管理
 │   ├── bank-accounts.html     # 銀行帳戶管理
 │   ├── financing.html         # 借款/融資額度管理（含還款記錄）
+│   ├── recurring-transactions.html # 週期性收支範本（可選連結借款）
 │   ├── users.html             # 人員管理（僅管理員可見）
 │   ├── admin-dashboard.html   # 管理者儀表板（僅管理員）
 │   ├── admin-system-health.html # 系統健康狀態
@@ -340,7 +343,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ## 資料庫結構
 
-主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄；`transfer_group_id` 欄位標記帳戶間轉帳，同一次轉帳的兩筆記錄共用同一個值，一般收支記錄為 NULL）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
+主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄；`transfer_group_id` 欄位標記帳戶間轉帳，同一次轉帳的兩筆記錄共用同一個值，一般收支記錄為 NULL）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`recurring_transactions`（週期性收支範本，選填 `financing_id` 連結借款）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
 
 ### 權限模型
 

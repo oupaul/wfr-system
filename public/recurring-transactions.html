@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>週期範本 - 資金週報系統</title>
+    <style>
+        body { visibility: hidden; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #F8FAFC;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .nav-links {
+            margin-top: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            color: #1E293B;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            background: #F8FAFC;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-links a:hover {
+            background: #F1F5F9;
+            transform: translateY(-2px);
+        }
+        .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
+        .user-info span { font-size: 0.9em; }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: #F8FAFC; color: #1E293B; cursor: pointer; transition: background 0.3s; }
+        .user-info button:hover { background: #F1F5F9; }
+
+        .content {
+            padding: 30px;
+        }
+
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .page-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 1.8em;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #1E293B;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(30, 41, 59, 0.35);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #5a6268;
+        }
+
+        .btn-edit {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #218838;
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin: 0 3px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* 模態框樣式 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            padding: 0;
+            border: none;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 700px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            animation: modalSlideIn 0.3s ease;
+        }
+
+        @keyframes modalSlideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 20px 30px;
+            border-radius: 15px 15px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 1.5em;
+        }
+
+        .close {
+            color: #64748B;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #F06000;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .required {
+            color: #dc3545;
+        }
+
+        .form-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-checkbox input[type="checkbox"] {
+            width: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #333;
+            position: sticky;
+            top: 0;
+        }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .actions {
+            white-space: nowrap;
+        }
+
+        .status-active {
+            color: #28a745;
+            font-weight: bold;
+        }
+
+        .status-inactive {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .type-badge {
+            display: inline-block;
+            font-size: 12px;
+            font-weight: normal;
+            color: #64748B;
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-radius: 4px;
+            padding: 2px 8px;
+        }
+
+        /* 到期未產生：用唯一強調色標示，不做多色語意 */
+        .due-badge {
+            color: #F06000;
+            font-weight: bold;
+        }
+
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            .modal-content {
+                width: 95%;
+                margin: 10% auto;
+            }
+            .page-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 15px;
+            }
+            .user-info {
+                position: static;
+                margin-top: 15px;
+                justify-content: center;
+            }
+        }
+    </style>
+    <script src="/js/auth-common.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔁 週期範本</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金預估週報</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/financing.html">💳 借款管理</a>
+                <a href="/recurring-transactions.html">🔁 週期範本</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="page-header">
+                <div>
+                    <h2>週期性收支範本</h2>
+                    <div style="font-size: 13px; color: #666; margin-top: 5px;">
+                        像房租、保費、借款還款這類每期都一樣的收支，建一個範本後按「產生下一筆」就能直接記一筆收支記錄，不用每次重填表單
+                    </div>
+                </div>
+                <button class="btn btn-primary" id="addTemplateBtn" onclick="openAddModal()">➕ 新增範本</button>
+            </div>
+
+            <div id="loading" class="loading" style="display: none;">載入中...</div>
+
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>類型</th>
+                            <th>金額</th>
+                            <th>類別/說明</th>
+                            <th>公司</th>
+                            <th>帳戶</th>
+                            <th>頻率</th>
+                            <th>下次產生日</th>
+                            <th>連結借款</th>
+                            <th>狀態</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="templatesTable">
+                        <tr>
+                            <td colspan="10" class="loading">載入中...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新增/編輯模態框 -->
+    <div id="dataModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">新增範本</h2>
+                <button class="close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm" onsubmit="saveTemplate(event)">
+                    <input type="hidden" id="recordId" value="">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalType">類型 <span class="required">*</span></label>
+                            <select id="modalType" required>
+                                <option value="expense">支出</option>
+                                <option value="income">收入</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalFrequency">頻率 <span class="required">*</span></label>
+                            <select id="modalFrequency" required>
+                                <option value="monthly">每月</option>
+                                <option value="quarterly">每季</option>
+                                <option value="yearly">每年</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalFinancingId">連結借款</label>
+                        <select id="modalFinancingId" onchange="onFinancingLinkChange()">
+                            <option value="">（不連結，一般收支範本）</option>
+                        </select>
+                        <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
+                            連結後，「產生下一筆」會同時在收支記錄記一筆支出、在借款管理記一筆對應還款記錄，並自動同步該借款的下次還款日
+                        </small>
+                    </div>
+
+                    <div class="form-group" id="amountWrap">
+                        <label for="modalAmount">金額 <span class="required">*</span></label>
+                        <input type="number" id="modalAmount" step="0.01" required placeholder="0.00">
+                    </div>
+
+                    <div class="form-row" id="financingSplitWrap" style="display: none;">
+                        <div class="form-group">
+                            <label for="modalPrincipalAmount">本金</label>
+                            <input type="number" id="modalPrincipalAmount" step="0.01" placeholder="0" oninput="updateComputedAmount()">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalInterestAmount">利息</label>
+                            <input type="number" id="modalInterestAmount" step="0.01" placeholder="0" oninput="updateComputedAmount()">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalCategory">類別</label>
+                            <input type="text" id="modalCategory" placeholder="例如：房租、保費">
+                        </div>
+                        <div class="form-group">
+                            <label for="modalDescription">說明</label>
+                            <input type="text" id="modalDescription" placeholder="收支記錄的說明文字">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalCompanyId">公司</label>
+                            <select id="modalCompanyId" onchange="onCompanyChange()">
+                                <option value="">請選擇公司</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalAccountId">帳戶</label>
+                            <select id="modalAccountId">
+                                <option value="">請選擇帳戶</option>
+                            </select>
+                        </div>
+                    </div>
+                    <input type="hidden" id="modalAccountNumber">
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="modalNextRunDate">下次產生日 <span class="required">*</span></label>
+                            <input type="date" id="modalNextRunDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="modalEndDate">到期日</label>
+                            <input type="date" id="modalEndDate">
+                            <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">選填，下次產生日超過此日期時範本自動停用</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalRemarks">備註</label>
+                        <textarea id="modalRemarks" placeholder="輸入備註說明..."></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="modalIsActive" checked>
+                            <label for="modalIsActive">啟用</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        let companiesList = [];
+        let bankAccountsList = [];
+        let financingOptionsList = [];
+        let templatesCache = [];
+
+        function formatCurrency(value) {
+            if (value === null || value === undefined || value === '') return '-';
+            const num = parseFloat(value);
+            if (isNaN(num)) return '-';
+            return new Intl.NumberFormat('zh-TW', {
+                style: 'currency', currency: 'TWD', minimumFractionDigits: 0, maximumFractionDigits: 0
+            }).format(num);
+        }
+
+        const frequencyLabels = { monthly: '每月', quarterly: '每季', yearly: '每年' };
+
+        function loadCompanies(callback) {
+            fetch(`${API_BASE}/companies?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { if (callback) callback(); return; }
+                    companiesList = data.data || [];
+                    const select = document.getElementById('modalCompanyId');
+                    select.innerHTML = '<option value="">請選擇公司</option>' +
+                        companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+                    if (callback) callback();
+                })
+                .catch(err => { console.error('載入公司列表錯誤:', err); if (callback) callback(); });
+        }
+
+        function loadBankAccounts(companyId, callback) {
+            let url = `${API_BASE}/bank-accounts?active=true`;
+            if (companyId) url += `&company_id=${companyId}`;
+            fetch(url)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { if (callback) callback(); return; }
+                    bankAccountsList = data.data || [];
+                    const select = document.getElementById('modalAccountId');
+                    select.innerHTML = '<option value="">請選擇帳戶</option>' +
+                        bankAccountsList.map(a => {
+                            const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
+                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
+                            return `<option value="${a.id}" data-account-number="${escapeHtml(a.account_number || '')}">${label}</option>`;
+                        }).join('');
+                    if (callback) callback();
+                })
+                .catch(err => { console.error('載入銀行帳戶列表錯誤:', err); if (callback) callback(); });
+        }
+
+        function loadFinancingOptions(callback) {
+            fetch(`${API_BASE}/financing?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { if (callback) callback(); return; }
+                    financingOptionsList = data.data || [];
+                    const select = document.getElementById('modalFinancingId');
+                    select.innerHTML = '<option value="">（不連結，一般收支範本）</option>' +
+                        financingOptionsList.map(f => `<option value="${f.id}">${escapeHtml(f.facility_name)}${f.company_name ? '（' + escapeHtml(f.company_name) + '）' : ''}</option>`).join('');
+                    if (callback) callback();
+                })
+                .catch(err => { console.error('載入借款列表錯誤:', err); if (callback) callback(); });
+        }
+
+        window.onCompanyChange = function() {
+            const companyId = document.getElementById('modalCompanyId').value;
+            loadBankAccounts(companyId || null);
+        };
+
+        window.onFinancingLinkChange = function() {
+            const linked = !!document.getElementById('modalFinancingId').value;
+            document.getElementById('financingSplitWrap').style.display = linked ? 'grid' : 'none';
+            document.getElementById('amountWrap').style.display = linked ? 'none' : 'block';
+            document.getElementById('modalAmount').required = !linked;
+            if (linked) updateComputedAmount();
+        };
+
+        window.updateComputedAmount = function() {
+            const principal = parseFloat(document.getElementById('modalPrincipalAmount').value) || 0;
+            const interest = parseFloat(document.getElementById('modalInterestAmount').value) || 0;
+            document.getElementById('modalAmount').value = (principal + interest).toFixed(2);
+        };
+
+        window.openAddModal = function() {
+            document.getElementById('recordId').value = '';
+            document.getElementById('modalTitle').textContent = '新增範本';
+            document.getElementById('templateForm').reset();
+            document.getElementById('modalType').value = 'expense';
+            document.getElementById('modalFrequency').value = 'monthly';
+            document.getElementById('modalIsActive').checked = true;
+            document.getElementById('financingSplitWrap').style.display = 'none';
+            document.getElementById('amountWrap').style.display = 'block';
+            document.getElementById('modalAmount').required = true;
+            loadCompanies();
+            loadBankAccounts(null);
+            loadFinancingOptions();
+            document.getElementById('dataModal').style.display = 'block';
+        };
+
+        window.editTemplate = function(id) {
+            fetch(`${API_BASE}/recurring-transactions/${id}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { showMessage(data.error, 'error'); return; }
+                    const record = data.data;
+                    loadCompanies(function() {
+                        document.getElementById('modalCompanyId').value = '';
+                        const company = companiesList.find(c => c.name === record.company_name);
+                        if (company) document.getElementById('modalCompanyId').value = String(company.id);
+                        loadBankAccounts(company ? company.id : null, function() {
+                            loadFinancingOptions(function() {
+                                document.getElementById('recordId').value = record.id;
+                                document.getElementById('modalTitle').textContent = '編輯範本';
+                                document.getElementById('modalType').value = record.type;
+                                document.getElementById('modalFrequency').value = record.frequency;
+                                document.getElementById('modalFinancingId').value = record.financing_id ? String(record.financing_id) : '';
+                                document.getElementById('modalAmount').value = record.amount != null ? record.amount : '';
+                                document.getElementById('modalPrincipalAmount').value = record.principal_amount != null ? record.principal_amount : '';
+                                document.getElementById('modalInterestAmount').value = record.interest_amount != null ? record.interest_amount : '';
+                                document.getElementById('modalCategory').value = record.category || '';
+                                document.getElementById('modalDescription').value = record.description || '';
+                                const account = bankAccountsList.find(a => a.account_name === record.account_name);
+                                if (account) document.getElementById('modalAccountId').value = String(account.id);
+                                document.getElementById('modalAccountNumber').value = record.account_number || '';
+                                document.getElementById('modalNextRunDate').value = record.next_run_date || '';
+                                document.getElementById('modalEndDate').value = record.end_date || '';
+                                document.getElementById('modalRemarks').value = record.remarks || '';
+                                document.getElementById('modalIsActive').checked = record.is_active !== 0;
+                                onFinancingLinkChange();
+                                document.getElementById('dataModal').style.display = 'block';
+                            });
+                        });
+                    });
+                })
+                .catch(err => { console.error('錯誤:', err); showMessage('載入記錄失敗', 'error'); });
+        };
+
+        window.closeModal = function() {
+            document.getElementById('dataModal').style.display = 'none';
+        };
+
+        window.saveTemplate = function(event) {
+            event.preventDefault();
+
+            const id = document.getElementById('recordId').value;
+            const companyId = document.getElementById('modalCompanyId').value;
+            const accountSelect = document.getElementById('modalAccountId');
+            const selectedAccountOption = accountSelect.options[accountSelect.selectedIndex];
+            const selectedCompany = companiesList.find(c => String(c.id) === companyId);
+            const financingId = document.getElementById('modalFinancingId').value;
+
+            const data = {
+                type: document.getElementById('modalType').value,
+                frequency: document.getElementById('modalFrequency').value,
+                financing_id: financingId ? parseInt(financingId) : null,
+                amount: parseFloat(document.getElementById('modalAmount').value) || 0,
+                principal_amount: financingId ? (parseFloat(document.getElementById('modalPrincipalAmount').value) || 0) : null,
+                interest_amount: financingId ? (parseFloat(document.getElementById('modalInterestAmount').value) || 0) : null,
+                category: document.getElementById('modalCategory').value,
+                description: document.getElementById('modalDescription').value,
+                company_name: selectedCompany ? selectedCompany.name : '',
+                account_name: selectedAccountOption ? selectedAccountOption.textContent.split(' (')[0] : '',
+                account_number: document.getElementById('modalAccountNumber').value || (selectedAccountOption ? selectedAccountOption.dataset.accountNumber : ''),
+                next_run_date: document.getElementById('modalNextRunDate').value,
+                end_date: document.getElementById('modalEndDate').value || null,
+                remarks: document.getElementById('modalRemarks').value,
+                is_active: document.getElementById('modalIsActive').checked ? 1 : 0
+            };
+
+            const url = id ? `${API_BASE}/recurring-transactions/${id}` : `${API_BASE}/recurring-transactions`;
+            const method = id ? 'PUT' : 'POST';
+
+            fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) { showMessage(result.error, 'error'); return; }
+                    showMessage(result.message || '範本已儲存', 'success');
+                    closeModal();
+                    loadTemplates();
+                })
+                .catch(err => { console.error('錯誤:', err); showMessage('儲存失敗', 'error'); });
+        };
+
+        window.deleteTemplate = function(id) {
+            if (!confirm('確定要刪除此範本嗎？')) return;
+            fetch(`${API_BASE}/recurring-transactions/${id}`, { method: 'DELETE' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) { showMessage(result.error, 'error'); return; }
+                    showMessage(result.message || '範本已刪除', 'success');
+                    loadTemplates();
+                })
+                .catch(err => { console.error('錯誤:', err); showMessage('刪除失敗', 'error'); });
+        };
+
+        window.generateNow = function(id) {
+            if (!confirm('確定要用這個範本產生一筆收支記錄嗎？')) return;
+            fetch(`${API_BASE}/recurring-transactions/${id}/generate`, { method: 'POST' })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) { showMessage(result.error, 'error'); return; }
+                    showMessage(result.message || '已產生', 'success');
+                    loadTemplates();
+                })
+                .catch(err => { console.error('錯誤:', err); showMessage('產生失敗', 'error'); });
+        };
+
+        function loadTemplates() {
+            const loading = document.getElementById('loading');
+            loading.style.display = 'block';
+            fetch(`${API_BASE}/recurring-transactions`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { showMessage(data.error, 'error'); return; }
+                    templatesCache = data.data || [];
+                    displayTemplates(templatesCache);
+                    loading.style.display = 'none';
+                })
+                .catch(err => {
+                    console.error('載入錯誤:', err);
+                    showMessage('載入數據失敗', 'error');
+                    loading.style.display = 'none';
+                });
+        }
+
+        function displayTemplates(rows) {
+            const tbody = document.getElementById('templatesTable');
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#666;">尚無範本</td></tr>';
+                return;
+            }
+            const today = new Date().toISOString().slice(0, 10);
+            tbody.innerHTML = rows.map(t => {
+                const isDue = t.is_active && t.next_run_date && t.next_run_date <= today;
+                const nextRun = t.next_run_date
+                    ? `<span class="${isDue ? 'due-badge' : ''}">${escapeHtml(t.next_run_date)}${isDue ? '（已到期）' : ''}</span>`
+                    : '-';
+                return `
+                <tr>
+                    <td>${t.type === 'income' ? '💰 收入' : '💸 支出'}</td>
+                    <td style="text-align:right;">${formatCurrency(t.amount)}</td>
+                    <td>${escapeHtml(t.category) || '-'}${t.description ? '<br><span style="font-size:12px;color:#64748B;">' + escapeHtml(t.description) + '</span>' : ''}</td>
+                    <td>${escapeHtml(t.company_name) || '-'}</td>
+                    <td>${escapeHtml(t.account_name) || '-'}</td>
+                    <td><span class="type-badge">${escapeHtml(frequencyLabels[t.frequency] || t.frequency)}</span></td>
+                    <td>${nextRun}</td>
+                    <td>${t.financing_facility_name ? escapeHtml(t.financing_facility_name) : '-'}</td>
+                    <td><span class="${t.is_active ? 'status-active' : 'status-inactive'}">${t.is_active ? '啟用' : '停用'}</span></td>
+                    <td class="actions">
+                        ${canEdit ? `
+                        <button class="btn btn-primary btn-sm" onclick="generateNow(${t.id})" ${(!t.is_active || !t.next_run_date) ? 'disabled' : ''}>產生下一筆</button>
+                        <button class="btn btn-edit btn-sm" onclick="editTemplate(${t.id})">編輯</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">刪除</button>
+                        ` : '<span style="color:#999;">-</span>'}
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        function showMessage(message, type = 'error') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.className = type;
+            messageDiv.textContent = message;
+            messageDiv.style.display = 'block';
+            setTimeout(() => { messageDiv.style.display = 'none'; }, 5000);
+        }
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('dataModal');
+            if (event.target == modal) closeModal();
+        };
+
+        let canEdit = false;
+        document.addEventListener('DOMContentLoaded', async function() {
+            const user = await checkAuth();
+            if (!user) return;
+            canEdit = user.role === 'admin' || user.role === 'finance';
+            if (!canEdit) {
+                const addBtn = document.getElementById('addTemplateBtn');
+                if (addBtn) addBtn.style.display = 'none';
+            }
+            loadTemplates();
+        });
+    </script>
+</body>
+</html>

@@ -207,3 +207,30 @@ CREATE TABLE IF NOT EXISTS financing_repayments (
     FOREIGN KEY (financing_id) REFERENCES financing(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_financing_repayments_financing ON financing_repayments(financing_id);
+
+-- 週期性收支範本：按「產生下一筆」才會實際寫入 transactions（不做全自動排程，
+-- 保留人工確認）。選填連結到某筆借款時，產生的同時也會記一筆對應的還款記錄，
+-- 並讓借款的「下次還款日」照既有邏輯自動往後推一期（見 utils/financingRepayment.js）
+CREATE TABLE IF NOT EXISTS recurring_transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL CHECK(type IN ('income', 'expense')),
+    amount DECIMAL(15, 2) NOT NULL,           -- 產生收支記錄時使用（連結借款時 = principal_amount + interest_amount）
+    category TEXT,
+    description TEXT,
+    company_name TEXT,
+    account_name TEXT,
+    account_number TEXT,
+    remarks TEXT,
+    frequency TEXT NOT NULL CHECK(frequency IN ('monthly', 'quarterly', 'yearly')),
+    next_run_date DATE,                       -- 下一次「產生」要用的日期；產生後往後推一期
+    end_date DATE,                            -- 選填，推算後的下次產生日超過此日期，範本自動停用
+    financing_id INTEGER,                     -- 選填：連結到借款
+    principal_amount DECIMAL(15, 2),          -- 僅連結借款時使用
+    interest_amount DECIMAL(15, 2),           -- 僅連結借款時使用
+    is_active INTEGER DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (financing_id) REFERENCES financing(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_transactions_active ON recurring_transactions(is_active);
+CREATE INDEX IF NOT EXISTS idx_recurring_transactions_financing ON recurring_transactions(financing_id);
