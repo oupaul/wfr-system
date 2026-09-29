@@ -14,6 +14,8 @@ const {
     isOverriddenInDb,
     envHasValue
 } = require('../utils/entraAuth');
+const { createBackup } = require('../utils/backup');
+const backupScheduler = require('../utils/backupScheduler');
 
 // 系統健康狀態
 router.get('/health', requireAuth, requireAdmin, (req, res) => {
@@ -181,65 +183,15 @@ router.get('/backups', requireAuth, requireAdmin, (req, res) => {
     res.json({ data: backups });
 });
 
-// 創建新備份
-router.post('/backup', requireAuth, requireAdmin, (req, res) => {
-    const backupDir = process.env.BACKUP_PATH || path.join(__dirname, '..', 'backups');
-
-    if (!fs.existsSync(backupDir)) {
-        fs.mkdirSync(backupDir, { recursive: true });
+// 創建新備份（手動「立即備份」；排程自動備份呼叫的是同一支 utils/backup.js 的 createBackup()）
+router.post('/backup', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const backup = await createBackup();
+        res.json({ success: true, message: '備份建立成功', backup });
+    } catch (err) {
+        logger.error('備份失敗:', err);
+        res.status(500).json({ error: '備份失敗', details: err.message });
     }
-
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
-    const backupFile = path.join(backupDir, `fund_report_${timestamp}.db`);
-
-    db.run('VACUUM INTO ?', [backupFile], (err) => {
-        if (err) {
-            logger.warn('VACUUM INTO 不支援，改用 WAL checkpoint 備份:', err.message);
-            try {
-                db.run('PRAGMA wal_checkpoint(FULL)', [], (cpErr) => {
-                    if (cpErr) logger.warn('WAL checkpoint 警告:', cpErr.message);
-                    try {
-                        fs.copyFileSync(path.join(__dirname, '..', 'database', 'fund_report.db'), backupFile);
-                        const stats = fs.statSync(backupFile);
-                        logger.info(`備份建立成功（fallback）: ${backupFile}`);
-                        res.json({
-                            success: true,
-                            message: '備份建立成功',
-                            backup: {
-                                filename: path.basename(backupFile),
-                                filepath: backupFile,
-                                size: `${(stats.size / 1024 / 1024).toFixed(2)} MB`
-                            }
-                        });
-                    } catch (copyErr) {
-                        logger.error('備份失敗:', copyErr);
-                        res.status(500).json({ error: '備份失敗', details: copyErr.message });
-                    }
-                });
-            } catch (fallbackErr) {
-                logger.error('備份失敗:', fallbackErr);
-                res.status(500).json({ error: '備份失敗', details: fallbackErr.message });
-            }
-            return;
-        }
-
-        try {
-            const stats = fs.statSync(backupFile);
-            logger.info(`備份建立成功（VACUUM INTO）: ${backupFile}`);
-            res.json({
-                success: true,
-                message: '備份建立成功',
-                backup: {
-                    filename: path.basename(backupFile),
-                    filepath: backupFile,
-                    size: `${(stats.size / 1024 / 1024).toFixed(2)} MB`
-                }
-            });
-        } catch (statErr) {
-            logger.error('備份狀態讀取失敗:', statErr);
-            res.status(500).json({ error: '備份失敗', details: statErr.message });
-        }
-    });
 });
 
 // 下載備份檔案
@@ -339,6 +291,45 @@ router.put('/sso-settings', requireAuth, requireAdmin, async (req, res) => {
         res.json({ success: true, message: 'SSO 設定已更新', enabled: ssoConfigured() });
     } catch (error) {
         logger.error('更新 SSO 設定失敗:', error);
+        res.status(500).json({ error: '更新失敗', details: error.message });
+    }
+});
+
+// 取得自動備份排程設定
+router.get('/backup-schedule', requireAuth, requireAdmin, (req, res) => {
+    res.json(backupScheduler.getSettings());
+});
+
+// 更新自動備份排程設定（存入資料庫並立即生效，不需重啟服務）
+router.put('/backup-schedule', requireAuth, requireAdmin, async (req, res) => {
+    const enabled = req.body.enabled === true;
+    const hour = parseInt(req.body.hour, 10);
+    const minute = parseInt(req.body.minute, 10);
+    const retentionCount = parseInt(req.body.retentionCount, 10);
+
+    if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+        return res.status(400).json({ error: 'hour 必須是 0-23 的整數' });
+    }
+    if (!Number.isInteger(minute) || minute < 0 || minute > 59) {
+        return res.status(400).json({ error: 'minute 必須是 0-59 的整數' });
+    }
+    if (!Number.isInteger(retentionCount) || retentionCount < 1 || retentionCount > 365) {
+        return res.status(400).json({ error: 'retentionCount 必須是 1-365 的整數' });
+    }
+
+    try {
+        const beforeData = backupScheduler.getSettings();
+        await backupScheduler.saveSettings({ enabled, hour, minute, retentionCount });
+        const afterData = backupScheduler.getSettings();
+        const timeStr = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+        writeOperationLog(
+            req, 'update', 'system_settings', 'backup_schedule',
+            beforeData, afterData,
+            `自動備份排程已更新：${enabled ? '啟用' : '停用'}，時間 ${timeStr}，保留 ${retentionCount} 份`
+        );
+        res.json({ success: true, message: '自動備份排程已更新', ...afterData });
+    } catch (error) {
+        logger.error('更新自動備份排程失敗:', error);
         res.status(500).json({ error: '更新失敗', details: error.message });
     }
 });

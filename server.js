@@ -10,6 +10,7 @@ const { OPERATION_LOGS_TABLE_SQL } = require('./utils/operationLog');
 const { requireAuth } = require('./middleware/auth');
 const entraAuth = require('./utils/entraAuth');
 const { isConfigured: ssoConfigured, tenantId: entraTenantId, clientId: entraClientId } = entraAuth;
+const backupScheduler = require('./utils/backupScheduler');
 
 // 載入環境變數（如果存在 .env 檔案）
 if (fs.existsSync('.env')) {
@@ -206,7 +207,8 @@ function ensureOperationLogsAndWriteStartupLog() {
 initDatabase().then(() => {
     ensureOperationLogsAndWriteStartupLog();
     return entraAuth.init();
-}).catch(console.error);
+}).then(() => backupScheduler.init())
+  .catch(console.error);
 
 // ==================== 全域錯誤處理中間件 ====================
 app.use((err, req, res, next) => {

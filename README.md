@@ -27,7 +27,7 @@
 - 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角
   - 系統健康狀態（運行時間、Node 版本、DB 狀態、記錄數）
   - 操作日誌（新增／修改／刪除前後差異、黃標註變更欄位）
-  - 備份管理：列出備份、建立備份、還原、下載備份檔
+  - 備份管理：列出備份、建立備份、還原、下載備份檔；可設定每日自動備份排程（啟用/停用、執行時間、保留份數），設定存資料庫、儲存後立即生效不需重啟服務，排程執行以台北時區為準（不受主機系統時區影響）；只有排程自動備份成功後才會依保留份數清理舊備份，手動「立即備份」不會觸發清理
   - M365 SSO 設定：後台直接設定 Entra ID Tenant ID / Client ID，儲存後立即生效不需重啟服務
 - 📊 Excel 收支匯入與匯出（支援民國年日期如 115/2/10；匯出為單一「金額」欄位）
 - 💾 SQLite 資料庫、RESTful API、現代化 Web 介面
@@ -203,6 +203,7 @@ npm run dev
 - **操作日誌**：`GET /api/admin/operation-logs`（查詢參數：entity_type, action, limit, offset）
 - **系統健康**：`GET /api/admin/health`
 - **備份**：`GET /api/admin/backups`、`POST /api/admin/backup`、`POST /api/admin/backup/download`、`POST /api/admin/restore`
+- **自動備份排程**：`GET/PUT /api/admin/backup-schedule`（`enabled`/`hour`(0-23)/`minute`(0-59)/`retentionCount`(1-365)，儲存至資料庫，立即生效不需重啟服務）
 - **M365 SSO 設定**：`GET/PUT /api/admin/sso-settings`（儲存至資料庫，立即生效不需重啟服務）
 
 ## Excel 檔案格式
@@ -275,6 +276,8 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 - 備份檔案命名格式：`fund_report_YYYYMMDD_HHMMSS.db`
 - 自動保留最近 30 個備份（超過會自動清理舊備份）
 - 顯示備份檔案大小和備份數量統計
+
+**注意**：這是安裝時（`install.sh`）可選擇設定的 OS 層 crontab，跟「管理者儀表板 → 備份管理」頁面裡設定的站內自動備份排程是**兩條完全獨立的路徑**，互不影響也不會互相同步。如果兩者都有啟用，會各自照自己的排程跑備份，可能造成備份重複；建議只擇一使用（例如改用站內排程後，執行 `crontab -e` 移除 `backup.sh` 那一行）。
 
 ### 資料庫還原
 
