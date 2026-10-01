@@ -795,12 +795,6 @@
             }).format(amount);
         }
 
-        // 格式化日期為 月/日
-        function formatDateShort(dateStr) {
-            const d = new Date(dateStr + 'T00:00:00');
-            return d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' });
-        }
-
         // 格式化日期為 年/月/日
         function formatDateFull(dateStr) {
             const d = new Date(dateStr + 'T00:00:00');

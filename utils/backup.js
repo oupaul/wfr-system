@@ -3,10 +3,10 @@ const path = require('path');
 const { db } = require('../database/db');
 const logger = require('./logger');
 
-// 實際產生的檔名長這樣：fund_report_2026-09-29_10-31-03-469Z.db
-// （時間戳記組字串時 .replace(/[:.]/g, '-') 已經把毫秒前的小數點也換成了 -，
-// 後面的 .split('.')[0] 其實找不到東西可切，所以毫秒+Z 尾巴會留在檔名裡；
-// 這裡直接比對實際產生的格式，不要求毫秒/Z 尾巴的精確位數，只求不誤刪其他檔案）
+// 檔名格式：fund_report_2026-09-29_10-31-03.db（UTC 時間）。
+// 這裡的 `.*` 尾巴容許比對到舊版本遺留的檔名（曾經有個小 bug 讓檔名多帶了
+// 毫秒+Z，例如 fund_report_2026-09-29_10-31-03-469Z.db），確保清理舊備份
+// 時仍然認得出那些既有檔案，不會因為格式微調就被當成「不是備份檔」而跳過。
 const BACKUP_FILENAME_PATTERN = /^fund_report_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}.*\.db$/;
 const PRE_RESTORE_PATTERN = /pre_restore/;
 
@@ -23,7 +23,7 @@ function createBackup() {
             fs.mkdirSync(backupDir, { recursive: true });
         }
 
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').split('.')[0];
+        const timestamp = new Date().toISOString().split('.')[0].replace('T', '_').replace(/:/g, '-');
         const backupFile = path.join(backupDir, `fund_report_${timestamp}.db`);
 
         db.run('VACUUM INTO ?', [backupFile], (err) => {
