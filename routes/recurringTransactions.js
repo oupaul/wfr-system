@@ -175,9 +175,11 @@ router.delete('/:id', requireEditor, (req, res) => {
 // 最後把 next_run_date 往後推一期（或超過 end_date 時自動停用）
 router.post('/:id/generate', requireEditor, async (req, res) => {
     const { id } = req.params;
+    let transactionId = null;
+    let template = null;
 
     try {
-        const template = await new Promise((resolve, reject) => {
+        template = await new Promise((resolve, reject) => {
             db.get('SELECT * FROM recurring_transactions WHERE id = ?', [id], (err, row) => (err ? reject(err) : resolve(row)));
         });
         if (!template) return res.status(404).json({ error: '找不到範本' });
@@ -189,7 +191,7 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
 
         const runDate = template.next_run_date;
 
-        const transactionId = await new Promise((resolve, reject) => {
+        transactionId = await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO transactions
                  (transaction_date, type, amount, category, description, company_name, account_name, account_number, remarks)
@@ -211,22 +213,22 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
             }
         }
 
+        // 連結借款時，還款記錄一定要寫成功；不像上面的餘額快取只是顯示用、失敗了之後
+        // 自然會被其他操作重算回來，這裡如果失敗又被吞掉，範本的「下次產生日」還是會
+        // 照樣往後推，這筆還款就永遠不會再被追上，所以這裡失敗要讓整個產生動作失敗
+        // （外層 catch 會把剛剛建立的交易記錄撤銷），不能默默繼續
         let repaymentId = null;
         if (template.financing_id) {
-            try {
-                const result = await recordRepaymentAndSync(db, template.financing_id, {
-                    payment_date: runDate,
-                    principal_paid: template.principal_amount || 0,
-                    interest_paid: template.interest_amount || 0,
-                    remarks: '（週期範本自動產生）' + (template.remarks || '')
-                });
-                repaymentId = result.repaymentId;
-                writeOperationLog(req, 'create', 'financing_repayment', repaymentId, null,
-                    { id: repaymentId, financing_id: template.financing_id, payment_date: runDate },
-                    '還款記錄 #' + repaymentId + '（週期範本 #' + id + ' 產生，' + (result.facilityName || '') + '）');
-            } catch (financingErr) {
-                logger.error('同步借款還款記錄失敗:', financingErr);
-            }
+            const result = await recordRepaymentAndSync(db, template.financing_id, {
+                payment_date: runDate,
+                principal_paid: template.principal_amount || 0,
+                interest_paid: template.interest_amount || 0,
+                remarks: '（週期範本自動產生）' + (template.remarks || '')
+            });
+            repaymentId = result.repaymentId;
+            writeOperationLog(req, 'create', 'financing_repayment', repaymentId, null,
+                { id: repaymentId, financing_id: template.financing_id, payment_date: runDate },
+                '還款記錄 #' + repaymentId + '（週期範本 #' + id + ' 產生，' + (result.facilityName || '') + '）');
         }
 
         // 推算下一次產生日；超過 end_date 就清空並停用，範本自然到期
@@ -251,6 +253,23 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
             message: '已產生一筆收支記錄' + (repaymentId ? '，並同步還款記錄' : '')
         });
     } catch (error) {
+        // 還款記錄沒寫成功，但交易已經建立的話要撤銷，避免留下一筆沒有對應還款記錄的交易，
+        // 範本的 next_run_date 也還沒推進（還沒執行到那一步），下次還是會重新嘗試同一筆
+        if (transactionId) {
+            db.run('DELETE FROM transactions WHERE id = ?', [transactionId], async (delErr) => {
+                if (delErr) {
+                    logger.error('回滾交易記錄失敗，交易 #' + transactionId + ' 可能殘留，請手動檢查:', delErr);
+                    return;
+                }
+                if (template && template.account_name) {
+                    try {
+                        await updateBankAccountBalance(template.account_name, template.account_number, template.company_name || null);
+                    } catch (balanceErr) {
+                        logger.error('回滾後更新帳戶餘額失敗:', balanceErr);
+                    }
+                }
+            });
+        }
         logger.error('產生收支記錄錯誤:', error);
         res.status(500).json({ error: '產生失敗', details: error.message });
     }

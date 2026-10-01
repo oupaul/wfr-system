@@ -38,7 +38,7 @@ router.get('/', (req, res) => {
 });
 
 // 重新計算所有銀行帳戶即時餘額（必須在 /:id 之前）
-router.post('/recalculate-balances', async (req, res) => {
+router.post('/recalculate-balances', requireEditor, async (req, res) => {
     try {
         const rows = await new Promise((resolve, reject) => {
             db.all(`

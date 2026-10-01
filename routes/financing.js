@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
+const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
 // 目前本金餘額 = 原始本金 - 已還本金總額，即時計算不存欄位，避免跟還款記錄兜不起來
 const REMAINING_PRINCIPAL_SQL = `
@@ -227,6 +228,8 @@ router.get('/:id/repayments', (req, res) => {
 });
 
 // 新增一筆還款記錄
+// 借款有設定「撥款/還款帳戶」時，手動補登的還款要跟「週期範本產生下一筆」一樣
+// 同步寫一筆收支記錄＋更新帳戶餘額，不然即時餘額會因為少算這筆還款而虛高
 router.post('/:id/repayments', requireEditor, async (req, res) => {
     const { id } = req.params;
     const { payment_date, principal_paid, interest_paid, remarks } = req.body;
@@ -235,12 +238,78 @@ router.post('/:id/repayments', requireEditor, async (req, res) => {
         return res.status(400).json({ error: 'payment_date 為必填欄位' });
     }
 
+    let transactionId = null;
+    let financingAccount = null;
+
     try {
+        financingAccount = await new Promise((resolve, reject) => {
+            db.get(
+                `SELECT f.facility_name, c.name as company_name, ba.account_name, ba.account_number
+                 FROM financing f
+                 LEFT JOIN companies c ON f.company_id = c.id
+                 LEFT JOIN bank_accounts ba ON f.bank_account_id = ba.id
+                 WHERE f.id = ?`,
+                [id],
+                (err, row) => (err ? reject(err) : resolve(row))
+            );
+        });
+        if (!financingAccount) {
+            return res.status(404).json({ error: '找不到借款記錄' });
+        }
+
+        const amount = (parseFloat(principal_paid) || 0) + (parseFloat(interest_paid) || 0);
+
+        if (financingAccount.account_name && amount > 0) {
+            transactionId = await new Promise((resolve, reject) => {
+                db.run(
+                    `INSERT INTO transactions
+                     (transaction_date, type, amount, description, company_name, account_name, account_number, remarks)
+                     VALUES (?, 'expense', ?, ?, ?, ?, ?, ?)`,
+                    [payment_date, amount, (financingAccount.facility_name || '借款') + ' 還款',
+                     financingAccount.company_name || null, financingAccount.account_name,
+                     financingAccount.account_number || null, remarks || null],
+                    function (err) { err ? reject(err) : resolve(this.lastID); }
+                );
+            });
+            try {
+                await updateBankAccountBalance(financingAccount.account_name, financingAccount.account_number, financingAccount.company_name || null);
+            } catch (balanceErr) {
+                logger.error('更新帳戶餘額失敗:', balanceErr);
+            }
+        }
+
         const { repaymentId, facilityName } = await recordRepaymentAndSync(db, id, { payment_date, principal_paid, interest_paid, remarks });
+
+        if (transactionId) {
+            writeOperationLog(req, 'create', 'transaction', transactionId, null,
+                { id: transactionId, transaction_date: payment_date, type: 'expense', amount },
+                '收支記錄 #' + transactionId + '（借款還款 #' + repaymentId + ' 產生）');
+        }
         const afterData = { id: repaymentId, financing_id: parseInt(id, 10), payment_date, principal_paid: principal_paid || 0, interest_paid: interest_paid || 0, remarks: remarks || null };
         writeOperationLog(req, 'create', 'financing_repayment', repaymentId, null, afterData, '還款記錄 #' + repaymentId + '（' + (facilityName || '') + '）');
-        res.json({ success: true, id: repaymentId, message: '還款記錄已新增' });
+        res.json({
+            success: true,
+            id: repaymentId,
+            transactionId,
+            message: '還款記錄已新增' + (transactionId ? '，已同步建立收支記錄並更新帳戶餘額' : '（此借款未設定還款帳戶，未建立對應收支記錄）')
+        });
     } catch (error) {
+        // 還款記錄沒寫成功，但交易已經建立的話要撤銷，避免留下一筆沒有對應還款記錄的交易
+        if (transactionId) {
+            db.run('DELETE FROM transactions WHERE id = ?', [transactionId], async (delErr) => {
+                if (delErr) {
+                    logger.error('回滾交易記錄失敗，交易 #' + transactionId + ' 可能殘留，請手動檢查:', delErr);
+                    return;
+                }
+                if (financingAccount && financingAccount.account_name) {
+                    try {
+                        await updateBankAccountBalance(financingAccount.account_name, financingAccount.account_number, financingAccount.company_name || null);
+                    } catch (balanceErr) {
+                        logger.error('回滾後更新帳戶餘額失敗:', balanceErr);
+                    }
+                }
+            });
+        }
         if (error.message === '找不到借款記錄') {
             return res.status(404).json({ error: error.message });
         }
