@@ -18,13 +18,15 @@ function clampToMonth(year, month, day) {
     return new Date(year, month, Math.min(day, lastDayOfMonth));
 }
 
-function buildMonthlyTargetDates() {
+// monthsAhead 預設 3（資金缺口卡片、對帳 API 維持原本的近三個月），
+// 資金流水帳改傳 12，可以看到未來一整年的 15/30 號結餘檢查點
+function buildMonthlyTargetDates(monthsAhead = 3) {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const y = today.getFullYear();
     const m = today.getMonth();
     const out = [];
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < monthsAhead; i++) {
         const d15 = clampToMonth(y, m + i, 15);
         const d30 = clampToMonth(y, m + i, 30);
         if (d15 >= today) out.push(toLocalDateStr(d15));
@@ -343,7 +345,7 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
 router.get('/cash-gap-ledger', (req, res) => {
     const now = new Date();
     const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
-    const targetDates = buildMonthlyTargetDates();
+    const targetDates = buildMonthlyTargetDates(12);
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
     db.all(`

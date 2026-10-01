@@ -486,6 +486,32 @@
             opacity: 0.85;
         }
 
+        /* 資金流水帳的月份分組標題列：可點擊收合/展開，維持單色，箭頭用強調色點綴。
+           這一列整列合併成一個 <td colspan>，表格預設 text-align: right 會把文字推到
+           最右邊、橫向捲動時整個跑出可視範圍外，這裡要蓋回 left 並固定在最左側，
+           跟日期/收支項目兩個 sticky 欄位一樣橫向捲動時仍看得到 */
+        .ledger-table tr.ledger-month-header td {
+            background: #F8FAFC;
+            color: #1E293B;
+            font-weight: bold;
+            cursor: pointer;
+            padding: 10px 12px;
+            text-align: left;
+            position: sticky;
+            left: 0;
+            z-index: 2;
+        }
+
+        .ledger-table tr.ledger-month-header:hover td {
+            background: #F1F5F9;
+        }
+
+        .ledger-month-toggle {
+            display: inline-block;
+            width: 16px;
+            color: #F06000;
+        }
+
         .ledger-bank-name {
             display: block;
             font-weight: normal;
@@ -530,6 +556,13 @@
             font-size: 20px;
             font-weight: bold;
             color: #F06000;
+        }
+
+        .ledger-toolbar-actions {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
         }
 
         .account-filter {
@@ -758,14 +791,18 @@
                         <span class="ledger-stat-label">定存總額</span>
                         <span class="ledger-stat-value" id="fixedDepositTotal">$0</span>
                     </div>
-                    <div class="account-filter">
-                        <button type="button" class="btn" id="accountFilterBtn" onclick="toggleAccountFilterPanel()">🏦 顯示帳戶 ▾</button>
-                        <div class="account-filter-panel" id="accountFilterPanel" style="display: none;">
-                            <div class="account-filter-actions">
-                                <button type="button" onclick="selectAllAccounts(true)">全選</button>
-                                <button type="button" onclick="selectAllAccounts(false)">取消全選</button>
+                    <div class="ledger-toolbar-actions">
+                        <button type="button" class="btn" onclick="expandAllLedgerMonths()">全部展開</button>
+                        <button type="button" class="btn" onclick="collapseAllLedgerMonths()">全部收合</button>
+                        <div class="account-filter">
+                            <button type="button" class="btn" id="accountFilterBtn" onclick="toggleAccountFilterPanel()">🏦 顯示帳戶 ▾</button>
+                            <div class="account-filter-panel" id="accountFilterPanel" style="display: none;">
+                                <div class="account-filter-actions">
+                                    <button type="button" onclick="selectAllAccounts(true)">全選</button>
+                                    <button type="button" onclick="selectAllAccounts(false)">取消全選</button>
+                                </div>
+                                <div id="accountFilterList"></div>
                             </div>
-                            <div id="accountFilterList"></div>
                         </div>
                     </div>
                 </div>
@@ -990,6 +1027,7 @@
         let ledgerColumns = [];
         let ledgerRows = [];
         let selectedAccountIds = null; // null 代表尚未初始化（預設全選）
+        let expandedLedgerMonths = null; // null 代表尚未初始化；之後整個頁面載入期間都記住哪些月份是展開的
 
         function switchView(view) {
             const isCard = view === 'card';
@@ -1125,15 +1163,37 @@
                 return `<th><span class="ledger-account-label">${label}</span>${bankLine}${numberLine}</th>`;
             }).join('');
 
+            // 一年份的資料攤開會很長，依月份分組、可收合；第一次載入預設只展開當月
+            if (!expandedLedgerMonths) {
+                const currentMonthKey = new Date().toISOString().slice(0, 7);
+                expandedLedgerMonths = new Set([currentMonthKey]);
+            }
+            const colCount = 2 + columns.length;
+
+            let lastMonthKey = null;
             const bodyRows = rows.map((row) => {
+                const monthKey = row.date.slice(0, 7);
+                let monthHeader = '';
+                if (monthKey !== lastMonthKey) {
+                    lastMonthKey = monthKey;
+                    const [y, m] = monthKey.split('-');
+                    const isExpanded = expandedLedgerMonths.has(monthKey);
+                    monthHeader = `
+                        <tr class="ledger-month-header${isExpanded ? ' expanded' : ''}" data-month="${monthKey}" onclick="toggleLedgerMonth('${monthKey}')">
+                            <td colspan="${colCount}"><span class="ledger-month-toggle">${isExpanded ? '▼' : '▶'}</span>${y}年${parseInt(m, 10)}月</td>
+                        </tr>
+                    `;
+                }
+                const rowHiddenStyle = expandedLedgerMonths.has(monthKey) ? '' : ' style="display:none"';
+
                 if (row.type === 'balance') {
                     const cells = columns.map(c => {
                         const val = row.balances[c.account_id];
                         const negative = val != null && val < 0;
                         return `<td class="${negative ? 'ledger-negative' : ''}">${formatCurrency(val != null ? val : 0)}</td>`;
                     }).join('');
-                    return `
-                        <tr class="ledger-row-balance">
+                    return monthHeader + `
+                        <tr class="ledger-row-balance" data-month="${monthKey}"${rowHiddenStyle}>
                             <td class="ledger-date-col">${formatDateFull(row.date)}</td>
                             <td class="ledger-desc-col">${escapeHtml(row.label)}</td>
                             ${cells}
@@ -1151,8 +1211,8 @@
                     return `<td class="${cls}">${text}</td>`;
                 }).join('');
 
-                return `
-                    <tr>
+                return monthHeader + `
+                    <tr data-month="${monthKey}"${rowHiddenStyle}>
                         <td class="ledger-date-col">${formatDateFull(row.date)}</td>
                         <td class="ledger-desc-col${projectedCls}">${escapeHtml(row.description) || ''}</td>
                         ${cells}
@@ -1178,6 +1238,35 @@
                 </table>
             `;
         }
+
+        // 收合/展開單一月份：直接切換該月份所有列的 display，不用整個表格重新畫一次
+        window.toggleLedgerMonth = function(monthKey) {
+            const willExpand = !expandedLedgerMonths.has(monthKey);
+            if (willExpand) expandedLedgerMonths.add(monthKey);
+            else expandedLedgerMonths.delete(monthKey);
+
+            const headerRow = document.querySelector(`tr.ledger-month-header[data-month="${monthKey}"]`);
+            if (headerRow) {
+                headerRow.classList.toggle('expanded', willExpand);
+                const toggleSpan = headerRow.querySelector('.ledger-month-toggle');
+                if (toggleSpan) toggleSpan.textContent = willExpand ? '▼' : '▶';
+            }
+            document.querySelectorAll(`#ledgerTableContainer tr[data-month="${monthKey}"]:not(.ledger-month-header)`).forEach((tr) => {
+                tr.style.display = willExpand ? '' : 'none';
+            });
+        };
+
+        window.expandAllLedgerMonths = function() {
+            document.querySelectorAll('#ledgerTableContainer tr.ledger-month-header').forEach((tr) => {
+                expandedLedgerMonths.add(tr.dataset.month);
+            });
+            renderLedger();
+        };
+
+        window.collapseAllLedgerMonths = function() {
+            expandedLedgerMonths = new Set();
+            renderLedger();
+        };
 
         // 顯示訊息
         function showMessage(message, type = 'error') {
