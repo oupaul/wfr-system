@@ -3,6 +3,7 @@ const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { getProjectedRepaymentRows } = require('../utils/financingProjection');
+const { getLatestSettlement } = require('../utils/settlementLookup');
 
 function toLocalDateStr(d) {
     const y = d.getFullYear();
@@ -58,31 +59,20 @@ router.get('/cash-gap-dashboard', (req, res) => {
         }
 
         accounts.forEach((account) => {
-            db.get(`
-                SELECT actual_balance, settlement_date
-                FROM balance_settlements
-                WHERE company_name = ? 
-                  AND (account_name = ? OR account_name IS NULL)
-                  AND (account_number = ? OR account_number IS NULL)
-                ORDER BY (CASE WHEN account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL)) THEN 0 ELSE 1 END), settlement_date DESC
-                LIMIT 1
-            `, [
-                account.company_name || '',
-                account.account_name || null,
-                account.account_number || null,
-                account.account_name || null,
-                account.account_number || null,
-                account.account_number || null
-            ], (err, settlement) => {
-                if (err) {
-                    logger.error('查詢結算記錄錯誤:', err);
-                }
+            getLatestSettlement(db, {
+                companyName: account.company_name || null,
+                accountName: account.account_name || null,
+                accountNumber: account.account_number || null
+            }).catch((err) => {
+                logger.error('查詢結算記錄錯誤:', err);
+                return null;
+            }).then((settlement) => {
 
                 const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
                 const startDate = settlement ? settlement.settlement_date : '2000-01-01';
 
                 db.all(`
-                    SELECT 
+                    SELECT
                         type,
                         SUM(CASE WHEN transaction_date >= ? AND transaction_date <= ? THEN amount ELSE 0 END) as future_amount,
                         COUNT(CASE WHEN transaction_date >= ? AND transaction_date <= ? THEN 1 ELSE NULL END) as future_count
@@ -252,25 +242,14 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
         let processedCount = 0;
 
         accounts.forEach((account) => {
-            db.get(`
-                SELECT actual_balance, settlement_date
-                FROM balance_settlements
-                WHERE company_name = ? 
-                  AND (account_name = ? OR account_name IS NULL)
-                  AND (account_number = ? OR account_number IS NULL)
-                ORDER BY (CASE WHEN account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL)) THEN 0 ELSE 1 END), settlement_date DESC
-                LIMIT 1
-            `, [
-                account.company_name || '',
-                account.account_name || null,
-                account.account_number || null,
-                account.account_name || null,
-                account.account_number || null,
-                account.account_number || null
-            ], (err, settlement) => {
-                if (err) {
-                    logger.error('查詢結算記錄錯誤:', err);
-                }
+            getLatestSettlement(db, {
+                companyName: account.company_name || null,
+                accountName: account.account_name || null,
+                accountNumber: account.account_number || null
+            }).catch((err) => {
+                logger.error('查詢結算記錄錯誤:', err);
+                return null;
+            }).then((settlement) => {
                 const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
                 const startDate = settlement ? settlement.settlement_date : '2000-01-01';
 
@@ -387,21 +366,14 @@ router.get('/cash-gap-ledger', (req, res) => {
         let processedCount = 0;
 
         accounts.forEach((account) => {
-            db.get(`
-                SELECT actual_balance, settlement_date
-                FROM balance_settlements
-                WHERE company_name = ?
-                  AND (account_name = ? OR account_name IS NULL)
-                  AND (account_number = ? OR account_number IS NULL)
-                ORDER BY (CASE WHEN account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL)) THEN 0 ELSE 1 END), settlement_date DESC
-                LIMIT 1
-            `, [
-                account.company_name || '', account.account_name || null, account.account_number || null,
-                account.account_name || null, account.account_number || null, account.account_number || null
-            ], (err, settlement) => {
-                if (err) {
-                    logger.error('查詢結算記錄錯誤:', err);
-                }
+            getLatestSettlement(db, {
+                companyName: account.company_name || null,
+                accountName: account.account_name || null,
+                accountNumber: account.account_number || null
+            }).catch((err) => {
+                logger.error('查詢結算記錄錯誤:', err);
+                return null;
+            }).then((settlement) => {
                 const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
                 const startDate = settlement ? settlement.settlement_date : '2000-01-01';
 
@@ -554,18 +526,14 @@ router.get('/cash-gap-reconciliation', (req, res) => {
         const result = [];
         let done = 0;
         accounts.forEach((acc) => {
-            db.get(`
-                SELECT actual_balance, settlement_date
-                FROM balance_settlements
-                WHERE company_name = ? 
-                  AND (account_name = ? OR account_name IS NULL)
-                  AND (account_number = ? OR account_number IS NULL)
-                ORDER BY (CASE WHEN account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL)) THEN 0 ELSE 1 END), settlement_date DESC
-                LIMIT 1
-            `, [
-                acc.company_name || '', acc.account_name || null, acc.account_number || null,
-                acc.account_name || null, acc.account_number || null, acc.account_number || null
-            ], (err, settlement) => {
+            getLatestSettlement(db, {
+                companyName: acc.company_name || null,
+                accountName: acc.account_name || null,
+                accountNumber: acc.account_number || null
+            }).catch((err) => {
+                logger.error('查詢結算記錄錯誤:', err);
+                return null;
+            }).then((settlement) => {
                 const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
                 const startDate = settlement ? settlement.settlement_date : '2000-01-01';
                 db.all(`

@@ -19,6 +19,15 @@ const db = new sqlite3.Database(dbPath, (err) => {
     }
 });
 
+// WAL 模式讓讀取不會被寫入鎖住（反之亦然），busy_timeout 讓並發寫入互相等待
+// 而不是立即丟出 SQLITE_BUSY，多人同時操作時比較不會遇到「資料庫忙碌中」的錯誤
+db.run('PRAGMA journal_mode = WAL', (err) => {
+    if (err) console.error('設定 WAL 模式失敗:', err.message);
+});
+db.run('PRAGMA busy_timeout = 5000', (err) => {
+    if (err) console.error('設定 busy_timeout 失敗:', err.message);
+});
+
 // 初始化資料庫表格
 const initDatabase = () => {
     return new Promise(async (resolve, reject) => {

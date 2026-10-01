@@ -9,6 +9,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
+const { getLatestSettlement } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
 
 // 確保上傳目錄存在
@@ -387,6 +388,9 @@ router.post('/batch-delete', requireEditor, async (req, res) => {
                 (err, r) => (err ? reject(err) : resolve(r || []))
             );
         });
+        // 餘額重算依帳戶去重，刪 50 筆同帳戶的交易只重算 1 次，不是 50 次
+        // （跟 Excel 匯入那邊的 distinctAccounts 寫法一致）
+        const distinctAccounts = new Map();
         for (const row of rows) {
             await new Promise((resolve, reject) => {
                 db.run('DELETE FROM transactions WHERE id = ?', [row.id], function(err) {
@@ -394,14 +398,18 @@ router.post('/batch-delete', requireEditor, async (req, res) => {
                     deletedCount += this.changes;
                     if (this.changes > 0) {
                         writeOperationLog(req, 'delete', 'transaction', row.id, row, null, '收支記錄 #' + row.id);
+                        if (row.account_name) {
+                            const key = `${row.company_name || ''}|${row.account_name}|${row.account_number || ''}`;
+                            if (!distinctAccounts.has(key)) distinctAccounts.set(key, row);
+                        }
                     }
                     resolve();
                 });
             });
+        }
+        for (const acc of distinctAccounts.values()) {
             try {
-                if (row.account_name) {
-                    await updateBankAccountBalance(row.account_name, row.account_number, row.company_name || null);
-                }
+                await updateBankAccountBalance(acc.account_name, acc.account_number, acc.company_name || null);
             } catch (e) {
                 logger.error('更新帳戶餘額失敗:', e);
             }
@@ -504,6 +512,13 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
             }
         }
 
+        // 包成單一 DB transaction：逐行 INSERT 原本每一列都各自 commit 一次（等於每列
+        // 都要 fsync），列數一多匯入會明顯變慢；包成一個 transaction 大幅減少 fsync 次數。
+        // 單一列解析/寫入失敗仍然只跳過那一列（下面 catch 自己處理），不會讓整批失敗。
+        await new Promise((resolve, reject) => {
+            db.run('BEGIN TRANSACTION', (err) => (err ? reject(err) : resolve()));
+        });
+
         for (let rowNumber = 2; rowNumber <= worksheet.rowCount; rowNumber++) {
             const row = worksheet.getRow(rowNumber);
 
@@ -601,6 +616,10 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
             }
         }
 
+        await new Promise((resolve, reject) => {
+            db.run('COMMIT', (err) => (err ? reject(err) : resolve()));
+        });
+
         fs.unlinkSync(filePath);
 
         // 匯入迴圈本身不會即時重算帳戶餘額，這裡針對本次匯入涉及到的每個帳戶各
@@ -621,14 +640,10 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
                 logger.error('更新帳戶餘額失敗:', balanceErr);
             }
             try {
-                const settleWhere = acc.company_name
-                    ? 'company_name = ? AND account_name = ?' + (acc.account_number ? ' AND (account_number = ? OR account_number IS NULL)' : '')
-                    : 'account_name = ?' + (acc.account_number ? ' AND account_number = ?' : '');
-                const settleParams = acc.company_name
-                    ? (acc.account_number ? [acc.company_name, acc.account_name, acc.account_number] : [acc.company_name, acc.account_name])
-                    : (acc.account_number ? [acc.account_name, acc.account_number] : [acc.account_name]);
-                const settlement = await new Promise((resolve, reject) => {
-                    db.get(`SELECT settlement_date FROM balance_settlements WHERE ${settleWhere} ORDER BY settlement_date DESC LIMIT 1`, settleParams, (err, row) => (err ? reject(err) : resolve(row)));
+                const settlement = await getLatestSettlement(db, {
+                    companyName: acc.company_name || null,
+                    accountName: acc.account_name,
+                    accountNumber: acc.account_number || null
                 });
                 if (settlement && settlement.settlement_date) {
                     backdatedCount += acc.dates.filter((d) => d < settlement.settlement_date).length;
@@ -648,6 +663,11 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
             errors: errors.length > 0 ? errors : undefined
         });
     } catch (error) {
+        // BEGIN 之後、COMMIT 之前任何地方拋出例外都要 ROLLBACK，避免 transaction 卡著沒結束；
+        // 沒有進行中的 transaction 時 ROLLBACK 本身會失敗，這裡只記 log 不讓它蓋掉原本的錯誤
+        db.run('ROLLBACK', (rollbackErr) => {
+            if (rollbackErr) logger.warn('匯入失敗後 ROLLBACK 警告（可能本來就沒有進行中的 transaction）:', rollbackErr.message);
+        });
         if (fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
         }
@@ -693,8 +713,9 @@ router.post('/transfer', requireEditor, async (req, res) => {
         );
     });
 
+    let fromId = null;
     try {
-        const fromId = await insertOne('expense', from.company_name, from.account_name, from.account_number, `轉帳至 ${to.account_name}`);
+        fromId = await insertOne('expense', from.company_name, from.account_name, from.account_number, `轉帳至 ${to.account_name}`);
         const toId = await insertOne('income', to.company_name, to.account_name, to.account_number, `轉帳自 ${from.account_name}`);
 
         const fromAfter = { id: fromId, transaction_date: transfer_date, type: 'expense', amount, category: transferCategory, company_name: from.company_name || null, account_name: from.account_name, account_number: from.account_number || null, transfer_group_id: transferGroupId };
@@ -711,6 +732,15 @@ router.post('/transfer', requireEditor, async (req, res) => {
 
         res.json({ success: true, fromId, toId, message: '轉帳已完成' });
     } catch (err) {
+        // 轉出那一腿成功、轉入那一腿失敗的話要撤銷，避免留下只扣款沒入帳的孤兒交易
+        // （這時候帳戶餘額還沒被更新過，不用額外重算）
+        if (fromId) {
+            db.run('DELETE FROM transactions WHERE id = ?', [fromId], (delErr) => {
+                if (delErr) {
+                    logger.error('回滾轉帳記錄失敗，交易 #' + fromId + ' 可能殘留，請手動檢查:', delErr);
+                }
+            });
+        }
         logger.error('轉帳錯誤:', err);
         res.status(500).json({ error: '轉帳失敗', details: err.message });
     }

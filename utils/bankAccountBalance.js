@@ -1,5 +1,6 @@
 const { db } = require('../database/db');
 const logger = require('./logger');
+const { getLatestSettlement } = require('./settlementLookup');
 
 // 更新銀行帳戶的即時餘額
 // 根據最近的餘額結算記錄 + 結算日～「當天」的收支記錄計算（即時餘額只統計到當天）
@@ -42,26 +43,8 @@ async function updateBankAccountBalance(accountName, accountNumber = null, compa
 
             const resolvedCompany = companyName || account.resolved_company || null;
 
-            const settleWhere = resolvedCompany
-                ? 'company_name = ? AND account_name = ? ' + (accountNumber ? 'AND (account_number = ? OR account_number IS NULL)' : '')
-                : 'account_name = ? ' + (accountNumber ? 'AND account_number = ?' : '');
-            const settleParams = resolvedCompany
-                ? (accountNumber ? [resolvedCompany, accountName, accountNumber] : [resolvedCompany, accountName])
-                : (accountNumber ? [accountName, accountNumber] : [accountName]);
-
-            db.get(
-                `SELECT settlement_date, actual_balance 
-                 FROM balance_settlements 
-                 WHERE ${settleWhere}
-                 ORDER BY settlement_date DESC 
-                 LIMIT 1`,
-                settleParams,
-                (err, settlement) => {
-                    if (err) {
-                        logger.error('查詢餘額結算錯誤:', err);
-                        return reject(err);
-                    }
-
+            getLatestSettlement(db, { companyName: resolvedCompany, accountName, accountNumber })
+                .then((settlement) => {
                     let startBalance = 0;
                     let startDate = '1900-01-01';
                     if (settlement) {
@@ -109,8 +92,8 @@ async function updateBankAccountBalance(accountName, accountNumber = null, compa
                             }
                         );
                     });
-                }
-            );
+                })
+                .catch(reject);
         });
     });
 }

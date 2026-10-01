@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS transactions (
 CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(transaction_date);
 CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
 CREATE INDEX IF NOT EXISTS idx_transactions_company ON transactions(company_name);
+CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_name, account_number);
 
 -- 餘額結算記錄表
 CREATE TABLE IF NOT EXISTS balance_settlements (
@@ -76,6 +77,7 @@ CREATE TABLE IF NOT EXISTS balance_settlements (
 -- 建立索引
 CREATE INDEX IF NOT EXISTS idx_settlements_date ON balance_settlements(settlement_date);
 CREATE INDEX IF NOT EXISTS idx_settlements_company ON balance_settlements(company_name);
+CREATE INDEX IF NOT EXISTS idx_settlements_account ON balance_settlements(account_name, account_number);
 
 -- 公司資訊表
 CREATE TABLE IF NOT EXISTS companies (
