@@ -1078,7 +1078,43 @@
                 .reduce((sum, c) => sum + (c.current_balance || 0), 0);
             document.getElementById('fixedDepositTotal').textContent = formatCurrency(fixedDepositTotal);
 
-            displayLedger(visibleColumns, ledgerRows);
+            displayLedger(buildLedgerDisplayColumns(visibleColumns), ledgerRows);
+        }
+
+        // 同一家公司、同一家銀行底下如果有多筆「定存」帳戶，合併成一欄只顯示加總金額
+        // （定存通常沒有逐筆交易、只是靜態餘額，合併後報表不會被拆成好幾欄同銀行定存）
+        // 只有單一公司單一銀行下只有一筆定存時維持原樣顯示，不特別標成「合計」
+        function buildLedgerDisplayColumns(columns) {
+            const groups = new Map(); // key: 公司|銀行 -> 合併後的欄位物件
+            const displayColumns = [];
+
+            columns.forEach((col) => {
+                if (col.account_type !== '定存') {
+                    displayColumns.push({ ...col, merged_account_ids: [col.account_id] });
+                    return;
+                }
+                const key = `${col.company_name || ''}|${col.bank_name || ''}`;
+                let group = groups.get(key);
+                if (!group) {
+                    group = { ...col, merged_account_ids: [] };
+                    groups.set(key, group);
+                    displayColumns.push(group);
+                } else {
+                    group.opening_balance = (group.opening_balance || 0) + (col.opening_balance || 0);
+                    group.current_balance = (group.current_balance || 0) + (col.current_balance || 0);
+                }
+                group.merged_account_ids.push(col.account_id);
+            });
+
+            // 同一組裡真的合併了兩筆以上才改標籤成「XX銀行 定存合計」，只有一筆的話沿用原本帳戶名稱
+            displayColumns.forEach((c) => {
+                if (c.account_type === '定存' && c.merged_account_ids.length > 1) {
+                    c.account_name = `${c.bank_name || '定存'} 定存合計`;
+                    c.account_number = '';
+                }
+            });
+
+            return displayColumns;
         }
 
         // 建立「顯示帳戶」多選選單內容
@@ -1188,9 +1224,12 @@
 
                 if (row.type === 'balance') {
                     const cells = columns.map(c => {
-                        const val = row.balances[c.account_id];
-                        const negative = val != null && val < 0;
-                        return `<td class="${negative ? 'ledger-negative' : ''}">${formatCurrency(val != null ? val : 0)}</td>`;
+                        const val = c.merged_account_ids.reduce((sum, id) => {
+                            const v = row.balances[id];
+                            return v != null ? sum + v : sum;
+                        }, 0);
+                        const negative = val < 0;
+                        return `<td class="${negative ? 'ledger-negative' : ''}">${formatCurrency(val)}</td>`;
                     }).join('');
                     return monthHeader + `
                         <tr class="ledger-row-balance" data-month="${monthKey}"${rowHiddenStyle}>
@@ -1203,7 +1242,7 @@
 
                 const projectedCls = row.is_projected ? ' ledger-projected' : '';
                 const cells = columns.map(c => {
-                    if (c.account_id !== row.account_id) return '<td></td>';
+                    if (!c.merged_account_ids.includes(row.account_id)) return '<td></td>';
                     const cls = (row.txn_type === 'income' ? 'ledger-amount-income' : 'ledger-amount-expense') + projectedCls;
                     const text = row.txn_type === 'income'
                         ? formatCurrency(row.amount)
