@@ -13,6 +13,8 @@ function getProjectedFutureRows(account, today, maxDate) {
     ]).then(([repayments, templates]) => repayments.concat(templates));
 }
 const { getLatestSettlement } = require('../utils/settlementLookup');
+const { requireEditor } = require('../middleware/auth');
+const { writeOperationLog } = require('../utils/operationLog');
 
 function toLocalDateStr(d) {
     const y = d.getFullYear();
@@ -619,6 +621,51 @@ router.get('/import-logs', (req, res) => {
             res.json({ data: rows });
         }
     );
+});
+
+// 資金流水帳上方「目前貸款餘額」：由財務人員手動填寫，存在 system_settings（所有使用者看到同一個數字）
+const LOAN_BALANCE_KEY = 'cash_gap_manual_loan_balance';
+
+router.get('/cash-gap-loan-balance', (req, res) => {
+    db.get('SELECT value, updated_at FROM system_settings WHERE key = ?', [LOAN_BALANCE_KEY], (err, row) => {
+        if (err) {
+            logger.error('查詢貸款餘額錯誤:', err);
+            return res.status(500).json({ error: '查詢失敗', details: err.message });
+        }
+        const amount = row && row.value !== '' && row.value != null ? parseFloat(row.value) : null;
+        res.json({ amount, updated_at: row ? row.updated_at : null });
+    });
+});
+
+router.put('/cash-gap-loan-balance', requireEditor, (req, res) => {
+    const raw = req.body.amount;
+    const isEmpty = raw === null || raw === undefined || raw === '';
+    const amount = isEmpty ? null : Number(raw);
+    if (!isEmpty && (!Number.isFinite(amount) || amount < 0)) {
+        return res.status(400).json({ error: '貸款餘額必須是大於或等於 0 的數字' });
+    }
+    db.get('SELECT value FROM system_settings WHERE key = ?', [LOAN_BALANCE_KEY], (getErr, oldRow) => {
+        if (getErr) {
+            logger.error('查詢貸款餘額錯誤:', getErr);
+            return res.status(500).json({ error: '儲存失敗', details: getErr.message });
+        }
+        const now = new Date().toISOString();
+        db.run(
+            `INSERT INTO system_settings (key, value, updated_at) VALUES (?, ?, ?)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+            [LOAN_BALANCE_KEY, isEmpty ? '' : String(amount), now],
+            (err) => {
+                if (err) {
+                    logger.error('儲存貸款餘額錯誤:', err);
+                    return res.status(500).json({ error: '儲存失敗', details: err.message });
+                }
+                writeOperationLog(req, 'update', 'system_settings', LOAN_BALANCE_KEY,
+                    { amount: oldRow && oldRow.value !== '' ? parseFloat(oldRow.value) : null }, { amount },
+                    '資金流水帳目前貸款餘額已更新');
+                res.json({ success: true, amount, updated_at: now });
+            }
+        );
+    });
 });
 
 module.exports = router;
