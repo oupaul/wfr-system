@@ -1214,10 +1214,14 @@
                 return `<th><span class="ledger-account-label">${label}</span>${bankLine}${numberLine}</th>`;
             }).join('');
 
-            // 一年份的資料攤開會很長，依月份分組、可收合；第一次載入預設只展開當月
+            // 一年份的資料攤開會很長，依月份分組、可收合；第一次載入預設展開當月起的六個月，其餘收合
             if (!expandedLedgerMonths) {
-                const currentMonthKey = new Date().toISOString().slice(0, 7);
-                expandedLedgerMonths = new Set([currentMonthKey]);
+                expandedLedgerMonths = new Set();
+                const now = new Date();
+                for (let i = 0; i < 6; i++) {
+                    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+                    expandedLedgerMonths.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+                }
             }
             const colCount = 2 + columns.length;
 
