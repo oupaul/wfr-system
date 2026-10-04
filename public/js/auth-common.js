@@ -1,6 +1,6 @@
 /**
  * auth-common.js — 全站共用認證模組
- * 功能：checkAuth、handleLogout、顯示使用者資訊、自動登出提醒
+ * 功能：checkAuth、handleLogout、顯示使用者資訊、自動登出提醒、系統更新通知橫幅、showMessage 訊息提示
  */
 (function () {
     'use strict';
@@ -321,8 +321,33 @@
             .replace(/'/g, '&#39;');
     }
 
+    // ==================== 頁面訊息（toast） ====================
+
+    let _messageTimer = null;
+
+    /**
+     * 在頁面的 #message 區塊顯示訊息，5 秒後自動隱藏。
+     * 原本 8 個頁面各自複製一份；#message 的樣式（.error / .success 等）仍由各頁自己定義。
+     * @param {string} message - 以純文字顯示（textContent），不會解析 HTML
+     * @param {string} [type='error'] - 套用到 #message 的 class（error / success / warning...）
+     */
+    function showMessage(message, type = 'error') {
+        const messageDiv = document.getElementById('message');
+        if (!messageDiv) return;
+        // 先清掉上一則的計時器，避免連續兩則訊息時，新訊息被前一則的計時器提早收掉
+        if (_messageTimer) clearTimeout(_messageTimer);
+        messageDiv.className = type;
+        messageDiv.textContent = message;
+        messageDiv.style.display = 'block';
+        _messageTimer = setTimeout(() => {
+            messageDiv.style.display = 'none';
+            _messageTimer = null;
+        }, 5000);
+    }
+
     // ==================== 對外暴露 ====================
     window.checkAuth = checkAuth;
     window.handleLogout = handleLogout;
     window.escapeHtml = escapeHtml;
+    window.showMessage = showMessage;
 })();

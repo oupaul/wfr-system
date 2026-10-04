@@ -1392,16 +1392,6 @@
         };
 
         // 顯示訊息
-        function showMessage(message, type = 'error') {
-            const messageDiv = document.getElementById('message');
-            messageDiv.className = type;
-            messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
-        }
-
         // 頁面載入時執行
         document.addEventListener('DOMContentLoaded', async function() {
             // 資料請求跟登入檢查同時發出，不用等彼此：資金流水帳、貸款餘額、到期範本提醒的 API

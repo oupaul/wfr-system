@@ -798,16 +798,6 @@
         }
 
         // 顯示訊息
-        function showMessage(message, type = 'error') {
-            const messageDiv = document.getElementById('message');
-            messageDiv.className = type;
-            messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
-        }
-
         // 點擊模態框外部關閉
         // 在輸入框裡按住滑鼠拖曳選取文字、結果在視窗外面放開時，瀏覽器會把 click 算在
         // 共同的上層（也就是灰色背景）上，會誤把視窗關掉；只有「按下」跟「放開」都落在

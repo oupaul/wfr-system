@@ -1626,16 +1626,6 @@
         }
 
         // 顯示訊息
-        function showMessage(message, type = 'error') {
-            const messageDiv = document.getElementById('message');
-            messageDiv.className = type;
-            messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
-        }
-
         // 下載匯入範本
         window.downloadTemplate = function() {
             const url = `${API_BASE}/transactions/template`;

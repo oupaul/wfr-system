@@ -1344,16 +1344,6 @@
         }
 
         // 顯示訊息
-        function showMessage(message, type = 'error') {
-            const messageDiv = document.getElementById('message');
-            messageDiv.className = type;
-            messageDiv.textContent = message;
-            messageDiv.style.display = 'block';
-            setTimeout(() => {
-                messageDiv.style.display = 'none';
-            }, 5000);
-        }
-
         // 檢查認證狀態並獲取用戶資訊
         async function checkAuthAndLoadUser() {
             try {
