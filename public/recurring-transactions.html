@@ -883,7 +883,7 @@
                 tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:40px;color:#666;">尚無範本</td></tr>';
                 return;
             }
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayInTaipei();
             tbody.innerHTML = rows.map(t => {
                 const isDue = t.is_active && t.next_run_date && t.next_run_date <= today;
                 const nextRun = t.next_run_date

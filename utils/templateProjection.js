@@ -9,6 +9,7 @@
 // - 超過 end_date 的期數不投影
 
 const { addMonthsClamped } = require('./financingProjection');
+const { transactionBelongsToAccount } = require('./accountMatch');
 
 const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 const MAX_OCCURRENCES = 60;
@@ -43,8 +44,7 @@ function projectTemplateOccurrences(template, todayStr, maxDateStr) {
 }
 
 // 一次查出所有啟用中的範本，再依帳戶的公司/帳戶名稱/帳號比對（範本跟交易一樣存的是去正規化文字）。
-// 比對規則：公司名稱（帳戶沒有公司時視為 ''）與帳戶名稱要完全相同；帳戶有帳號時範本帳號要相同，
-// 帳戶沒有帳號時範本帳號也要是 NULL。回傳 Map<account.id, 預計事件[]>。
+// 比對規則與收支記錄歸戶完全相同（見 utils/accountMatch.js）：公司、帳戶名稱、帳號三項嚴格比對，空值視為相同。回傳 Map<account.id, 預計事件[]>。
 // 永遠 resolve，查詢失敗只記錄錯誤、回傳空陣列。
 function getProjectedTemplateRowsByAccount(db, accounts, todayStr, maxDateStr) {
     return new Promise((resolve) => {
@@ -60,12 +60,8 @@ function getProjectedTemplateRowsByAccount(db, accounts, todayStr, maxDateStr) {
                     return resolve(result);
                 }
                 (accounts || []).forEach((account) => {
-                    if (!account.account_name) return;
-                    const company = account.company_name || '';
-                    const number = account.account_number || null;
                     (templates || []).forEach((t) => {
-                        const sameNumber = number !== null ? t.account_number === number : t.account_number == null;
-                        if (t.company_name === company && t.account_name === account.account_name && sameNumber) {
+                        if (transactionBelongsToAccount(t, account)) {
                             result.get(account.id).push(...projectTemplateOccurrences(t, todayStr, maxDateStr));
                         }
                     });

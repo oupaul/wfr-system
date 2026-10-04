@@ -1388,7 +1388,7 @@
             if (!authenticated) return;
 
             // 預設日期為今天
-            const today = new Date().toISOString().split('T')[0];
+            const today = todayInTaipei();
             document.getElementById('settlementDate').value = today;
             // 載入公司列表（初始不載入帳戶，等選擇公司後再載入）
             loadCompaniesSettlement().then(() => {

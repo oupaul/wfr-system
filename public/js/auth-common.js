@@ -345,9 +345,17 @@
         }, 5000);
     }
 
+    // ==================== 日期 ====================
+
+    /** 今天（台北時區）YYYY-MM-DD。不用 toISOString()：那是 UTC，台灣 00:00～08:00 會變成昨天 */
+    function todayInTaipei() {
+        return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
+    }
+
     // ==================== 對外暴露 ====================
     window.checkAuth = checkAuth;
     window.handleLogout = handleLogout;
     window.escapeHtml = escapeHtml;
     window.showMessage = showMessage;
+    window.todayInTaipei = todayInTaipei;
 })();

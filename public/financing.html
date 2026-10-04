@@ -881,7 +881,7 @@
             const record = financingListCache.find(f => f.id === id);
             document.getElementById('repaymentModalTitle').textContent = `還款記錄 - ${(record && record.facility_name) || ''}`;
             document.getElementById('repaymentFormWrap').style.display = canEdit ? 'block' : 'none';
-            document.getElementById('repayDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('repayDate').value = todayInTaipei();
             document.getElementById('repaymentModal').style.display = 'block';
             loadRepaymentSummary();
             loadRepayments();

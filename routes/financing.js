@@ -4,16 +4,12 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
+const { todayInTaipei } = require('../utils/dateUtil');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
 // 目前本金餘額的定義（含手動輸入餘額）集中在 utils/financingProjection.js，跟資金預估的投影上限共用
-
-// 以台北時區算「今天」，不受主機系統時區影響
-function todayInTaipei() {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
-}
 
 // 手動輸入的餘額與基準日只給有編輯權限者（admin/finance）；一般使用者的回應不帶這兩個欄位，
 // 目前本金餘額（remaining_principal）的數字本身不受影響

@@ -1036,7 +1036,7 @@
 
         window.openTransferModal = function() {
             document.getElementById('transferForm').reset();
-            document.getElementById('transferDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('transferDate').value = todayInTaipei();
 
             const fromCompanySelect = document.getElementById('transferFromCompanyId');
             const toCompanySelect = document.getElementById('transferToCompanyId');
@@ -1187,7 +1187,7 @@
             document.getElementById('modalCompanyName').value = '';
             document.getElementById('modalAccountName').value = '';
             // 預設日期為今天
-            const today = new Date().toISOString().split('T')[0];
+            const today = todayInTaipei();
             document.getElementById('modalTransactionDate').value = today;
             
             // 如果是僅支出模式，自動設定類型為支出

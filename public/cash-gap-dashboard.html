@@ -1506,7 +1506,7 @@
             fetch(`${API_BASE}/recurring-transactions?active=true`)
                 .then(res => res.json())
                 .then(data => {
-                    const today = new Date().toISOString().slice(0, 10);
+                    const today = todayInTaipei();
                     const due = (data.data || []).filter(t => t.next_run_date && t.next_run_date <= today);
                     const el = document.getElementById('dueTemplatesNotice');
                     if (due.length === 0) { el.style.display = 'none'; return; }

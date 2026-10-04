@@ -7,6 +7,8 @@ const { getProjectedTemplateRowsByAccount } = require('../utils/templateProjecti
 const { getLatestSettlementsForAccounts } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
+const { todayInTaipei, addDaysStr } = require('../utils/dateUtil');
+const { transactionBelongsToAccount } = require('../utils/accountMatch');
 
 // ==================== 批次載入（避免每個帳戶各查好幾次資料庫） ====================
 // 原本每個端點都對「每個帳戶」各查一次結算、一次交易、一次借款、一次範本（N+1），
@@ -74,12 +76,8 @@ async function loadAccountInputs(accounts, endDate) {
         accounts.forEach((account) => {
             if (!account.account_name) return;
             const info = infos.get(account.id);
-            const company = account.company_name || '';
-            const number = account.account_number || null;
             info.rows = (byName.get(account.account_name) || []).filter((t) =>
-                t.company_name === company
-                && (number !== null ? t.account_number === number : t.account_number === null)
-                && t.transaction_date >= info.startDate
+                transactionBelongsToAccount(t, account) && t.transaction_date >= info.startDate
             );
         });
     } catch (err) {
@@ -120,8 +118,8 @@ function clampToMonth(year, month, day) {
 // monthsAhead 預設 3（資金缺口卡片、對帳 API 維持原本的近三個月），
 // 資金流水帳改傳 12，可以看到未來一整年的 15/30 號結餘檢查點
 function buildMonthlyTargetDates(monthsAhead = 3) {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const [ty, tm, td] = todayInTaipei().split('-').map(Number);
+    const today = new Date(ty, tm - 1, td);
     const y = today.getFullYear();
     const m = today.getMonth();
     const out = [];
@@ -137,8 +135,8 @@ function buildMonthlyTargetDates(monthsAhead = 3) {
 // 資金預估週報儀表板
 router.get('/cash-gap-dashboard', async (req, res) => {
     const { forecastDays = 28 } = req.query;
-    const today = new Date().toISOString().split('T')[0];
-    const forecastEndDate = new Date(Date.now() + parseInt(forecastDays) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const today = todayInTaipei();
+    const forecastEndDate = addDaysStr(today, parseInt(forecastDays));
 
     try {
         const accounts = await loadActiveAccounts();
@@ -185,8 +183,7 @@ router.get('/cash-gap-dashboard', async (req, res) => {
                         if (dailyNetFlow > 0) {
                             const daysToGap = Math.ceil(balanceBuffer / dailyNetFlow);
                             if (daysToGap > 0 && daysToGap <= daysToForecast) {
-                                const gapDateObj = new Date(Date.now() + daysToGap * 24 * 60 * 60 * 1000);
-                                gapDate = gapDateObj.toISOString().split('T')[0];
+                                gapDate = addDaysStr(today, daysToGap);
                             } else {
                                 gapDate = forecastEndDate;
                             }
@@ -254,8 +251,7 @@ router.get('/cash-gap-dashboard', async (req, res) => {
 
 // 資金缺口：未來三個月每月 15 號、30 號
 router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
-    const now = new Date();
-    const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+    const today = todayInTaipei();
     const targetDates = buildMonthlyTargetDates();
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
@@ -339,8 +335,7 @@ router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
 
 // 資金流水帳檢視：帳戶為欄、逐筆交易與每月 15/30 號結餘檢查點為列
 router.get('/cash-gap-ledger', async (req, res) => {
-    const now = new Date();
-    const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+    const today = todayInTaipei();
     const targetDates = buildMonthlyTargetDates(12);
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
@@ -451,8 +446,7 @@ router.get('/cash-gap-ledger', async (req, res) => {
 router.get('/cash-gap-reconciliation', async (req, res) => {
     const company = (req.query.company || '').trim();
     const account = (req.query.account || '').trim();
-    const now = new Date();
-    const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
+    const today = todayInTaipei();
     const targetDates = buildMonthlyTargetDates();
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
