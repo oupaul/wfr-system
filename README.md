@@ -334,7 +334,8 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 │   ├── admin-operation-logs.html # 操作日誌
 │   ├── admin-backup.html      # 備份管理
 │   ├── admin-sso-settings.html # M365 SSO 設定（僅管理員）
-│   └── js/auth-common.js      # 全站共用登入檢查、登出、閒置自動登出
+│   ├── js/auth-common.js      # 全站共用登入檢查、登出、閒置自動登出
+│   └── js/account-select.js   # 「公司 → 該公司銀行帳戶」下拉選單共用載入邏輯（各頁面共用，不需 build）
 ├── docs/
 │   └── 資金缺口計算邏輯說明.md
 ├── backups/            # 備份目錄（可自訂 BACKUP_PATH）

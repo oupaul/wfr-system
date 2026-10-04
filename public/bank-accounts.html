@@ -371,6 +371,7 @@
         }
     </style>
     <script src="/js/auth-common.js"></script>
+    <script src="/js/account-select.js"></script>
 </head>
 <body>
     <div class="container">
@@ -552,25 +553,12 @@
             }).format(num);
         }
 
-        // 載入公司列表
+        // 載入公司列表（填入新增/編輯表單的公司下拉選單）
         function loadCompanies(callback) {
-            fetch(`${API_BASE}/companies?active=true`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.error) {
-                        if (callback) callback();
-                        return;
-                    }
-                    companiesList = data.data || [];
-                    const select = document.getElementById('modalCompanyId');
-                    select.innerHTML = '<option value="">請選擇公司</option>' +
-                        companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-                    if (callback) callback();
-                })
-                .catch(err => {
-                    console.error('載入公司列表錯誤:', err);
-                    if (callback) callback();
-                });
+            AccountSelect.loadCompanies(document.getElementById('modalCompanyId')).then((list) => {
+                if (list) companiesList = list;
+                if (callback) callback();
+            });
         }
 
         // 開啟新增模態框

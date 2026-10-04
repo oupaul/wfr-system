@@ -386,6 +386,7 @@
         }
     </style>
     <script src="/js/auth-common.js"></script>
+    <script src="/js/account-select.js"></script>
 </head>
 <body>
     <div class="container">
@@ -635,37 +636,17 @@
         const frequencyLabels = { monthly: '每月', quarterly: '每季', yearly: '每年' };
 
         function loadCompanies(callback) {
-            fetch(`${API_BASE}/companies?active=true`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.error) { if (callback) callback(); return; }
-                    companiesList = data.data || [];
-                    const select = document.getElementById('modalCompanyId');
-                    select.innerHTML = '<option value="">請選擇公司</option>' +
-                        companiesList.map(c => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
-                    if (callback) callback();
-                })
-                .catch(err => { console.error('載入公司列表錯誤:', err); if (callback) callback(); });
+            AccountSelect.loadCompanies(document.getElementById('modalCompanyId')).then((list) => {
+                if (list) companiesList = list;
+                if (callback) callback();
+            });
         }
 
         function loadBankAccounts(companyId, callback) {
-            let url = `${API_BASE}/bank-accounts?active=true`;
-            if (companyId) url += `&company_id=${companyId}`;
-            fetch(url)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.error) { if (callback) callback(); return; }
-                    bankAccountsList = data.data || [];
-                    const select = document.getElementById('modalAccountId');
-                    select.innerHTML = '<option value="">請選擇帳戶</option>' +
-                        bankAccountsList.map(a => {
-                            const bankAndType = [a.bank_name, a.account_type].filter(Boolean).join(' - ');
-                            const label = `${escapeHtml(a.account_name)}${bankAndType ? ' (' + escapeHtml(bankAndType) + ')' : ''}${a.account_number ? ' - ' + escapeHtml(a.account_number) : ''}${a.company_name ? ' - ' + escapeHtml(a.company_name) : ''}`;
-                            return `<option value="${a.id}" data-account-number="${escapeHtml(a.account_number || '')}">${label}</option>`;
-                        }).join('');
-                    if (callback) callback();
-                })
-                .catch(err => { console.error('載入銀行帳戶列表錯誤:', err); if (callback) callback(); });
+            AccountSelect.loadAccounts(document.getElementById('modalAccountId'), companyId, { accountNumberAttr: true }).then((list) => {
+                if (list) bankAccountsList = list;
+                if (callback) callback();
+            });
         }
 
         function loadFinancingOptions(callback) {
