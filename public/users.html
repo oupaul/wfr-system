@@ -777,7 +777,7 @@
             const roleLabels = { admin: ['role-admin', '管理員'], finance: ['role-finance', '財務人員'], user: ['role-user', '一般人員'] };
 
             tbody.innerHTML = users.map(u => {
-                const lastLogin = u.last_login ? new Date(u.last_login).toLocaleString('zh-TW') : '從未登入';
+                const lastLogin = u.last_login ? formatDateTime(u.last_login) : '從未登入';
                 const [roleClass, roleLabel] = roleLabels[u.role] || roleLabels.user;
                 return `
                     <tr>
@@ -859,7 +859,7 @@
                                 <td><span class="${roleClass}">${roleLabel}</span></td>
                                 <td>${escapeHtml(r.device)}</td>
                                 <td>${escapeHtml(r.ip || '-')}</td>
-                                <td>${new Date(r.login_at).toLocaleString('zh-TW', { hour12: false })}</td>
+                                <td>${formatDateTime(r.login_at)}</td>
                                 <td>${r.is_self ? '剛剛' : formatIdle(r.idle_seconds)}</td>
                             </tr>`;
                     }).join('');
@@ -892,7 +892,7 @@
                     box.className = 'notice-current';
                     box.textContent = `發佈中：${n.message || '（使用預設文字）'}`
                         + (n.scheduled_at ? `\n預計更新時間：${n.scheduled_at.replace('T', ' ')}` : '')
-                        + `\n發佈者：${n.created_by || '-'}，發佈時間：${new Date(n.created_at).toLocaleString('zh-TW', { hour12: false })}`;
+                        + `\n發佈者：${n.created_by || '-'}，發佈時間：${formatDateTime(n.created_at)}`;
                     clearBtn.style.display = 'inline-block';
                 })
                 .catch(err => console.error('載入系統通知失敗:', err));

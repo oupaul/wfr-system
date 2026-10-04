@@ -347,8 +347,7 @@
         // 格式化日期
         function formatDate(dateString) {
             if (!dateString) return '-';
-            const date = new Date(dateString);
-            return date.toLocaleString('zh-TW');
+            return formatDateTime(dateString);
         }
 
         // 載入自動備份排程設定

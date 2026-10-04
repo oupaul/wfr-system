@@ -352,10 +352,33 @@
         return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
     }
 
+    /**
+     * 把資料庫／API 回來的時間顯示成台北時間，格式 2026/10/04 17:16:38。
+     * SQLite 的 CURRENT_TIMESTAMP 存的是 UTC，字串長得像 '2026-10-04 09:16:38'（沒有時區標記），
+     * 直接丟給 new Date() 會被當成瀏覽器本地時間，結果少了 8 小時；這裡明確當成 UTC 再轉台北時間。
+     * 帶 Z 或 +08:00 的 ISO 字串、Date 物件則直接轉換。
+     */
+    function formatDateTime(value) {
+        if (!value) return '-';
+        let v = value;
+        if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(v.trim())) {
+            v = v.trim().replace(' ', 'T') + 'Z';
+        }
+        const d = new Date(v);
+        if (isNaN(d.getTime())) return String(value);
+        return new Intl.DateTimeFormat('zh-TW', {
+            timeZone: 'Asia/Taipei',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', second: '2-digit',
+            hour12: false
+        }).format(d);
+    }
+
     // ==================== 對外暴露 ====================
     window.checkAuth = checkAuth;
     window.handleLogout = handleLogout;
     window.escapeHtml = escapeHtml;
     window.showMessage = showMessage;
     window.todayInTaipei = todayInTaipei;
+    window.formatDateTime = formatDateTime;
 })();

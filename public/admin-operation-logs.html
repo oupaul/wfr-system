@@ -165,10 +165,9 @@
             const user = await window.checkAuth({ adminOnly: true });
             return !!user;
         }
+        // 操作時間以台北時間顯示（資料庫存的是 UTC，換算見 auth-common.js 的 formatDateTime）
         function formatDate(s) {
-            if (!s) return '-';
-            const d = new Date(s);
-            return d.toLocaleString('zh-TW');
+            return formatDateTime(s);
         }
         function entityTypeLabel(t) {
             const map = { transaction: '收支記錄', company: '公司', bank_account: '銀行帳戶', settlement: '結算', user: '使用者' };
