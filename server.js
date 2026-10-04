@@ -91,7 +91,7 @@ app.use(cors((req, callback) => {
     callback(null, { origin: allow, credentials: true });
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' })); // 貼上匯入單次最多 1000 筆，預設 100kb 不夠
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 

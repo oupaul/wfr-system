@@ -267,6 +267,32 @@
             background-color: rgba(0,0,0,0.5);
         }
 
+        /* ===== 貼上匯入 ===== */
+        #pasteModal .modal-content { max-width: 1280px; margin: 3% auto; }
+        .paste-top { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+        .paste-top .form-group { flex: 1 1 280px; margin-bottom: 0; }
+        .paste-help { font-size: 13px; color: #475569; background: #F8FAFC; border-left: 3px solid #F06000; padding: 8px 12px; margin-bottom: 10px; line-height: 1.7; }
+        #pasteInput { width: 100%; font-family: Consolas, Menlo, monospace; font-size: 13px; padding: 8px 10px; border: 1px solid #CBD5E1; border-radius: 6px; white-space: pre; overflow: auto; }
+        .paste-summary { margin: 10px 0; font-size: 14px; color: #1E293B; }
+        .paste-summary .bad { color: #dc3545; font-weight: bold; }
+        .paste-summary .warn { color: #F06000; font-weight: bold; }
+        .paste-table-wrap { max-height: 42vh; overflow: auto; border: 1px solid #E2E8F0; border-radius: 6px; }
+        .paste-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .paste-table th { position: sticky; top: 0; background: #F8FAFC; z-index: 1; padding: 6px 6px; text-align: left; white-space: nowrap; border-bottom: 1px solid #E2E8F0; }
+        .paste-table td { padding: 3px 4px; border-bottom: 1px solid #F1F5F9; vertical-align: top; }
+        .paste-table input[type="text"], .paste-table select { width: 100%; min-width: 70px; padding: 4px 6px; border: 1px solid #E2E8F0; border-radius: 4px; font-size: 13px; font-family: inherit; background: #fff; }
+        .paste-table input.col-date { min-width: 100px; }
+        .paste-table input.col-amount { min-width: 90px; text-align: right; }
+        .paste-table select.col-account { min-width: 200px; }
+        .paste-table tr.row-error td { background: #FFF5F5; }
+        .paste-table tr.row-excluded td { opacity: 0.5; }
+        .paste-status { min-width: 150px; font-size: 12px; line-height: 1.5; }
+        .paste-status .bad { color: #dc3545; font-weight: bold; }
+        .paste-status .warn { color: #F06000; }
+        .paste-status .ok { color: #475569; }
+        .paste-remove { border: none; background: transparent; color: #94A3B8; cursor: pointer; font-size: 16px; }
+        .paste-remove:hover { color: #dc3545; }
+
         .modal-content {
             background-color: #fefefe;
             margin: 5% auto;
@@ -563,6 +589,7 @@
                     <button class="btn btn-secondary" onclick="downloadTemplate()">📄 下載範本</button>
                     <button class="btn btn-secondary" onclick="exportToExcel()">📥 匯出Excel</button>
                     <button class="btn btn-secondary" id="importExcelBtn" onclick="document.getElementById('importFileInput').click()">📤 匯入Excel</button>
+                    <button class="btn btn-secondary" id="pasteImportBtn" onclick="openPasteModal()">📋 貼上匯入</button>
                     <input type="file" id="importFileInput" accept=".xlsx,.xls" style="display: none;" onchange="importFromExcel(event)">
                     <button class="btn btn-secondary" id="transferBtn" onclick="openTransferModal()">🔁 轉帳</button>
                     <button class="btn btn-secondary" data-editor-only onclick="window.location.href='/recurring-transactions.html'">🔁 週期範本</button>
@@ -749,7 +776,57 @@
         </div>
     </div>
 
-    <!-- 轉帳模態框：一次寫入轉出帳戶支出 + 轉入帳戶收入兩筆記錄，共用同一個
+        <!-- 貼上匯入：從 Excel 複製儲存格後直接貼上，即時解析並預覽，確認後才寫入 -->
+    <div id="pasteModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📋 貼上匯入收支記錄</h2>
+                <button class="close" onclick="closePasteModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="paste-help">
+                    在 Excel 選取要匯入的儲存格（可含表頭）→ <strong>Ctrl+C</strong> → 點下方輸入框 → <strong>Ctrl+V</strong>，系統會即時解析並顯示預覽。<br>
+                    欄位順序：<strong>日期、類型（收入/支出）、金額、類別、說明、備註</strong>（之後可再接 公司、帳戶、帳號）。第一列若是表頭（日期、類型、金額…），會依欄名辨識，順序不拘。<br>
+                    日期支援 2026/10/04、2026-10-04、民國 115/10/04；金額可含千分位、$、括號負數。預覽表格內的每一格都可以直接修改。
+                </div>
+                <div class="paste-top">
+                    <div class="form-group">
+                        <label for="pasteDefaultAccount">預設帳戶（資料沒有帳戶欄時整批套用）</label>
+                        <select id="pasteDefaultAccount" onchange="onPasteDefaultsChange()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="pasteDefaultType">資料沒有填類型時</label>
+                        <select id="pasteDefaultType" onchange="onPasteDefaultsChange()">
+                            <option value="">要求每列都填類型（最安全）</option>
+                            <option value="expense">全部視為支出</option>
+                            <option value="income">全部視為收入</option>
+                            <option value="sign">依金額正負（正數收入、負數支出）</option>
+                        </select>
+                    </div>
+                </div>
+                <textarea id="pasteInput" rows="4" placeholder="在這裡貼上從 Excel 複製的內容…" oninput="schedulePasteParse()"></textarea>
+                <div id="pasteSummary" class="paste-summary"></div>
+                <div class="paste-table-wrap">
+                    <table class="paste-table">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>匯入</th><th>檢查結果</th><th>日期</th><th>類型</th><th>金額</th>
+                                <th>類別</th><th>說明</th><th>帳戶</th><th>備註</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="pasteTableBody"></tbody>
+                    </table>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-cancel" onclick="closePasteModal()">取消</button>
+                    <button type="button" class="btn btn-secondary" onclick="clearPaste()">清除重貼</button>
+                    <button type="button" class="btn btn-primary" id="pasteConfirmBtn" onclick="confirmPasteImport()" disabled>確認匯入</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- 轉帳模態框：一次寫入轉出帳戶支出 + 轉入帳戶收入兩筆記錄，共用同一個
          transfer_group_id，排除在總收入/總支出統計之外；轉帳記錄只能整組刪除，
          不支援編輯 -->
     <div id="transferModal" class="modal">
@@ -1813,6 +1890,515 @@
             }
         }
 
+        // ==================== 貼上匯入（Excel 複製貼上） ====================
+        // 流程：貼上 → 前端即時解析（parseTsv / 欄位對應 / 逐列驗證）→ 預覽表格可直接修改 →
+        // 伺服器 dry_run 補驗證與「疑似重複」偵測 → 使用者按「確認匯入」才真正寫入（整批全有或全無）。
+        const PASTE_MAX_ROWS = 1000;
+        let pasteRows = [];
+        let pasteAccounts = [];
+        let pasteNextId = 1;
+        let pasteParseTimer = null;
+        let pasteServerTimer = null;
+        let pasteServerSeq = 0;
+        let pasteServerPending = false;
+        let pasteNotice = '';
+
+        const PASTE_HEADER_KEYS = [
+            ['accountNumber', ['帳號', 'account_number', 'accountnumber']],
+            ['account', ['帳戶', 'account']],
+            ['company', ['公司', 'company']],
+            ['date', ['日期', 'date']],
+            ['type', ['類型', '收支', 'type']],
+            ['amount', ['金額', 'amount']],
+            ['category', ['類別', 'category']],
+            ['description', ['說明', '描述', '摘要', 'description', 'desc']],
+            ['remarks', ['備註', 'remarks', 'note']]
+        ];
+        const PASTE_POSITIONAL = ['date', 'type', 'amount', 'category', 'description', 'remarks', 'company', 'account', 'accountNumber'];
+
+        // 解析 Excel 複製出來的 Tab 分隔文字（含被雙引號包起來、內有換行/Tab 的儲存格）
+        function parseTsv(text) {
+            const rows = [];
+            let row = [];
+            let field = '';
+            let inQuotes = false;
+            for (let i = 0; i < text.length; i++) {
+                const ch = text[i];
+                if (inQuotes) {
+                    if (ch === '"') {
+                        if (text[i + 1] === '"') { field += '"'; i++; } else { inQuotes = false; }
+                    } else {
+                        field += ch;
+                    }
+                } else if (ch === '"' && field === '') {
+                    inQuotes = true;
+                } else if (ch === '\t') {
+                    row.push(field); field = '';
+                } else if (ch === '\n' || ch === '\r') {
+                    if (ch === '\r' && text[i + 1] === '\n') i++;
+                    row.push(field); field = '';
+                    rows.push(row); row = [];
+                } else {
+                    field += ch;
+                }
+            }
+            row.push(field);
+            rows.push(row);
+            return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
+        }
+
+        function detectPasteHeader(firstRow) {
+            const mapping = {};
+            firstRow.forEach((cell, i) => {
+                const h = String(cell).trim().toLowerCase();
+                if (!h) return;
+                for (const [field, keywords] of PASTE_HEADER_KEYS) {
+                    if (mapping[field] === undefined && keywords.some((k) => h.includes(k))) {
+                        mapping[field] = i;
+                        break;
+                    }
+                }
+            });
+            const hit = Object.keys(mapping).length;
+            const looksLikeData = parsePasteDate(String(firstRow[mapping.date !== undefined ? mapping.date : 0] || '')) !== null;
+            return hit >= 2 && !looksLikeData ? mapping : null;
+        }
+
+        // 回傳 'YYYY-MM-DD' 或 null；支援西元/民國、/ - . 分隔、中文年月日、純數字 8 碼(西元)/7 碼(民國)
+        function parsePasteDate(raw) {
+            let str = String(raw || '').trim().replace(/\s+.*$/, '');
+            if (!str) return null;
+            let y, m, d, match;
+            if ((match = str.match(/^(\d{4})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})日?$/))) {
+                [y, m, d] = [+match[1], +match[2], +match[3]];
+            } else if ((match = str.match(/^(\d{2,3})[\/\-.年](\d{1,2})[\/\-.月](\d{1,2})日?$/))) {
+                [y, m, d] = [+match[1] + 1911, +match[2], +match[3]];
+            } else if ((match = str.match(/^(\d{4})(\d{2})(\d{2})$/))) {
+                [y, m, d] = [+match[1], +match[2], +match[3]];
+            } else if ((match = str.match(/^(\d{3})(\d{2})(\d{2})$/))) {
+                [y, m, d] = [+match[1] + 1911, +match[2], +match[3]];
+            } else {
+                return null;
+            }
+            const dt = new Date(Date.UTC(y, m - 1, d));
+            if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+            if (y < 1990 || y > 2100) return null;
+            return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        }
+
+        // 回傳有正負號的數字或 null
+        function parsePasteAmount(raw) {
+            let str = String(raw === undefined || raw === null ? '' : raw).trim();
+            if (!str) return null;
+            let negative = false;
+            if (/^\(.*\)$/.test(str)) { negative = true; str = str.slice(1, -1); }
+            str = str.replace(/[,\s$＄]|NT|元|TWD/gi, '').replace(/[−–—]/g, '-');
+            if (str.startsWith('-')) { negative = !negative; str = str.slice(1); }
+            if (!/^\d+(\.\d+)?$/.test(str)) return null;
+            const n = parseFloat(str);
+            return negative ? -n : n;
+        }
+
+        function parsePasteType(raw) {
+            const t = String(raw || '').trim().toLowerCase();
+            if (!t) return { type: '', error: '' };
+            if (/收入|income|存入|入帳|^in$/.test(t)) return { type: 'income', error: '' };
+            if (/支出|expense|提領|出帳|付款|^out$/.test(t)) return { type: 'expense', error: '' };
+            return { type: '', error: `無法辨識類型「${String(raw).trim()}」` };
+        }
+
+        function resolvePasteAccount(company, name, number) {
+            company = String(company || '').trim();
+            name = String(name || '').trim();
+            number = String(number || '').trim();
+            if (!name) return { id: '', error: '' };
+            const matches = pasteAccounts.filter((a) => a.account_name === name
+                && (!company || (a.company_name || '') === company)
+                && (!number || (a.account_number || '') === number));
+            if (matches.length === 1) return { id: String(matches[0].id), error: '' };
+            if (matches.length === 0) return { id: '', error: `找不到帳戶「${name}」，請從下拉選單選擇` };
+            return { id: '', error: `有多個同名帳戶「${name}」，請從下拉選單選擇` };
+        }
+
+        function pasteAccountById(id) {
+            return pasteAccounts.find((a) => String(a.id) === String(id)) || null;
+        }
+
+        function schedulePasteParse() {
+            clearTimeout(pasteParseTimer);
+            pasteParseTimer = setTimeout(parsePasteInput, 150);
+        }
+
+        function parsePasteInput() {
+            const text = document.getElementById('pasteInput').value;
+            pasteRows = [];
+            pasteNotice = '';
+            const table = text.trim() ? parseTsv(text) : [];
+            if (table.length > 0) {
+                const mapping = detectPasteHeader(table[0]);
+                let dataRows = table;
+                let colOf;
+                if (mapping) {
+                    dataRows = table.slice(1);
+                    colOf = (field) => mapping[field];
+                    if (mapping.date === undefined || mapping.amount === undefined) {
+                        pasteNotice = '表頭中找不到「日期」或「金額」欄，請確認第一列表頭名稱';
+                        dataRows = [];
+                    }
+                } else {
+                    colOf = (field) => { const i = PASTE_POSITIONAL.indexOf(field); return i >= 0 ? i : undefined; };
+                    if (table.every((r) => r.length <= 1)) {
+                        pasteNotice = '沒有偵測到欄位分隔，請直接從 Excel 選取儲存格複製（不要貼成單欄文字）';
+                    }
+                }
+                if (dataRows.length > PASTE_MAX_ROWS) {
+                    pasteNotice = `單次最多匯入 ${PASTE_MAX_ROWS} 列，目前貼了 ${dataRows.length} 列，請分批貼上`;
+                    dataRows = [];
+                }
+                const get = (cells, field) => {
+                    const i = colOf(field);
+                    return i === undefined || i >= cells.length ? '' : String(cells[i]).trim();
+                };
+                pasteRows = dataRows.map((cells) => {
+                    const dateRaw = get(cells, 'date');
+                    const isoDate = parsePasteDate(dateRaw);
+                    const t = parsePasteType(get(cells, 'type'));
+                    const company = get(cells, 'company'), account = get(cells, 'account'), number = get(cells, 'accountNumber');
+                    const resolved = resolvePasteAccount(company, account, number);
+                    const hasPastedAccount = !!account;
+                    return {
+                        id: pasteNextId++,
+                        dateRaw: isoDate || dateRaw,
+                        type: t.type,
+                        typeError: t.error,
+                        amountRaw: get(cells, 'amount'),
+                        category: get(cells, 'category'),
+                        description: get(cells, 'description'),
+                        remarks: get(cells, 'remarks'),
+                        accountId: hasPastedAccount ? resolved.id : '',
+                        accountSource: hasPastedAccount ? 'paste' : 'default',
+                        accountError: hasPastedAccount ? resolved.error : '',
+                        include: true,
+                        serverErrors: [],
+                        duplicate: false,
+                        dupHandled: false
+                    };
+                });
+                applyPasteDefaultAccount();
+            }
+            renderPaste();
+            scheduleServerCheck();
+        }
+
+        function applyPasteDefaultAccount() {
+            const defaultId = document.getElementById('pasteDefaultAccount').value;
+            pasteRows.forEach((r) => {
+                if (r.accountSource === 'default') r.accountId = defaultId;
+            });
+        }
+
+        function onPasteDefaultsChange() {
+            applyPasteDefaultAccount();
+            renderPaste();
+            scheduleServerCheck();
+        }
+
+        // 逐列本機驗證，回傳 { errors, warnings, payload }
+        function evaluatePasteRow(row) {
+            const errors = [];
+            const warnings = [];
+            const date = parsePasteDate(row.dateRaw);
+            if (!date) errors.push('日期無法辨識');
+            else {
+                const diffDays = Math.abs((new Date(date + 'T00:00:00') - new Date()) / 86400000);
+                if (diffDays > 365) warnings.push('日期與今天相差超過一年，請確認年份（民國/西元）');
+            }
+
+            const signed = parsePasteAmount(row.amountRaw);
+            if (signed === null) errors.push('金額不是有效數字');
+            else if (signed === 0) errors.push('金額不可為 0');
+
+            let type = row.type;
+            if (!type) {
+                if (row.typeError) errors.push(row.typeError);
+                else {
+                    const def = document.getElementById('pasteDefaultType').value;
+                    if (def === 'income' || def === 'expense') type = def;
+                    else if (def === 'sign' && signed !== null && signed !== 0) type = signed < 0 ? 'expense' : 'income';
+                    else if (def === 'sign') { /* 金額錯誤已經回報 */ }
+                    else errors.push('缺少類型（請選擇，或在上方設定預設類型）');
+                }
+            } else if (signed !== null && signed < 0) {
+                warnings.push('金額為負數，已取絕對值');
+            }
+
+            if (row.accountError) errors.push(row.accountError);
+            const account = row.accountId ? pasteAccountById(row.accountId) : null;
+            if (!row.accountId && !row.accountError) warnings.push('未指定帳戶，不會影響任何帳戶餘額');
+            row.serverErrors.forEach((e) => errors.push(e));
+            if (row.description.length > 500 || row.category.length > 500 || row.remarks.length > 500) errors.push('文字欄位不可超過 500 字');
+
+            const payload = errors.length === 0 ? {
+                transaction_date: date,
+                type,
+                amount: Math.abs(signed),
+                category: row.category || null,
+                description: row.description || null,
+                company_name: account ? (account.company_name || null) : null,
+                account_name: account ? account.account_name : null,
+                account_number: account ? (account.account_number || null) : null,
+                remarks: row.remarks || null
+            } : null;
+            return { errors, warnings, payload, effectiveType: type };
+        }
+
+        function scheduleServerCheck() {
+            clearTimeout(pasteServerTimer);
+            pasteServerSeq++;
+            const seq = pasteServerSeq;
+            const candidates = pasteRows.map((r) => ({ row: r, ev: evaluatePasteRow(r) })).filter((x) => x.ev.payload);
+            if (candidates.length === 0) { pasteServerPending = false; updatePasteButtons(); return; }
+            pasteServerPending = true;
+            updatePasteButtons();
+            pasteServerTimer = setTimeout(() => {
+                fetch(`${API_BASE}/transactions/bulk`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dry_run: true, rows: candidates.map((x) => x.ev.payload) })
+                })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (seq !== pasteServerSeq) return; // 期間內又有修改，丟棄過時的結果
+                        pasteServerPending = false;
+                        if (data.rows) {
+                            data.rows.forEach((r) => {
+                                const row = candidates[r.index].row;
+                                row.serverErrors = r.errors || [];
+                                row.duplicate = !!r.duplicate;
+                                if (row.duplicate && !row.dupHandled) { row.include = false; row.dupHandled = true; }
+                                if (!row.duplicate) row.dupHandled = false;
+                            });
+                        }
+                        renderPaste();
+                    })
+                    .catch((err) => {
+                        if (seq !== pasteServerSeq) return;
+                        console.error('貼上匯入預檢失敗:', err);
+                        pasteServerPending = false;
+                        renderPaste();
+                    });
+            }, 400);
+        }
+
+        function renderPaste() {
+            const tbody = document.getElementById('pasteTableBody');
+            // 重新繪製會讓焦點消失（Tab 切到下一格時 change 事件觸發），記下來再還原
+            const active = document.activeElement;
+            const focusKey = active && active.dataset && active.dataset.field && tbody.contains(active)
+                ? { id: active.dataset.id, field: active.dataset.field } : null;
+
+            const optionsBase = pasteAccounts.map((a) => `<option value="${a.id}">${AccountSelect.buildAccountLabel(a, true)}</option>`).join('');
+            let includedValid = 0, includedBad = 0, dupCount = 0, excluded = 0, totalIncome = 0, totalExpense = 0, errorRows = 0;
+            const seenKeys = new Map();
+
+            const html = pasteRows.map((row, i) => {
+                const ev = evaluatePasteRow(row);
+                row._ev = ev;
+                if (row.duplicate) dupCount++;
+                if (ev.errors.length) errorRows++;
+                if (!row.include) excluded++;
+                else if (ev.errors.length) includedBad++;
+                else {
+                    includedValid++;
+                    if (ev.effectiveType === 'income') totalIncome += ev.payload.amount; else totalExpense += ev.payload.amount;
+                }
+                // 同一批裡內容完全相同的列（可能是貼了兩次，也可能本來就是兩筆一樣的款項）
+                const warnings = ev.warnings.slice();
+                if (ev.payload) {
+                    const key = JSON.stringify(ev.payload);
+                    if (seenKeys.has(key)) warnings.push(`與第 ${seenKeys.get(key)} 列內容完全相同`);
+                    else seenKeys.set(key, i + 1);
+                }
+                if (row.duplicate) warnings.unshift('資料庫已有相同的記錄（疑似重複）');
+
+                const statusParts = [];
+                if (ev.errors.length) ev.errors.forEach((e) => statusParts.push(`<div class="bad">✗ ${escapeHtml(e)}</div>`));
+                warnings.forEach((w) => statusParts.push(`<div class="warn">⚠ ${escapeHtml(w)}</div>`));
+                if (!ev.errors.length && warnings.length === 0) statusParts.push('<div class="ok">✓ 可匯入</div>');
+
+                const typeOptions = [
+                    ['', '（未指定）'], ['income', '收入'], ['expense', '支出']
+                ].map(([v, l]) => `<option value="${v}"${row.type === v ? ' selected' : ''}>${l}</option>`).join('');
+                const accountSelected = row.accountId
+                    ? optionsBase.replace(`value="${row.accountId}"`, `value="${row.accountId}" selected`) : optionsBase;
+                const rowClass = !row.include ? 'row-excluded' : (ev.errors.length ? 'row-error' : '');
+                const id = row.id;
+                return `<tr class="${rowClass}">
+                    <td>${i + 1}</td>
+                    <td><input type="checkbox" data-id="${id}" data-field="include"${row.include ? ' checked' : ''}></td>
+                    <td class="paste-status">${statusParts.join('')}</td>
+                    <td><input type="text" class="col-date" data-id="${id}" data-field="dateRaw" value="${escapeHtml(row.dateRaw)}"></td>
+                    <td><select data-id="${id}" data-field="type">${typeOptions}</select></td>
+                    <td><input type="text" class="col-amount" data-id="${id}" data-field="amountRaw" value="${escapeHtml(row.amountRaw)}"></td>
+                    <td><input type="text" data-id="${id}" data-field="category" value="${escapeHtml(row.category)}"></td>
+                    <td><input type="text" data-id="${id}" data-field="description" value="${escapeHtml(row.description)}"></td>
+                    <td><select class="col-account" data-id="${id}" data-field="accountId"><option value="">（不指定帳戶）</option>${accountSelected}</select></td>
+                    <td><input type="text" data-id="${id}" data-field="remarks" value="${escapeHtml(row.remarks)}"></td>
+                    <td><button type="button" class="paste-remove" data-id="${id}" data-remove="1" title="移除這一列">✕</button></td>
+                </tr>`;
+            }).join('');
+            tbody.innerHTML = html || `<tr><td colspan="11" style="text-align:center;padding:24px;color:#94A3B8;">${pasteNotice ? escapeHtml(pasteNotice) : '貼上資料後，這裡會即時顯示解析結果'}</td></tr>`;
+
+            const summary = document.getElementById('pasteSummary');
+            if (pasteRows.length === 0) {
+                summary.innerHTML = pasteNotice ? `<span class="bad">${escapeHtml(pasteNotice)}</span>` : '';
+            } else {
+                const parts = [`共 <strong>${pasteRows.length}</strong> 列`,
+                    `將匯入 <strong>${includedValid}</strong> 筆（收入 ${formatCurrency(totalIncome)}、支出 ${formatCurrency(totalExpense)}）`];
+                if (errorRows) parts.push(`<span class="bad">${errorRows} 列有錯誤${includedBad ? '（已勾選匯入的錯誤列必須修正或取消勾選）' : ''}</span>`);
+                if (dupCount) parts.push(`<span class="warn">${dupCount} 列疑似重複（預設不匯入，確定要匯入請手動勾選）</span>`);
+                if (excluded) parts.push(`已排除 ${excluded} 列`);
+                summary.innerHTML = parts.join('｜');
+            }
+            pasteState = { includedValid, includedBad };
+            updatePasteButtons();
+
+            if (focusKey) {
+                const el = tbody.querySelector(`[data-id="${focusKey.id}"][data-field="${focusKey.field}"]`);
+                if (el) el.focus();
+            }
+        }
+
+        let pasteState = { includedValid: 0, includedBad: 0 };
+        function updatePasteButtons() {
+            const btn = document.getElementById('pasteConfirmBtn');
+            if (!btn) return;
+            const ok = pasteState.includedValid > 0 && pasteState.includedBad === 0 && !pasteServerPending;
+            btn.disabled = !ok;
+            btn.textContent = pasteServerPending ? '檢查中…' : (pasteState.includedValid > 0 ? `確認匯入 ${pasteState.includedValid} 筆` : '確認匯入');
+        }
+
+        function onPasteCellChange(event) {
+            const el = event.target;
+            const field = el.dataset && el.dataset.field;
+            if (!field) return;
+            const row = pasteRows.find((r) => String(r.id) === el.dataset.id);
+            if (!row) return;
+            if (field === 'include') {
+                row.include = el.checked;
+            } else if (field === 'accountId') {
+                row.accountId = el.value;
+                row.accountSource = 'manual';
+                row.accountError = '';
+            } else if (field === 'type') {
+                row.type = el.value;
+                row.typeError = '';
+            } else if (field === 'dateRaw') {
+                row.dateRaw = parsePasteDate(el.value) || el.value.trim();
+            } else {
+                row[field] = el.value.trim();
+            }
+            if (field !== 'include') row.serverErrors = [];
+            renderPaste();
+            if (field !== 'include') scheduleServerCheck();
+        }
+
+        function onPasteTableClick(event) {
+            const btn = event.target.closest && event.target.closest('[data-remove]');
+            if (!btn) return;
+            pasteRows = pasteRows.filter((r) => String(r.id) !== btn.dataset.id);
+            renderPaste();
+            scheduleServerCheck();
+        }
+
+        window.openPasteModal = function() {
+            document.getElementById('pasteInput').value = '';
+            pasteRows = [];
+            pasteNotice = '';
+            pasteServerPending = false;
+            pasteServerSeq++;
+            document.getElementById('pasteModal').style.display = 'block';
+            renderPaste();
+            AccountSelect.loadAccounts(null, null).then((list) => {
+                pasteAccounts = list || [];
+                const sel = document.getElementById('pasteDefaultAccount');
+                const keep = sel.value;
+                sel.innerHTML = '<option value="">（不指定，由每列自行決定）</option>'
+                    + pasteAccounts.map((a) => `<option value="${a.id}">${AccountSelect.buildAccountLabel(a, true)}</option>`).join('');
+                sel.value = keep;
+                if (pasteRows.length) parsePasteInput();
+            });
+            document.getElementById('pasteInput').focus();
+        };
+
+        window.closePasteModal = function() {
+            if (pasteRows.length > 0 && !confirm('已貼上的資料尚未匯入，確定要關閉嗎？')) return;
+            clearTimeout(pasteParseTimer);
+            clearTimeout(pasteServerTimer);
+            pasteServerSeq++;
+            document.getElementById('pasteModal').style.display = 'none';
+        };
+
+        window.clearPaste = function() {
+            document.getElementById('pasteInput').value = '';
+            parsePasteInput();
+            document.getElementById('pasteInput').focus();
+        };
+
+        window.confirmPasteImport = function() {
+            const rows = pasteRows.filter((r) => r.include && r._ev && r._ev.payload);
+            if (rows.length === 0) return;
+            const income = rows.filter((r) => r._ev.payload.type === 'income');
+            const expense = rows.filter((r) => r._ev.payload.type === 'expense');
+            const sum = (list) => list.reduce((t, r) => t + r._ev.payload.amount, 0);
+            const withoutAccount = rows.filter((r) => !r._ev.payload.account_name).length;
+            const msg = `即將匯入 ${rows.length} 筆收支記錄：\n`
+                + `　收入 ${income.length} 筆，共 ${formatCurrency(sum(income))}\n`
+                + `　支出 ${expense.length} 筆，共 ${formatCurrency(sum(expense))}\n`
+                + (withoutAccount ? `　（其中 ${withoutAccount} 筆沒有指定帳戶）\n` : '')
+                + '\n匯入後會更新相關帳戶的餘額，確定要匯入嗎？';
+            if (!confirm(msg)) return;
+
+            const btn = document.getElementById('pasteConfirmBtn');
+            btn.disabled = true;
+            btn.textContent = '匯入中…';
+            fetch(`${API_BASE}/transactions/bulk`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: rows.map((r) => r._ev.payload) })
+            })
+                .then((res) => res.json())
+                .then((data) => {
+                    if (data.error) {
+                        if (data.rows) {
+                            data.rows.forEach((r) => { if (r.errors && r.errors.length) rows[r.index].serverErrors = r.errors; });
+                            renderPaste();
+                        }
+                        showMessage(data.error, 'error');
+                        updatePasteButtons();
+                        return;
+                    }
+                    pasteRows = []; // 已匯入，關閉時不需要再提醒
+                    document.getElementById('pasteModal').style.display = 'none';
+                    showMessage(data.message || '匯入完成', 'success');
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch((err) => {
+                    console.error('貼上匯入錯誤:', err);
+                    showMessage('匯入失敗，請稍後再試', 'error');
+                    renderPaste();
+                });
+        };
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const body = document.getElementById('pasteTableBody');
+            body.addEventListener('change', onPasteCellChange);
+            body.addEventListener('click', onPasteTableClick);
+        });
+
         // 頁面載入時執行
         let canEdit = false;
         document.addEventListener('DOMContentLoaded', async function() {
@@ -1826,6 +2412,8 @@
                 const batchBar = document.getElementById('batchActionsBar');
                 const selectAllHeader = document.getElementById('selectAllHeader');
                 if (importBtn) importBtn.style.display = 'none';
+                const pasteBtn = document.getElementById('pasteImportBtn');
+                if (pasteBtn) pasteBtn.style.display = 'none';
                 if (addBtn) addBtn.style.display = 'none';
                 if (transferBtn) transferBtn.style.display = 'none';
                 if (batchBar) batchBar.style.display = 'none';

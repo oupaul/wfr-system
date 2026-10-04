@@ -17,6 +17,7 @@
   - **帳戶卡片**：每帳戶餘額、安全水位、缺口預測，並提供依銀行、依帳戶類型分類的餘額小計
 - 💰 **收支記錄管理**：新增／修改／刪除、Excel 匯入與匯出、批次刪除、日期/類型/公司/帳戶（公司、帳戶為連動下拉選單，選公司後帳戶只列出該公司的帳戶；同公司同帳戶名稱但不同帳號時能精準區分）/關鍵字（說明、類別、備註）篩選、分頁（每頁 50 筆）、點擊欄位標題可依日期/類型/金額/類別/說明/公司名稱/帳戶/備註排序（再次點擊切換升降冪）
   - 🔁 **帳戶間轉帳**：一次操作在轉出帳戶記一筆支出、轉入帳戶記一筆收入，自動排除在「總收入/總支出」統計之外；轉帳記錄以徽章標示、只能整組刪除（不支援編輯，需重新建立）
+  - 📋 **貼上匯入**：不用存檔上傳，直接在 Excel 選取儲存格複製、貼進視窗，系統即時解析並顯示預覽，確認後才寫入。欄位順序為 日期、類型、金額、類別、說明、備註（可再接 公司、帳戶、帳號），第一列若是表頭則依欄名辨識、順序不拘；日期支援西元/民國與多種分隔、金額可含千分位/$/括號負數、被引號包起來的多行儲存格。預覽表格每格都可直接修改，帳戶可從下拉選單選（同名帳戶會要求指定），可設「預設帳戶」整批套用；資料沒填類型時預設要求每列補上，避免收入/支出被悄悄判錯。逐列顯示錯誤與警告（日期差超過一年、未指定帳戶、同批內容相同），並向伺服器比對「同日期/類型/金額/帳戶/說明」找出疑似重複（預設不匯入，需手動勾選）。已勾選匯入的列只要有錯誤就不能送出，送出時伺服器會再驗證一次，整批全有或全無（單一 SQL 敘述寫入）；每批最多 1000 筆，匯入後每個涉及的帳戶只重算一次餘額、提示早於結算日的筆數，並寫入一筆操作日誌
   - ⚠️ **補登警語**：新增/編輯收支記錄、轉帳（轉出帳戶）、Excel 匯入時，若交易日期早於該帳戶最近一次餘額結算日期，會提示這筆交易不會影響目前計算的帳戶餘額（結算日之後的交易才會被加總），純提醒不擋送出
 - ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳、分頁（每頁 50 筆）；選公司後帳戶名稱可「快速新增帳戶」，不用先跳去銀行帳戶管理建好帳戶再回來（只收帳戶名稱/帳號/銀行名稱/帳戶類型，其他細節設定之後可到銀行帳戶管理補齊），新增後自動選用該帳戶
 - 🏢 **公司管理**：公司主檔維護
@@ -190,7 +191,7 @@ npm run dev
 - `POST /api/auth/logout`：登出
 
 ### 業務 API（需登入；新增／修改／刪除需財務人員或管理員權限，一般人員僅能查詢）
-- **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁、`keyword` 搜尋說明/類別/備註、`sortBy`(date/type/amount/category/description/company/account/remarks，預設 date)/`sortDir`(asc/desc，預設 desc) 排序）、`PUT/DELETE /api/transactions/:id`（轉帳記錄 `PUT` 會回 400，`DELETE` 會連同另一半一起刪除）、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`、`POST /api/transactions/transfer`（帳戶間轉帳，一次寫入兩筆並排除在 `GET /api/transactions/statistics` 統計之外）
+- **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁、`keyword` 搜尋說明/類別/備註、`sortBy`(date/type/amount/category/description/company/account/remarks，預設 date)/`sortDir`(asc/desc，預設 desc) 排序）、`PUT/DELETE /api/transactions/:id`（轉帳記錄 `PUT` 會回 400，`DELETE` 會連同另一半一起刪除）、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`POST /api/transactions/bulk`（貼上匯入，body 為 `{ rows: [...], dry_run? }`，`dry_run` 只驗證並回傳每列錯誤與疑似重複、不寫入）、`GET /api/transactions/export`、`POST /api/transactions/transfer`（帳戶間轉帳，一次寫入兩筆並排除在 `GET /api/transactions/statistics` 統計之外）
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
 - **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額；新增/更新可帶 `manual_principal_balance`（空值或 null＝自動計算，負數或非數字回 400），系統自動記錄 `manual_balance_date`（這兩個欄位只回傳給管理員/財務人員，一般使用者的回應不含，`remaining_principal` 數字不受影響）；刪除前會檢查是否有週期範本連結，有的話回 400）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`

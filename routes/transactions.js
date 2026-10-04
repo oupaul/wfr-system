@@ -11,6 +11,7 @@ const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 const { getLatestSettlement } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
+const bulk = require('../utils/bulkTransactions');
 
 // 確保上傳目錄存在
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -672,6 +673,88 @@ router.post('/import', requireEditor, upload.single('file'), async (req, res) =>
             fs.unlinkSync(filePath);
         }
         logger.error('匯入錯誤:', error);
+        res.status(500).json({ error: '匯入失敗', details: error.message });
+    }
+});
+
+// 貼上匯入（從 Excel 複製貼上）：前端即時解析並顯示預覽，使用者確認後才送出。
+// dry_run=true 只驗證並回傳每列的錯誤與疑似重複，不寫入；否則整批驗證通過才一次寫入（有任何一列錯誤就整批不寫入）。
+router.post('/bulk', requireEditor, async (req, res) => {
+    const rawRows = req.body && req.body.rows;
+    const dryRun = !!(req.body && req.body.dry_run);
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
+        return res.status(400).json({ error: '沒有可匯入的資料' });
+    }
+    if (rawRows.length > bulk.MAX_ROWS) {
+        return res.status(400).json({ error: `單次最多匯入 ${bulk.MAX_ROWS} 筆，請分批貼上` });
+    }
+
+    try {
+        const { rows, hasError } = await bulk.validateRows(rawRows);
+
+        if (dryRun) {
+            const valid = rows.filter((r) => r.errors.length === 0);
+            const dupIdx = new Set((await bulk.findDuplicates(valid.map((r) => r.normalized)))
+                .map((i) => valid[i].index));
+            return res.json({
+                rows: rows.map((r) => ({ index: r.index, errors: r.errors, duplicate: dupIdx.has(r.index) }))
+            });
+        }
+
+        if (hasError) {
+            return res.status(400).json({
+                error: '有資料列未通過驗證，整批未匯入，請修正後再送出',
+                rows: rows.map((r) => ({ index: r.index, errors: r.errors }))
+            });
+        }
+
+        const normalized = rows.map((r) => r.normalized);
+        const { firstId, lastId } = await bulk.insertRows(normalized);
+
+        // 每個涉及的帳戶只重算一次餘額，並統計早於該帳戶最近一次結算的筆數
+        let backdatedCount = 0;
+        const accountMap = new Map();
+        normalized.forEach((n) => {
+            if (!n.account_name) return;
+            const key = `${n.company_name || ''}|${n.account_name}|${n.account_number || ''}`;
+            if (!accountMap.has(key)) accountMap.set(key, { n, dates: [] });
+            accountMap.get(key).dates.push(n.transaction_date);
+        });
+        for (const { n, dates } of accountMap.values()) {
+            try {
+                await updateBankAccountBalance(n.account_name, n.account_number, n.company_name);
+            } catch (balanceErr) {
+                logger.error('更新帳戶餘額失敗:', balanceErr);
+            }
+            try {
+                const settlement = await getLatestSettlement(db, {
+                    companyName: n.company_name || null,
+                    accountName: n.account_name,
+                    accountNumber: n.account_number || null
+                });
+                if (settlement && settlement.settlement_date) {
+                    backdatedCount += dates.filter((d) => d < settlement.settlement_date).length;
+                }
+            } catch (settleErr) {
+                logger.error('檢查結算日期失敗:', settleErr);
+            }
+        }
+
+        const totalIncome = normalized.filter((n) => n.type === 'income').reduce((sum, n) => sum + n.amount, 0);
+        const totalExpense = normalized.filter((n) => n.type === 'expense').reduce((sum, n) => sum + n.amount, 0);
+        writeOperationLog(req, 'create', 'transaction_batch', `${firstId}-${lastId}`, null,
+            { count: normalized.length, first_id: firstId, last_id: lastId, total_income: totalIncome, total_expense: totalExpense },
+            `貼上批次匯入 ${normalized.length} 筆收支記錄（#${firstId}～#${lastId}）`);
+
+        res.json({
+            success: true,
+            importedCount: normalized.length,
+            backdatedCount,
+            message: `已匯入 ${normalized.length} 筆收支記錄`
+                + (backdatedCount > 0 ? `；其中 ${backdatedCount} 筆交易日期早於該帳戶最近一次結算，不會影響目前計算的帳戶餘額，請確認結算金額是否已包含` : '')
+        });
+    } catch (error) {
+        logger.error('貼上匯入錯誤:', error);
         res.status(500).json({ error: '匯入失敗', details: error.message });
     }
 });
