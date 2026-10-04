@@ -308,11 +308,8 @@
                     showSuccess('登入成功，正在跳轉...');
                     // 等待稍長時間確保 session cookie 已設置
                     setTimeout(() => {
-                        // 檢查是否有重定向參數
-                        const urlParams = new URLSearchParams(window.location.search);
-                        const redirect = urlParams.get('redirect') || '/';
                         // 強制重新載入頁面以確保 session 被正確讀取
-                        window.location.replace(redirect);
+                        window.location.replace(getPostLoginTarget(result.user));
                     }, 800);
                 } else {
                     throw new Error(result.error || '登入失敗');
@@ -326,6 +323,14 @@
             }
         }
 
+        // 登入後預設要去的頁面：一般人員直接進資金預估週報（預設就是資金流水帳頁籤），
+        // 其他角色維持首頁；網址帶 ?redirect= 時（例如被登出後原頁面）以 redirect 為準
+        function getPostLoginTarget(user) {
+            const redirect = new URLSearchParams(window.location.search).get('redirect');
+            if (redirect) return redirect;
+            return user && user.role === 'user' ? '/cash-gap-dashboard.html' : '/';
+        }
+
         // 檢查是否已登入
         async function checkAuth() {
             try {
@@ -335,10 +340,8 @@
                 const result = await response.json();
 
                 if (result.authenticated) {
-                    // 已登入，重定向到首頁
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const redirect = urlParams.get('redirect') || '/';
-                    window.location.href = redirect;
+                    // 已登入，直接跳到預設頁面
+                    window.location.href = getPostLoginTarget(result.user);
                 }
             } catch (error) {
                 console.error('檢查認證狀態錯誤:', error);
@@ -411,9 +414,7 @@
 
                 showSuccess('登入成功，正在跳轉...');
                 setTimeout(() => {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const redirect = urlParams.get('redirect') || '/';
-                    window.location.replace(redirect);
+                    window.location.replace(getPostLoginTarget(result.user));
                 }, 800);
             } catch (error) {
                 console.error('M365 登入錯誤:', error);
