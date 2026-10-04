@@ -373,6 +373,25 @@
             color: #28a745;
         }
 
+        .online-panel {
+            margin-bottom: 28px;
+            border: 1px solid #E2E8F0;
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .online-panel-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+        .online-panel-head h3 { color: #1E293B; font-size: 1.1em; }
+        .online-panel-meta { color: #64748B; font-size: 13px; }
+        .online-dot { color: #F06000; }
+        .online-idle { color: #94A3B8; }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -420,6 +439,31 @@
 
         <div class="content">
             <div id="message"></div>
+
+            <div class="online-panel">
+                <div class="online-panel-head">
+                    <h3>🟢 目前上線使用者 <span id="onlineSummary" class="online-panel-meta"></span></h3>
+                    <span class="online-panel-meta">每 10 秒自動更新・<span id="onlineUpdatedAt">-</span></span>
+                </div>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>狀態</th>
+                                <th>使用者</th>
+                                <th>角色</th>
+                                <th>裝置</th>
+                                <th>IP</th>
+                                <th>登入時間</th>
+                                <th>最後活動</th>
+                            </tr>
+                        </thead>
+                        <tbody id="onlineTable">
+                            <tr><td colspan="7" class="loading" style="padding: 16px;">載入中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <div class="page-header">
                 <h2>使用者帳號管理</h2>
@@ -742,11 +786,75 @@
             }
         }
 
+        // ==================== 目前上線使用者（管理員） ====================
+        // 「線上」= 5 分鐘內有操作；「閒置」= 超過 5 分鐘但尚未逾時登出。
+        // 背景輪詢帶 X-Background-Poll，不會重置自己的閒置登出計時器。
+        let onlineTimer = null;
+
+        function formatIdle(seconds) {
+            if (seconds < 10) return '剛剛';
+            if (seconds < 60) return `${seconds} 秒前`;
+            if (seconds < 3600) return `${Math.floor(seconds / 60)} 分鐘前`;
+            return `${Math.floor(seconds / 3600)} 小時前`;
+        }
+
+        function loadOnlineUsers() {
+            fetch(`${API_BASE}/admin/online-users`, {
+                credentials: 'include',
+                cache: 'no-store',
+                headers: { 'X-Background-Poll': '1' }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) return;
+                    const rows = data.data || [];
+                    const tbody = document.getElementById('onlineTable');
+                    const roleLabels = { admin: ['role-admin', '管理員'], finance: ['role-finance', '財務人員'], user: ['role-user', '一般人員'] };
+                    const onlineCount = rows.filter(r => r.status === 'online').length;
+                    const idleCount = rows.length - onlineCount;
+                    const people = new Set(rows.map(r => r.user_id)).size;
+                    document.getElementById('onlineSummary').textContent =
+                        `（${people} 人・線上 ${onlineCount} 個連線${idleCount ? `、閒置 ${idleCount} 個` : ''}）`;
+                    document.getElementById('onlineUpdatedAt').textContent =
+                        '更新於 ' + new Date().toLocaleTimeString('zh-TW', { hour12: false });
+                    if (rows.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:16px; color:#666;">目前沒有人上線</td></tr>';
+                        return;
+                    }
+                    tbody.innerHTML = rows.map(r => {
+                        const [roleClass, roleLabel] = roleLabels[r.role] || roleLabels.user;
+                        const status = r.status === 'online'
+                            ? '<span class="online-dot">●</span> 線上'
+                            : '<span class="online-idle">● 閒置</span>';
+                        return `
+                            <tr>
+                                <td>${status}</td>
+                                <td>${escapeHtml(r.username)}${r.is_self ? ' <small style="color:#64748B;">（你）</small>' : ''}</td>
+                                <td><span class="${roleClass}">${roleLabel}</span></td>
+                                <td>${escapeHtml(r.device)}</td>
+                                <td>${escapeHtml(r.ip || '-')}</td>
+                                <td>${new Date(r.login_at).toLocaleString('zh-TW', { hour12: false })}</td>
+                                <td>${r.is_self ? '剛剛' : formatIdle(r.idle_seconds)}</td>
+                            </tr>`;
+                    }).join('');
+                })
+                .catch(err => console.error('載入上線狀態失敗:', err));
+        }
+
+        function startOnlinePolling() {
+            loadOnlineUsers();
+            if (onlineTimer) clearInterval(onlineTimer);
+            // 分頁在背景時不輪詢，切回來立刻更新一次
+            onlineTimer = setInterval(() => { if (!document.hidden) loadOnlineUsers(); }, 10000);
+        }
+        document.addEventListener('visibilitychange', () => { if (!document.hidden && onlineTimer) loadOnlineUsers(); });
+
         // 頁面載入時執行
         document.addEventListener('DOMContentLoaded', async function() {
             const authenticated = await checkAuth({ adminOnly: true });
             if (authenticated) {
                 loadUsers();
+                startOnlinePolling();
             }
         });
     </script>

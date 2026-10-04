@@ -2,6 +2,7 @@ const path = require('path');
 const session = require('express-session');
 const SQLiteStoreFactory = require('connect-sqlite3');
 const logger = require('./logger');
+const { removeUser: removeOnlineUser } = require('./onlineUsers');
 
 const SQLiteStore = SQLiteStoreFactory(session);
 
@@ -24,6 +25,7 @@ const sessionStore = new SQLiteStore({
  */
 function revokeSessionsForUser(userId) {
     if (!userId) return;
+    removeOnlineUser(userId);
     sessionStore.db.all(`SELECT sid, sess FROM sessions`, [], (err, rows) => {
         if (err) {
             logger.error('[Session] 查詢 session 以撤銷權限失敗:', err.message);

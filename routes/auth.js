@@ -4,6 +4,7 @@ const argon2 = require('argon2');
 const rateLimit = require('express-rate-limit');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
+const { removeSession: removeOnlineSession } = require('../utils/onlineUsers');
 const { isConfigured: ssoConfigured, verifyEntraIdToken } = require('../utils/entraAuth');
 
 const loginLimiter = rateLimit({
@@ -47,6 +48,7 @@ function establishSession(req, res, user, { rememberMe = false, logSource = '' }
     req.session.userId = user.id;
     req.session.username = user.username;
     req.session.role = user.role;
+    req.session.loginAt = Date.now();
 
     if (rememberMe) {
         req.session.cookie.maxAge = 7 * 24 * 60 * 60 * 1000;
@@ -157,6 +159,7 @@ router.post('/sso-login', loginLimiter, async (req, res) => {
 
 // 登出
 router.post('/logout', (req, res) => {
+    removeOnlineSession(req.sessionID);
     req.session.destroy((err) => {
         if (err) {
             logger.error('登出錯誤:', err);

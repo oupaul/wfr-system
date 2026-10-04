@@ -104,6 +104,7 @@ const transactionRoutes = require('./routes/transactions');
 const settlementRoutes = require('./routes/settlements');
 const cashGapRoutes = require('./routes/cashGap');
 const adminRoutes = require('./routes/admin');
+const { trackActivity } = require('./utils/onlineUsers');
 const financingRoutes = require('./routes/financing');
 const recurringTransactionsRoutes = require('./routes/recurringTransactions');
 
@@ -126,6 +127,8 @@ app.use('/api', (req, res, next) => {
     }
     return requireAuth(req, res, next);
 });
+// 記錄已登入使用者的最後活動時間，供管理員查看目前上線狀態
+app.use('/api', trackActivity);
 
 // ==================== API 路由掛載 ====================
 app.use('/api/auth', authRoutes);

@@ -16,6 +16,14 @@ const {
 } = require('../utils/entraAuth');
 const { createBackup } = require('../utils/backup');
 const backupScheduler = require('../utils/backupScheduler');
+const { listOnline } = require('../utils/onlineUsers');
+
+// 目前上線使用者（記憶體追蹤，見 utils/onlineUsers.js）
+router.get('/online-users', requireAuth, requireAdmin, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const users = listOnline(req.sessionID);
+    res.json({ data: users, count: users.length });
+});
 
 // 系統健康狀態
 router.get('/health', requireAuth, requireAdmin, (req, res) => {

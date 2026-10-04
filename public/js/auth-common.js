@@ -123,7 +123,9 @@
         const result = _origFetch.apply(this, args);
         // 只針對同域 API 請求重置計時
         const url = typeof args[0] === 'string' ? args[0] : (args[0] && args[0].url) || '';
-        if (url.startsWith('/api/') && !url.includes('/auth/logout')) {
+        // 背景輪詢（例如管理員的上線狀態自動更新）不算使用者操作，否則會讓閒置自動登出永遠不觸發
+        const isBackgroundPoll = !!(args[1] && args[1].headers && args[1].headers['X-Background-Poll']);
+        if (url.startsWith('/api/') && !url.includes('/auth/logout') && !isBackgroundPoll) {
             _resetSessionTimers();
         }
         return result;
