@@ -15,4 +15,15 @@ function addDaysStr(dateStr, days) {
     return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
 }
 
-module.exports = { todayInTaipei, addDaysStr };
+// 台北時間的檔名用時間戳記：2026-10-04_17-16-38
+function fileTimestampInTaipei(now = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Taipei',
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(now).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    return `${parts.year}-${parts.month}-${parts.day}_${parts.hour}-${parts.minute}-${parts.second}`;
+}
+
+module.exports = { todayInTaipei, addDaysStr, fileTimestampInTaipei };

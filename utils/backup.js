@@ -2,8 +2,10 @@ const fs = require('fs');
 const path = require('path');
 const { db } = require('../database/db');
 const logger = require('./logger');
+const { fileTimestampInTaipei } = require('./dateUtil');
 
-// 檔名格式：fund_report_2026-09-29_10-31-03.db（UTC 時間）。
+// 檔名格式：fund_report_2026-09-29_10-31-03.db（台北時間；2026-10 之前建立的備份檔名是 UTC 時間）。
+// 清理舊備份是依檔案修改時間排序、不看檔名裡的時間，所以新舊兩種檔名並存不影響保留份數。
 // 這裡的 `.*` 尾巴容許比對到舊版本遺留的檔名（曾經有個小 bug 讓檔名多帶了
 // 毫秒+Z，例如 fund_report_2026-09-29_10-31-03-469Z.db），確保清理舊備份
 // 時仍然認得出那些既有檔案，不會因為格式微調就被當成「不是備份檔」而跳過。
@@ -23,7 +25,7 @@ function createBackup() {
             fs.mkdirSync(backupDir, { recursive: true });
         }
 
-        const timestamp = new Date().toISOString().split('.')[0].replace('T', '_').replace(/:/g, '-');
+        const timestamp = fileTimestampInTaipei();
         const backupFile = path.join(backupDir, `fund_report_${timestamp}.db`);
 
         db.run('VACUUM INTO ?', [backupFile], (err) => {
