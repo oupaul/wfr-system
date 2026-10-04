@@ -189,20 +189,43 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
             return res.status(400).json({ error: '此範本已超過到期日' });
         }
 
-        const runDate = template.next_run_date;
+        // 排定的產生日（用來推算下一期）跟實際入帳日期可以不同；金額預設用範本預估值，
+        // 使用者可在確認視窗輸入實際金額（連結借款時要一併給本金/利息）
+        const scheduledDate = template.next_run_date;
+        const body = req.body || {};
+        const runDate = body.transaction_date || scheduledDate;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(runDate)) {
+            return res.status(400).json({ error: 'transaction_date 格式必須是 YYYY-MM-DD' });
+        }
+        const actualAmount = body.amount !== undefined && body.amount !== '' ? parseFloat(body.amount) : parseFloat(template.amount);
+        if (!(actualAmount > 0)) {
+            return res.status(400).json({ error: '金額必須大於 0' });
+        }
+        let actualPrincipal = template.principal_amount || 0;
+        let actualInterest = template.interest_amount || 0;
+        if (template.financing_id) {
+            if (body.amount !== undefined && body.amount !== '') {
+                actualPrincipal = parseFloat(body.principal_amount) || 0;
+                actualInterest = parseFloat(body.interest_amount) || 0;
+            }
+            if (Math.abs(actualAmount - (actualPrincipal + actualInterest)) > 0.01) {
+                return res.status(400).json({ error: '連結借款時，本金 + 利息必須等於金額' });
+            }
+        }
+        const updateTemplateAmount = body.update_template_amount === true;
 
         transactionId = await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO transactions
                  (transaction_date, type, amount, category, description, company_name, account_name, account_number, remarks)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [runDate, template.type, template.amount, template.category || null, template.description || null,
+                [runDate, template.type, actualAmount, template.category || null, template.description || null,
                  template.company_name || null, template.account_name || null, template.account_number || null, template.remarks || null],
                 function (err) { err ? reject(err) : resolve(this.lastID); }
             );
         });
         writeOperationLog(req, 'create', 'transaction', transactionId, null,
-            { id: transactionId, transaction_date: runDate, type: template.type, amount: template.amount },
+            { id: transactionId, transaction_date: runDate, type: template.type, amount: actualAmount },
             '收支記錄 #' + transactionId + '（週期範本 #' + id + ' 產生）');
 
         if (template.account_name) {
@@ -221,8 +244,8 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
         if (template.financing_id) {
             const result = await recordRepaymentAndSync(db, template.financing_id, {
                 payment_date: runDate,
-                principal_paid: template.principal_amount || 0,
-                interest_paid: template.interest_amount || 0,
+                principal_paid: actualPrincipal,
+                interest_paid: actualInterest,
                 remarks: '（週期範本自動產生）' + (template.remarks || '')
             });
             repaymentId = result.repaymentId;
@@ -233,14 +256,21 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
 
         // 推算下一次產生日；超過 end_date 就清空並停用，範本自然到期
         const stepMonths = STEP_MONTHS[template.frequency] || 1;
-        const nextRunDate = addMonthsClamped(runDate, stepMonths);
+        const nextRunDate = addMonthsClamped(scheduledDate, stepMonths);
         const exceedsEndDate = template.end_date && nextRunDate > template.end_date;
 
+        // 「同時更新範本預估金額」：下次預測就用這次的實際金額
+        const amountSql = updateTemplateAmount
+            ? (template.financing_id ? ', amount = ?, principal_amount = ?, interest_amount = ?' : ', amount = ?')
+            : '';
+        const amountParams = updateTemplateAmount
+            ? (template.financing_id ? [actualAmount, actualPrincipal, actualInterest] : [actualAmount])
+            : [];
         await new Promise((resolve, reject) => {
             if (exceedsEndDate) {
-                db.run('UPDATE recurring_transactions SET next_run_date = NULL, is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [id], (err) => (err ? reject(err) : resolve()));
+                db.run(`UPDATE recurring_transactions SET next_run_date = NULL, is_active = 0${amountSql}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [...amountParams, id], (err) => (err ? reject(err) : resolve()));
             } else {
-                db.run('UPDATE recurring_transactions SET next_run_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [nextRunDate, id], (err) => (err ? reject(err) : resolve()));
+                db.run(`UPDATE recurring_transactions SET next_run_date = ?${amountSql}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, [nextRunDate, ...amountParams, id], (err) => (err ? reject(err) : resolve()));
             }
         });
 

@@ -564,6 +564,53 @@
         </div>
     </div>
 
+    <!-- 產生下一筆確認視窗：預設帶入預估金額，可改成實際金額 -->
+    <div id="generateModal" class="modal">
+        <div class="modal-content" style="max-width: 520px;">
+            <div class="modal-header">
+                <h2>確認產生收支記錄</h2>
+                <button class="close" onclick="closeGenerateModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="generateForm" onsubmit="submitGenerate(event)">
+                    <input type="hidden" id="generateTemplateId" value="">
+                    <p id="generateSummary" style="font-size: 13px; color: #64748B; margin-bottom: 15px;"></p>
+
+                    <div class="form-group">
+                        <label for="generateDate">實際入帳日期 <span class="required">*</span></label>
+                        <input type="date" id="generateDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="generateAmount">實際金額 <span class="required">*</span></label>
+                        <input type="number" id="generateAmount" step="0.01" min="0.01" required oninput="onGenerateAmountInput()">
+                        <small id="generateEstimateHint" style="color: #64748B; font-size: 12px;"></small>
+                    </div>
+                    <div class="form-row" id="generateSplitRow" style="display: none;">
+                        <div class="form-group">
+                            <label for="generatePrincipal">本金</label>
+                            <input type="number" id="generatePrincipal" step="0.01" min="0" oninput="onGenerateSplitInput()">
+                        </div>
+                        <div class="form-group">
+                            <label for="generateInterest">利息</label>
+                            <input type="number" id="generateInterest" step="0.01" min="0" oninput="onGenerateSplitInput()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="generateUpdateTemplate" checked>
+                            <label for="generateUpdateTemplate">同時把範本預估金額更新為這次的實際金額（下次預測會用新金額）</label>
+                        </div>
+                    </div>
+
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeGenerateModal()">取消</button>
+                        <button type="submit" class="btn btn-primary">確認產生</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api';
 
@@ -763,11 +810,62 @@
         };
 
         window.generateNow = function(id) {
-            if (!confirm('確定要用這個範本產生一筆收支記錄嗎？')) return;
-            fetch(`${API_BASE}/recurring-transactions/${id}/generate`, { method: 'POST' })
+            const t = templatesCache.find(x => x.id === id);
+            if (!t) return;
+            document.getElementById('generateTemplateId').value = id;
+            document.getElementById('generateSummary').textContent =
+                `${t.description || t.category || '週期範本'}（排定日期 ${t.next_run_date}）`;
+            document.getElementById('generateDate').value = t.next_run_date;
+            document.getElementById('generateAmount').value = t.amount;
+            document.getElementById('generateEstimateHint').textContent = `範本預估金額：${formatCurrency(t.amount)}`;
+            const isFinancing = !!t.financing_id;
+            document.getElementById('generateSplitRow').style.display = isFinancing ? 'grid' : 'none';
+            document.getElementById('generatePrincipal').value = t.principal_amount || 0;
+            document.getElementById('generateInterest').value = t.interest_amount || 0;
+            document.getElementById('generateUpdateTemplate').checked = true;
+            document.getElementById('generateModal').style.display = 'block';
+        };
+
+        window.closeGenerateModal = function() {
+            document.getElementById('generateModal').style.display = 'none';
+        };
+
+        // 連結借款時：改本金/利息會自動帶出金額，反過來改金額則把差額放回利息
+        window.onGenerateSplitInput = function() {
+            const p = parseFloat(document.getElementById('generatePrincipal').value) || 0;
+            const i = parseFloat(document.getElementById('generateInterest').value) || 0;
+            document.getElementById('generateAmount').value = (Math.round((p + i) * 100) / 100);
+        };
+
+        window.onGenerateAmountInput = function() {
+            if (document.getElementById('generateSplitRow').style.display === 'none') return;
+            const amount = parseFloat(document.getElementById('generateAmount').value) || 0;
+            const p = parseFloat(document.getElementById('generatePrincipal').value) || 0;
+            document.getElementById('generateInterest').value = Math.max(0, Math.round((amount - p) * 100) / 100);
+        };
+
+        window.submitGenerate = function(event) {
+            event.preventDefault();
+            const id = document.getElementById('generateTemplateId').value;
+            const t = templatesCache.find(x => String(x.id) === String(id));
+            const payload = {
+                transaction_date: document.getElementById('generateDate').value,
+                amount: parseFloat(document.getElementById('generateAmount').value),
+                update_template_amount: document.getElementById('generateUpdateTemplate').checked
+            };
+            if (t && t.financing_id) {
+                payload.principal_amount = parseFloat(document.getElementById('generatePrincipal').value) || 0;
+                payload.interest_amount = parseFloat(document.getElementById('generateInterest').value) || 0;
+            }
+            fetch(`${API_BASE}/recurring-transactions/${id}/generate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
                 .then(res => res.json())
                 .then(result => {
                     if (result.error) { showMessage(result.error, 'error'); return; }
+                    closeGenerateModal();
                     showMessage(result.message || '已產生', 'success');
                     loadTemplates();
                 })
@@ -838,6 +936,7 @@
         window.onclick = function(event) {
             const modal = document.getElementById('dataModal');
             if (event.target == modal) closeModal();
+            if (event.target == document.getElementById('generateModal')) closeGenerateModal();
         };
 
         let canEdit = false;

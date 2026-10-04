@@ -3,6 +3,15 @@ const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { getProjectedRepaymentRows } = require('../utils/financingProjection');
+const { getProjectedTemplateRows } = require('../utils/templateProjection');
+
+// 借款還款投影 + 週期範本投影，一起併入未來預測
+function getProjectedFutureRows(account, today, maxDate) {
+    return Promise.all([
+        getProjectedRepaymentRows(db, account.id, today, maxDate),
+        getProjectedTemplateRows(db, account, today, maxDate)
+    ]).then(([repayments, templates]) => repayments.concat(templates));
+}
 const { getLatestSettlement } = require('../utils/settlementLookup');
 
 function toLocalDateStr(d) {
@@ -277,7 +286,7 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
                     }
                     const safetyLevel = parseFloat(account.safety_level) || 0;
 
-                    getProjectedRepaymentRows(db, account.id, today, maxDate).then((projectedRows) => {
+                    getProjectedFutureRows(account, today, maxDate).then((projectedRows) => {
                         // 「未來預測」的檢查點才併入借款投影；current_balance/
                         // transaction_count 維持只用真實交易，確保「目前」的數字
                         // 永遠是真實資料
@@ -403,7 +412,7 @@ router.get('/cash-gap-ledger', (req, res) => {
                         currentBalance += (r.type === 'income' ? amt : -amt);
                     });
 
-                    getProjectedRepaymentRows(db, account.id, today, maxDate).then((projectedRows) => {
+                    getProjectedFutureRows(account, today, maxDate).then((projectedRows) => {
                     columns.push({
                         account_id: account.id,
                         company_name: account.company_name || '',

@@ -366,6 +366,19 @@
             box-shadow: 0 5px 15px rgba(30, 41, 59, 0.35);
         }
 
+        /* 已到期尚未確認的週期範本提醒：單色底，強調色只用在左邊框 */
+        .due-templates-notice {
+            background: #F8FAFC;
+            border: 1px solid #E2E8F0;
+            border-left: 4px solid #F06000;
+            border-radius: 5px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #1E293B;
+        }
+        .due-templates-notice a { color: #F06000; font-weight: bold; text-decoration: none; }
+
         /* 檢視方式頁籤 */
         .view-tabs {
             display: flex;
@@ -725,6 +738,8 @@
             <div id="message"></div>
 
             <!-- 檢視方式頁籤 -->
+            <div id="dueTemplatesNotice" class="due-templates-notice" style="display: none;"></div>
+
             <div class="view-tabs">
                 <button type="button" class="view-tab active" id="tabLedgerView" onclick="switchView('ledger')">📋 資金流水帳</button>
                 <button type="button" class="view-tab" id="tabCardView" onclick="switchView('card')">📇 帳戶卡片</button>
@@ -1324,7 +1339,24 @@
             if (!authenticated) return;
             await recalculateBalances();
             loadLedger();
+            loadDueTemplatesNotice();
         });
+
+        // 已到期（下次產生日 <= 今天）還沒確認的週期範本，提醒使用者去確認實際金額
+        function loadDueTemplatesNotice() {
+            fetch(`${API_BASE}/recurring-transactions?active=true`)
+                .then(res => res.json())
+                .then(data => {
+                    const today = new Date().toISOString().slice(0, 10);
+                    const due = (data.data || []).filter(t => t.next_run_date && t.next_run_date <= today);
+                    const el = document.getElementById('dueTemplatesNotice');
+                    if (due.length === 0) { el.style.display = 'none'; return; }
+                    el.innerHTML = `有 ${due.length} 筆週期範本已到期尚未確認（預測目前以預估金額計算，已逾期的期數落在今天），請到<a href="/recurring-transactions.html">週期範本</a>輸入實際金額產生收支記錄`;
+                    el.style.display = 'block';
+                })
+                .catch(err => console.error('載入到期範本提醒失敗:', err));
+        }
+
     </script>
 </body>
 </html>
