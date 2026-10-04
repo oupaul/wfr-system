@@ -9,6 +9,23 @@
 // 產生後續期數。這是把 next_payment_amount 整筆當本金處理的保守近似（實際還款
 // 通常還含利息，真正能投影的期數可能更少），但已足以避免長期分期貸款被嚴重高估。
 
+// 目前本金餘額（SQL 片段，別名固定用 f）：
+// - 使用者手動輸入過餘額（manual_principal_balance 不是 NULL）：手動餘額 − 基準日「之後」才記錄的還款本金
+//   （基準日當天以前的還款視為已反映在手動輸入的餘額裡，不再重複扣）
+// - 沒手動輸入：原始本金 − 全部還款本金
+// 借款管理頁面的「目前本金餘額」跟資金預估的還款投影上限都用這同一個定義。
+const REMAINING_PRINCIPAL_SQL = `
+    (CASE WHEN f.manual_principal_balance IS NOT NULL
+        THEN f.manual_principal_balance - COALESCE((
+            SELECT SUM(fr.principal_paid) FROM financing_repayments fr
+            WHERE fr.financing_id = f.id AND fr.payment_date > COALESCE(f.manual_balance_date, '')
+        ), 0)
+        ELSE f.principal_amount - COALESCE((
+            SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
+        ), 0)
+    END)
+`;
+
 const MAX_OCCURRENCES = 60; // 安全上限（例如每月投影最多 5 年），避免資料異常造成無限迴圈
 
 function toLocalDateStr(d) {
@@ -104,9 +121,7 @@ function getProjectedRepaymentRowsByAccount(db, bankAccountIds, todayStr, maxDat
         if (ids.length === 0) return resolve(result);
         db.all(
             `SELECT f.bank_account_id, f.facility_name, f.next_payment_date, f.next_payment_amount, f.repayment_frequency, f.maturity_date,
-                    (f.principal_amount - COALESCE((
-                        SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
-                    ), 0)) as remaining_principal
+                    ${REMAINING_PRINCIPAL_SQL} as remaining_principal
              FROM financing f
              WHERE f.bank_account_id IN (${ids.map(() => '?').join(',')}) AND f.is_active = 1`,
             ids,
@@ -132,4 +147,4 @@ function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
         .then((map) => map.get(bankAccountId) || []);
 }
 
-module.exports = { getProjectedRepaymentRows, getProjectedRepaymentRowsByAccount, projectRepaymentOccurrences, addMonthsClamped };
+module.exports = { REMAINING_PRINCIPAL_SQL, getProjectedRepaymentRows, getProjectedRepaymentRowsByAccount, projectRepaymentOccurrences, addMonthsClamped };

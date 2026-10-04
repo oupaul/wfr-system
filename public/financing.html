@@ -554,6 +554,16 @@
 
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="modalManualBalance">目前本金餘額（手動輸入）</label>
+                            <input type="number" id="modalManualBalance" step="0.01" min="0" placeholder="留空＝自動計算">
+                            <small style="color: #64748B; font-size: 12px; margin-top: 5px; display: block;" id="modalManualBalanceHint">
+                                留空時由「原始本金 − 已記錄的還款本金」自動計算；填入後以今天為基準日，之後新增的還款記錄才會再從這個餘額扣除
+                            </small>
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
                             <label for="modalStartDate">起貸日</label>
                             <input type="date" id="modalStartDate">
                         </div>
@@ -626,11 +636,11 @@
                         <div class="value" id="repaySummaryPrincipal">-</div>
                     </div>
                     <div class="item">
-                        <div class="label">已還本金</div>
+                        <div class="label" id="repaySummaryPaidLabel">已還本金</div>
                         <div class="value" id="repaySummaryPaid">-</div>
                     </div>
                     <div class="item">
-                        <div class="label">目前本金餘額</div>
+                        <div class="label" id="repaySummaryRemainingLabel">目前本金餘額</div>
                         <div class="value" id="repaySummaryRemaining">-</div>
                     </div>
                 </div>
@@ -707,6 +717,8 @@
             '其他': '其他'
         };
 
+        const MANUAL_BALANCE_HINT_DEFAULT = '留空時由「原始本金 − 已記錄的還款本金」自動計算；填入後以今天為基準日，之後新增的還款記錄才會再從這個餘額扣除';
+
         // 載入公司列表（同時填入新增/編輯表單的公司下拉選單）
         function loadCompanies(callback) {
             AccountSelect.loadCompanies(document.getElementById('modalCompanyId')).then((list) => {
@@ -730,6 +742,7 @@
             document.getElementById('financingForm').reset();
             document.getElementById('modalFacilityType').value = '短期借款';
             document.getElementById('modalIsActive').checked = true;
+            document.getElementById('modalManualBalanceHint').textContent = MANUAL_BALANCE_HINT_DEFAULT;
             loadCompanies();
             loadBankAccountsForModal();
             document.getElementById('dataModal').style.display = 'block';
@@ -761,6 +774,10 @@
                             document.getElementById('modalInterestRate').value = record.interest_rate != null ? record.interest_rate : '';
                             document.getElementById('modalPrincipalAmount').value = record.principal_amount != null ? record.principal_amount : '';
                             document.getElementById('modalTotalLimit').value = record.total_limit != null ? record.total_limit : '';
+                            document.getElementById('modalManualBalance').value = record.manual_principal_balance != null ? record.manual_principal_balance : '';
+                            document.getElementById('modalManualBalanceHint').textContent = record.manual_principal_balance != null
+                                ? `目前為手動輸入（基準日 ${record.manual_balance_date || '-'}）；改成別的金額會以今天重新作為基準日，清空則回到自動計算`
+                                : MANUAL_BALANCE_HINT_DEFAULT;
                             document.getElementById('modalStartDate').value = record.start_date || '';
                             document.getElementById('modalMaturityDate').value = record.maturity_date || '';
                             document.getElementById('modalNextPaymentDate').value = record.next_payment_date || '';
@@ -801,6 +818,7 @@
                 interest_rate: document.getElementById('modalInterestRate').value ? parseFloat(document.getElementById('modalInterestRate').value) : null,
                 principal_amount: document.getElementById('modalPrincipalAmount').value ? parseFloat(document.getElementById('modalPrincipalAmount').value) : 0,
                 total_limit: document.getElementById('modalTotalLimit').value ? parseFloat(document.getElementById('modalTotalLimit').value) : null,
+                manual_principal_balance: document.getElementById('modalManualBalance').value !== '' ? parseFloat(document.getElementById('modalManualBalance').value) : null,
                 start_date: document.getElementById('modalStartDate').value,
                 maturity_date: document.getElementById('modalMaturityDate').value,
                 next_payment_date: document.getElementById('modalNextPaymentDate').value,
@@ -884,7 +902,17 @@
                     const principal = parseFloat(record.principal_amount) || 0;
                     const remaining = parseFloat(record.remaining_principal) || 0;
                     document.getElementById('repaySummaryPrincipal').textContent = formatCurrency(principal);
-                    document.getElementById('repaySummaryPaid').textContent = formatCurrency(principal - remaining);
+                    const isManual = record.manual_principal_balance != null;
+                    if (isManual) {
+                        // 手動輸入餘額時，「已還本金」改顯示基準日之後才記錄的還款本金（= 手動餘額 − 目前餘額）
+                        document.getElementById('repaySummaryPaidLabel').textContent = `基準日(${record.manual_balance_date || '-'})後已還本金`;
+                        document.getElementById('repaySummaryRemainingLabel').textContent = '目前本金餘額（手動輸入）';
+                        document.getElementById('repaySummaryPaid').textContent = formatCurrency((parseFloat(record.manual_principal_balance) || 0) - remaining);
+                    } else {
+                        document.getElementById('repaySummaryPaidLabel').textContent = '已還本金';
+                        document.getElementById('repaySummaryRemainingLabel').textContent = '目前本金餘額';
+                        document.getElementById('repaySummaryPaid').textContent = formatCurrency(principal - remaining);
+                    }
                     document.getElementById('repaySummaryRemaining').textContent = formatCurrency(remaining);
                 })
                 .catch(err => console.error('載入借款摘要錯誤:', err));
@@ -1029,7 +1057,7 @@
                     <td><span class="type-badge">${escapeHtml(facilityTypeLabels[f.facility_type] || f.facility_type)}</span></td>
                     <td>${escapeHtml(f.lender) || '-'}</td>
                     <td style="text-align:right;">${formatCurrency(f.principal_amount)}${f.total_limit != null ? '<br><span style="font-size:12px;color:#64748B;">總額度 ' + formatCurrency(f.total_limit) + '</span>' : ''}</td>
-                    <td style="text-align:right;font-weight:bold;">${formatCurrency(remaining)}</td>
+                    <td style="text-align:right;font-weight:bold;">${formatCurrency(remaining)}${f.manual_principal_balance != null ? '<br><span style="font-size:12px;font-weight:normal;color:#64748B;">手動輸入（基準日 ' + escapeHtml(f.manual_balance_date || '-') + '）</span>' : ''}</td>
                     <td>${f.interest_rate != null ? f.interest_rate + '%' : '-'}</td>
                     <td>${escapeHtml(f.maturity_date) || '-'}</td>
                     <td>${nextPayment}</td>

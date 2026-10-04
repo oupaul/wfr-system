@@ -21,7 +21,7 @@
 - ✅ **餘額結算**：結算記錄維護、期初餘額與收支對帳、分頁（每頁 50 筆）；選公司後帳戶名稱可「快速新增帳戶」，不用先跳去銀行帳戶管理建好帳戶再回來（只收帳戶名稱/帳號/銀行名稱/帳戶類型，其他細節設定之後可到銀行帳戶管理補齊），新增後自動選用該帳戶
 - 🏢 **公司管理**：公司主檔維護
 - 🏦 **銀行帳戶管理**：帳戶主檔（含銀行名稱、帳戶類型：活存/定存/支票/外幣/授信/其他）、安全水位、即時餘額重算；每個帳戶可直接點「交易明細」跳轉到收支記錄並自動套用該帳戶篩選
-- 💳 **借款管理**：借款/融資額度主檔（授信額度、短期借款、長期借款、其他）、利率與到期日、下次還款提醒；還款記錄獨立追蹤，目前本金餘額由還款記錄即時加總計算，不需手動維護。設定「撥款/還款帳戶」與「還款頻率」（不重複/每月/每季）後，未來還款會自動投影進資金流水帳與帳戶卡片的現金流預測（以「（預計）」文字與斜體樣式跟真實交易區隔，只投影未來、不回填歷史還款，避免跟日後實際入帳的收支記錄重複計算）。投影跟還款記錄會互相同步：新增一筆涵蓋「下次還款日」的還款記錄時，該日期會自動往後跳一期（無頻率的一次性還款則清空，不再視為待繳），投影金額加總也不會超過目前實際剩餘本金，還清後自動停止投影（金額本身不會自動遞減，若每期金額有變化仍需自行調整「下次還款金額」）。借款有設定還款帳戶時，不論是在借款管理手動登記一筆還款、還是透過週期範本「產生下一筆」，都會同步寫一筆收支記錄並更新該帳戶的即時餘額，兩條路徑的資料會保持一致
+- 💳 **借款管理**：借款/融資額度主檔（授信額度、短期借款、長期借款、其他）、利率與到期日、下次還款提醒；還款記錄獨立追蹤，目前本金餘額預設由還款記錄即時加總計算；也可在編輯視窗手動輸入餘額（以輸入當天為基準日，基準日之後新登記的還款仍會繼續扣減，同日或更早日期視為已包含在輸入金額內；金額沒變時編輯其他欄位不會重設基準日，清空欄位即回到自動計算），列表會標示「手動輸入（基準日 …）」，投影的剩餘本金上限也採同一定義。設定「撥款/還款帳戶」與「還款頻率」（不重複/每月/每季）後，未來還款會自動投影進資金流水帳與帳戶卡片的現金流預測（以「（預計）」文字與斜體樣式跟真實交易區隔，只投影未來、不回填歷史還款，避免跟日後實際入帳的收支記錄重複計算）。投影跟還款記錄會互相同步：新增一筆涵蓋「下次還款日」的還款記錄時，該日期會自動往後跳一期（無頻率的一次性還款則清空，不再視為待繳），投影金額加總也不會超過目前實際剩餘本金，還清後自動停止投影（金額本身不會自動遞減，若每期金額有變化仍需自行調整「下次還款金額」）。借款有設定還款帳戶時，不論是在借款管理手動登記一筆還款、還是透過週期範本「產生下一筆」，都會同步寫一筆收支記錄並更新該帳戶的即時餘額，兩條路徑的資料會保持一致
 - 🔁 **週期範本**：收支記錄裡固定重複的項目（房租、保費、借款還款等）建成範本，按「產生下一筆」才實際寫入一筆收支記錄（不做全自動排程，保留人工確認），頻率支援每月/每季/每年，可設到期日讓範本自動停用。範本可選填連結到某筆借款，連結後「產生下一筆」會一次做完三件事：收支記錄記一筆支出、借款管理記一筆對應還款記錄（本金/利息分開）、借款的「下次還款日」自動同步往後推一期——直接透過收支記錄反映帳戶餘額變化，不需要再手動記兩次。範本金額視為「預估值」：啟用中的範本會以「（預計）」斜體列併入資金流水帳與資金缺口預測（已逾期未確認的期數落在今天，避免缺口被低估；連結借款的範本不重複投影，借款本身已投影）；按「產生下一筆」會開確認視窗，預設帶入預估金額與排定日期，可改成實際金額、實際入帳日期，並可另外填寫這筆收支記錄的說明（預設帶範本說明，連結借款可調整本金/利息），並可勾選「同時更新範本預估金額」（預設勾選）讓下次預測用最新金額；範本到期未確認時，範本頁會標示「已到期」，資金預估週報頁頂端也會顯示提醒。仍不做全自動產生，避免預估金額直接影響真實帳戶餘額
 - 👥 **人員管理**（僅管理員）：使用者帳號與角色設定
 - 🎛️ **管理者儀表板**（僅管理員）：入口於首頁右下角
@@ -193,7 +193,7 @@ npm run dev
 - **收支記錄**：`GET/POST /api/transactions`（GET 支援 `limit`/`offset` 分頁、`keyword` 搜尋說明/類別/備註、`sortBy`(date/type/amount/category/description/company/account/remarks，預設 date)/`sortDir`(asc/desc，預設 desc) 排序）、`PUT/DELETE /api/transactions/:id`（轉帳記錄 `PUT` 會回 400，`DELETE` 會連同另一半一起刪除）、`POST /api/transactions/batch-delete`、`POST /api/transactions/import`（Excel）、`GET /api/transactions/export`、`POST /api/transactions/transfer`（帳戶間轉帳，一次寫入兩筆並排除在 `GET /api/transactions/statistics` 統計之外）
 - **公司**：`GET/POST /api/companies`、`PUT/DELETE /api/companies/:id`
 - **銀行帳戶**：`GET/POST /api/bank-accounts`、`PUT/DELETE /api/bank-accounts/:id`、`POST /api/bank-accounts/recalculate-balances`
-- **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額；刪除前會檢查是否有週期範本連結，有的話回 400）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
+- **借款/融資額度**：`GET/POST /api/financing`、`PUT/DELETE /api/financing/:id`（列表與單筆皆含即時計算的 `remaining_principal` 目前本金餘額；新增/更新可帶 `manual_principal_balance`（空值或 null＝自動計算，負數或非數字回 400），系統自動記錄 `manual_balance_date`；刪除前會檢查是否有週期範本連結，有的話回 400）；還款記錄：`GET/POST /api/financing/:id/repayments`、`DELETE /api/financing/:id/repayments/:repaymentId`
 - **週期性收支範本**：`GET/POST /api/recurring-transactions`、`PUT/DELETE /api/recurring-transactions/:id`、`POST /api/recurring-transactions/:id/generate`（產生下一筆：寫入收支記錄、更新帳戶餘額、連結借款時一併寫入還款記錄並同步下次還款日、把範本的下次產生日往後推一期或超過到期日時自動停用）
 - **餘額結算**：`GET/POST /api/settlements`（GET 支援 `limit`/`offset` 分頁）、`PUT/DELETE /api/settlements/:id`
 - **資金預估週報**：`GET /api/cash-gap-dashboard`、`GET /api/cash-gap-dashboard-by-dates`、`GET/PUT /api/cash-gap-loan-balance`（手動填寫的目前貸款餘額）、`GET /api/cash-gap-ledger`（資金流水帳，各帳戶期初餘額＋逐筆交易＋每月 15/30 號結餘檢查點）、`GET /api/cash-gap-reconciliation`
@@ -348,7 +348,7 @@ Excel 檔案應該包含以下欄位（欄位名稱支援中英文）：
 
 ## 資料庫結構
 
-主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄；`transfer_group_id` 欄位標記帳戶間轉帳，同一次轉帳的兩筆記錄共用同一個值，一般收支記錄為 NULL）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔）、`financing_repayments`（還款記錄，目前本金餘額由此即時加總計算）、`recurring_transactions`（週期性收支範本，選填 `financing_id` 連結借款）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
+主要資料表：`users`（使用者與角色：admin／finance／user）、`companies`（公司）、`bank_accounts`（銀行帳戶）、`transactions`（收支記錄；`transfer_group_id` 欄位標記帳戶間轉帳，同一次轉帳的兩筆記錄共用同一個值，一般收支記錄為 NULL）、`balance_settlements`（餘額結算）、`financing`（借款/融資額度主檔，含選填的手動本金餘額與基準日）、`financing_repayments`（還款記錄，目前本金餘額預設由此即時加總計算）、`recurring_transactions`（週期性收支範本，選填 `financing_id` 連結借款）、`operation_logs`（操作日誌，供管理員查詢）、`system_settings`（後台可調整的系統設定，如 M365 SSO）。完整定義請見 `database/schema.sql`。
 
 ### 權限模型
 

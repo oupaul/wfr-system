@@ -197,7 +197,9 @@ CREATE TABLE IF NOT EXISTS financing (
 CREATE INDEX IF NOT EXISTS idx_financing_company ON financing(company_id);
 CREATE INDEX IF NOT EXISTS idx_financing_active ON financing(is_active);
 
--- 還款記錄：目前本金餘額 = principal_amount - SUM(principal_paid)，即時計算不存欄位
+-- 還款記錄：目前本金餘額預設 = principal_amount - SUM(principal_paid)，即時計算不存欄位；
+-- 使用者手動輸入餘額時（financing.manual_principal_balance，由 db.js 遷移加入）改為
+-- 手動餘額 - 基準日(manual_balance_date)之後才記錄的還款本金
 CREATE TABLE IF NOT EXISTS financing_repayments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     financing_id INTEGER NOT NULL,

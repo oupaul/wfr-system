@@ -5,14 +5,32 @@ const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
+const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
-// 目前本金餘額 = 原始本金 - 已還本金總額，即時計算不存欄位，避免跟還款記錄兜不起來
-const REMAINING_PRINCIPAL_SQL = `
-    (f.principal_amount - COALESCE((
-        SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
-    ), 0))
-`;
+// 目前本金餘額的定義（含手動輸入餘額）集中在 utils/financingProjection.js，跟資金預估的投影上限共用
+
+// 以台北時區算「今天」，不受主機系統時區影響
+function todayInTaipei() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
+}
+
+// 解析手動輸入的本金餘額：空值代表清除手動餘額（回到自動計算）；回傳 { value, error }
+function parseManualBalance(raw) {
+    if (raw === undefined || raw === null || raw === '') return { value: null };
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return { error: '目前本金餘額必須是大於或等於 0 的數字' };
+    return { value: n };
+}
+
+// 換算成寫入用的 (餘額, 基準日)：餘額沒變就保留原本基準日，有變才把基準日更新成今天，
+// 這樣編輯其他欄位不會不小心重設基準日、讓之前的還款被重複扣一次
+function resolveManualBalance(newValue, oldRow) {
+    if (newValue === null) return { balance: null, date: null };
+    const unchanged = oldRow && oldRow.manual_principal_balance != null
+        && Number(oldRow.manual_principal_balance) === newValue && oldRow.manual_balance_date;
+    return { balance: newValue, date: unchanged ? oldRow.manual_balance_date : todayInTaipei() };
+}
 
 // 取得所有借款/融資額度
 router.get('/', (req, res) => {
@@ -78,19 +96,24 @@ router.post('/', requireEditor, (req, res) => {
     const {
         company_id, bank_account_id, facility_name, facility_type, lender,
         total_limit, principal_amount, interest_rate, start_date, maturity_date,
-        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active
+        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active,
+        manual_principal_balance
     } = req.body;
 
     if (!facility_name) {
         return res.status(400).json({ error: 'facility_name 為必填欄位' });
     }
+    const manualParsed = parseManualBalance(manual_principal_balance);
+    if (manualParsed.error) return res.status(400).json({ error: manualParsed.error });
+    const manual = resolveManualBalance(manualParsed.value, null);
 
     db.run(
         `INSERT INTO financing
          (company_id, bank_account_id, facility_name, facility_type, lender, total_limit,
           principal_amount, interest_rate, start_date, maturity_date, repayment_method,
-          next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active,
+          manual_principal_balance, manual_balance_date)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             company_id || null, bank_account_id || null, facility_name, facility_type || '短期借款',
             lender || null, total_limit != null && total_limit !== '' ? total_limit : null,
@@ -98,7 +121,8 @@ router.post('/', requireEditor, (req, res) => {
             start_date || null, maturity_date || null, repayment_method || null,
             next_payment_date || null, next_payment_amount != null && next_payment_amount !== '' ? next_payment_amount : null,
             repayment_frequency || null,
-            remarks || null, is_active !== undefined ? is_active : 1
+            remarks || null, is_active !== undefined ? is_active : 1,
+            manual.balance, manual.date
         ],
         function (err) {
             if (err) {
@@ -119,12 +143,15 @@ router.put('/:id', requireEditor, (req, res) => {
     const {
         company_id, bank_account_id, facility_name, facility_type, lender,
         total_limit, principal_amount, interest_rate, start_date, maturity_date,
-        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active
+        repayment_method, next_payment_date, next_payment_amount, repayment_frequency, remarks, is_active,
+        manual_principal_balance
     } = req.body;
 
     if (!facility_name) {
         return res.status(400).json({ error: 'facility_name 為必填欄位' });
     }
+    const manualParsed = parseManualBalance(manual_principal_balance);
+    if (manualParsed.error) return res.status(400).json({ error: manualParsed.error });
 
     db.get('SELECT * FROM financing WHERE id = ?', [id], (err, oldRow) => {
         if (err || !oldRow) {
@@ -143,11 +170,15 @@ router.put('/:id', requireEditor, (req, res) => {
             repayment_frequency: repayment_frequency || null,
             remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1
         };
+        const manual = resolveManualBalance(manualParsed.value, oldRow);
+        afterData.manual_principal_balance = manual.balance;
+        afterData.manual_balance_date = manual.date;
         db.run(
             `UPDATE financing SET company_id = ?, bank_account_id = ?, facility_name = ?, facility_type = ?,
                 lender = ?, total_limit = ?, principal_amount = ?, interest_rate = ?, start_date = ?,
                 maturity_date = ?, repayment_method = ?, next_payment_date = ?, next_payment_amount = ?,
-                repayment_frequency = ?, remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
+                repayment_frequency = ?, remarks = ?, is_active = ?,
+                manual_principal_balance = ?, manual_balance_date = ?, updated_at = CURRENT_TIMESTAMP
              WHERE id = ?`,
             [
                 afterData.company_id, afterData.bank_account_id, afterData.facility_name, afterData.facility_type,
@@ -155,6 +186,7 @@ router.put('/:id', requireEditor, (req, res) => {
                 afterData.start_date, afterData.maturity_date, afterData.repayment_method,
                 afterData.next_payment_date, afterData.next_payment_amount, afterData.repayment_frequency,
                 afterData.remarks, afterData.is_active,
+                manual.balance, manual.date,
                 id
             ],
             function (updateErr) {

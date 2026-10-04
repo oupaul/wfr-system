@@ -48,6 +48,7 @@ const initDatabase = () => {
                     await ensureOperationLogsTable();
                     await migrateUserRoleFinanceTier();
                     await migrateFinancingRepaymentFrequency();
+                    await migrateFinancingManualBalance();
                     await migrateTransactionsTransferGroup();
                     resolve();
                 } catch (error) {
@@ -338,6 +339,40 @@ const migrateTransactionsTransferGroup = () => {
 // 資料庫遷移：為 financing 表添加 repayment_frequency 欄位（用於資金流水帳/
 // 資金缺口把借款未來還款自動投影進現金流預測；ALTER TABLE 路徑不含 CHECK
 // 限制，避免相容性風險，驗證交給 API 層）
+// 借款「目前本金餘額」可手動輸入：manual_principal_balance 是使用者填的餘額，
+// manual_balance_date 是填寫當天（基準日）。有填的話，目前本金餘額 = 手動餘額 − 基準日「之後」
+// 才記錄的還款本金；沒填（NULL）就維持原本「原始本金 − 全部還款本金」的自動計算。
+const migrateFinancingManualBalance = () => {
+    const wanted = [
+        ['manual_principal_balance', 'DECIMAL(15, 2) DEFAULT NULL'],
+        ['manual_balance_date', 'DATE DEFAULT NULL']
+    ];
+    return new Promise((resolve, reject) => {
+        db.all("PRAGMA table_info(financing)", [], async (err, columns) => {
+            if (err) {
+                console.error('檢查 financing 表結構失敗:', err.message);
+                return reject(err);
+            }
+            try {
+                for (const [name, def] of wanted) {
+                    if (columns.some(col => col.name === name)) continue;
+                    await new Promise((res, rej) => {
+                        db.run(`ALTER TABLE financing ADD COLUMN ${name} ${def}`, (alterErr) => {
+                            if (alterErr && !alterErr.message.includes('duplicate column')) return rej(alterErr);
+                            if (!alterErr) console.log(`✓ ${name} 欄位已添加到 financing 表`);
+                            res();
+                        });
+                    });
+                }
+                resolve();
+            } catch (e) {
+                console.error('添加手動本金餘額欄位失敗:', e.message);
+                reject(e);
+            }
+        });
+    });
+};
+
 const migrateFinancingRepaymentFrequency = () => {
     return new Promise((resolve, reject) => {
         db.all("PRAGMA table_info(financing)", [], (err, columns) => {
