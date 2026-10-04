@@ -233,26 +233,26 @@ if [ -f "$DB_PATH" ]; then
                 read -p "需要 root 權限備份到系統目錄，是否使用 sudo? (Y/n): " use_sudo
                 if [[ ! $use_sudo =~ ^[Nn]$ ]]; then
                     sudo mkdir -p "$SYSTEM_BACKUP_DIR"
-                    EXISTING_BACKUP="$SYSTEM_BACKUP_DIR/fund_report_pre_restore_$(date +%Y%m%d_%H%M%S).db"
+                    EXISTING_BACKUP="$SYSTEM_BACKUP_DIR/fund_report_pre_restore_$(TZ=CST-8 date +%Y%m%d_%H%M%S).db"
                     sudo cp "$DB_PATH" "$EXISTING_BACKUP"
                     sudo chmod 644 "$EXISTING_BACKUP"
                     echo -e "${GREEN}✓ 現有資料庫已備份至: $EXISTING_BACKUP${NC}"
                 else
                     mkdir -p "$LOCAL_BACKUP_DIR"
-                    EXISTING_BACKUP="$LOCAL_BACKUP_DIR/fund_report_pre_restore_$(date +%Y%m%d_%H%M%S).db"
+                    EXISTING_BACKUP="$LOCAL_BACKUP_DIR/fund_report_pre_restore_$(TZ=CST-8 date +%Y%m%d_%H%M%S).db"
                     cp "$DB_PATH" "$EXISTING_BACKUP"
                     echo -e "${GREEN}✓ 現有資料庫已備份至: $EXISTING_BACKUP${NC}"
                 fi
             else
                 mkdir -p "$SYSTEM_BACKUP_DIR"
-                EXISTING_BACKUP="$SYSTEM_BACKUP_DIR/fund_report_pre_restore_$(date +%Y%m%d_%H%M%S).db"
+                EXISTING_BACKUP="$SYSTEM_BACKUP_DIR/fund_report_pre_restore_$(TZ=CST-8 date +%Y%m%d_%H%M%S).db"
                 cp "$DB_PATH" "$EXISTING_BACKUP"
                 chmod 644 "$EXISTING_BACKUP"
                 echo -e "${GREEN}✓ 現有資料庫已備份至: $EXISTING_BACKUP${NC}"
             fi
         else
             mkdir -p "$LOCAL_BACKUP_DIR"
-            EXISTING_BACKUP="$LOCAL_BACKUP_DIR/fund_report_pre_restore_$(date +%Y%m%d_%H%M%S).db"
+            EXISTING_BACKUP="$LOCAL_BACKUP_DIR/fund_report_pre_restore_$(TZ=CST-8 date +%Y%m%d_%H%M%S).db"
             cp "$DB_PATH" "$EXISTING_BACKUP"
             echo -e "${GREEN}✓ 現有資料庫已備份至: $EXISTING_BACKUP${NC}"
         fi

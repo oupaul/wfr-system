@@ -43,7 +43,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 DB_PATH="database/fund_report.db"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUP_DIR/fund_report_$TIMESTAMP.db"
 
 CURRENT_DIR=$(pwd)

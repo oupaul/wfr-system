@@ -281,7 +281,7 @@ if [ -f "database/fund_report.db" ]; then
                 # 使用 sudo 創建備份目錄並備份
                 sudo mkdir -p "$SYSTEM_BACKUP_DIR"
                 if [ $? -eq 0 ]; then
-                    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                    TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
                     BACKUP_FILE="$SYSTEM_BACKUP_DIR/fund_report_${TIMESTAMP}.db"
                     sudo cp "database/fund_report.db" "$BACKUP_FILE"
                     sudo chmod 644 "$BACKUP_FILE"
@@ -308,7 +308,7 @@ if [ -f "database/fund_report.db" ]; then
                 echo -e "${YELLOW}使用本地備份目錄...${NC}"
                 BACKUP_DIR="backups"
                 mkdir -p "$BACKUP_DIR"
-                TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
                 BACKUP_FILE="$BACKUP_DIR/fund_report_uninstall_${TIMESTAMP}.db"
                 cp "database/fund_report.db" "$BACKUP_FILE"
                 # 驗證備份檔案
@@ -330,7 +330,7 @@ if [ -f "database/fund_report.db" ]; then
             # 有權限，直接備份到 /opt 下的獨立目錄
             mkdir -p "$SYSTEM_BACKUP_DIR"
             if [ $? -eq 0 ]; then
-                TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
                 BACKUP_FILE="$SYSTEM_BACKUP_DIR/fund_report_${TIMESTAMP}.db"
                 cp "database/fund_report.db" "$BACKUP_FILE"
                 chmod 644 "$BACKUP_FILE"
@@ -354,7 +354,7 @@ if [ -f "database/fund_report.db" ]; then
                 echo -e "${YELLOW}無法寫入 /opt，使用本地備份目錄...${NC}"
                 BACKUP_DIR="backups"
                 mkdir -p "$BACKUP_DIR"
-                TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+                TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
                 BACKUP_FILE="$BACKUP_DIR/fund_report_uninstall_${TIMESTAMP}.db"
                 cp "database/fund_report.db" "$BACKUP_FILE"
                 # 驗證備份檔案

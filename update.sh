@@ -108,7 +108,7 @@ if [ -n "$(git status --porcelain)" ]; then
     echo ""
     read -p "是否要暫存 (stash) 這些變更後繼續更新? (Y/n): " stash_choice
     if [[ ! $stash_choice =~ ^[Nn]$ ]]; then
-        git stash push -u -m "update.sh 自動暫存 $(date +%Y%m%d_%H%M%S)"
+        git stash push -u -m "update.sh 自動暫存 $(TZ=CST-8 date +%Y%m%d_%H%M%S)"
         STASHED=true
         echo -e "${GREEN}✓ 已暫存本地變更（可用 'git stash list' 查看，'git stash pop' 還原）${NC}"
     else
@@ -122,7 +122,7 @@ echo ""
 if [ -f "database/fund_report.db" ]; then
     echo "4. 更新前備份資料庫..."
     mkdir -p backups
-    TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+    TIMESTAMP=$(TZ=CST-8 date +%Y%m%d_%H%M%S)
     cp "database/fund_report.db" "backups/fund_report_pre-update_${TIMESTAMP}.db"
     echo -e "${GREEN}✓ 已備份至 backups/fund_report_pre-update_${TIMESTAMP}.db${NC}"
     echo ""
