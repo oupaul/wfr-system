@@ -1,0 +1,19 @@
+{
+  "name": "資金週報系統",
+  "short_name": "資金週報",
+  "description": "企業資金週報：帳戶餘額、收支記錄、資金缺口預估",
+  "lang": "zh-TW",
+  "dir": "ltr",
+  "start_url": "/login.html?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FFFFFF",
+  "theme_color": "#1E293B",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -93,7 +93,13 @@ app.use(cors((req, callback) => {
 
 app.use(express.json({ limit: '1mb' })); // 貼上匯入單次最多 1000 筆，預設 100kb 不夠
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static('public'));
+app.use(express.static('public', {
+    setHeaders: (res, filePath) => {
+        // PWA：manifest 要有正確的 MIME；Service Worker 與離線頁不可被瀏覽器長時間快取，才能隨部署更新
+        if (filePath.endsWith('manifest.json')) res.type('application/manifest+json');
+        if (filePath.endsWith('sw.js') || filePath.endsWith('offline.html')) res.set('Cache-Control', 'no-cache');
+    }
+}));
 
 // ==================== 路由載入 ====================
 const authRoutes = require('./routes/auth');

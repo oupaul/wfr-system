@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#1E293B">
+    <title>需要網路連線 - 資金週報</title>
+    <style>
+        :root { --ink: #1E293B; --muted: #64748B; --accent: #F06000; --line: #E2E8F0; --bg: #FFFFFF; }
+        @media (prefers-color-scheme: dark) {
+            :root { --ink: #F1F5F9; --muted: #94A3B8; --line: #334155; --bg: #0F172A; }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+            background: var(--bg); color: var(--ink);
+            font-family: -apple-system, 'Microsoft JhengHei', 'PingFang TC', Arial, sans-serif; padding: 24px;
+        }
+        .card { max-width: 360px; text-align: center; border: 1px solid var(--line); border-radius: 16px; padding: 32px 24px; }
+        img { width: 72px; height: 72px; border-radius: 16px; }
+        h1 { font-size: 20px; margin: 16px 0 8px; }
+        p { color: var(--muted); line-height: 1.7; margin: 0 0 20px; font-size: 14px; }
+        button {
+            border: none; border-radius: 8px; padding: 12px 28px; font-size: 15px; cursor: pointer;
+            background: #1E293B; color: #fff; border-bottom: 3px solid var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="/icons/icon-192.png" alt="資金週報">
+        <h1>目前無法連線</h1>
+        <p>資金週報需要網路連線才能顯示最新的餘額與收支資料。<br>為了避免看到過期的財務數字，離線時不會顯示任何資料。</p>
+        <button type="button" onclick="location.reload()">重新連線</button>
+    </div>
+</body>
+</html>
