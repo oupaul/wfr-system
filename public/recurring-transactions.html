@@ -581,6 +581,10 @@
                         <input type="date" id="generateDate" required>
                     </div>
                     <div class="form-group">
+                        <label for="generateDescription">說明</label>
+                        <input type="text" id="generateDescription" maxlength="200" placeholder="寫入這筆收支記錄的說明（預設帶範本說明）">
+                    </div>
+                    <div class="form-group">
                         <label for="generateAmount">實際金額 <span class="required">*</span></label>
                         <input type="number" id="generateAmount" step="0.01" min="0.01" required oninput="onGenerateAmountInput()">
                         <small id="generateEstimateHint" style="color: #64748B; font-size: 12px;"></small>
@@ -816,6 +820,7 @@
             document.getElementById('generateSummary').textContent =
                 `${t.description || t.category || '週期範本'}（排定日期 ${t.next_run_date}）`;
             document.getElementById('generateDate').value = t.next_run_date;
+            document.getElementById('generateDescription').value = t.description || '';
             document.getElementById('generateAmount').value = t.amount;
             document.getElementById('generateEstimateHint').textContent = `範本預估金額：${formatCurrency(t.amount)}`;
             const isFinancing = !!t.financing_id;
@@ -850,6 +855,7 @@
             const t = templatesCache.find(x => String(x.id) === String(id));
             const payload = {
                 transaction_date: document.getElementById('generateDate').value,
+                description: document.getElementById('generateDescription').value,
                 amount: parseFloat(document.getElementById('generateAmount').value),
                 update_template_amount: document.getElementById('generateUpdateTemplate').checked
             };

@@ -213,13 +213,16 @@ router.post('/:id/generate', requireEditor, async (req, res) => {
             }
         }
         const updateTemplateAmount = body.update_template_amount === true;
+        // 說明可在確認視窗另外填寫（寫入這筆收支記錄）；沒填就沿用範本的說明
+        const actualDescription = typeof body.description === 'string' && body.description.trim()
+            ? body.description.trim() : (template.description || null);
 
         transactionId = await new Promise((resolve, reject) => {
             db.run(
                 `INSERT INTO transactions
                  (transaction_date, type, amount, category, description, company_name, account_name, account_number, remarks)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [runDate, template.type, actualAmount, template.category || null, template.description || null,
+                [runDate, template.type, actualAmount, template.category || null, actualDescription,
                  template.company_name || null, template.account_name || null, template.account_number || null, template.remarks || null],
                 function (err) { err ? reject(err) : resolve(this.lastID); }
             );
