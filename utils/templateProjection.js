@@ -42,28 +42,45 @@ function projectTemplateOccurrences(template, todayStr, maxDateStr) {
     return occurrences;
 }
 
-// 以帳戶的公司/帳戶名稱/帳號比對範本（範本跟交易一樣存的是去正規化文字）。
+// 一次查出所有啟用中的範本，再依帳戶的公司/帳戶名稱/帳號比對（範本跟交易一樣存的是去正規化文字）。
+// 比對規則：公司名稱（帳戶沒有公司時視為 ''）與帳戶名稱要完全相同；帳戶有帳號時範本帳號要相同，
+// 帳戶沒有帳號時範本帳號也要是 NULL。回傳 Map<account.id, 預計事件[]>。
 // 永遠 resolve，查詢失敗只記錄錯誤、回傳空陣列。
-function getProjectedTemplateRows(db, account, todayStr, maxDateStr) {
+function getProjectedTemplateRowsByAccount(db, accounts, todayStr, maxDateStr) {
     return new Promise((resolve) => {
-        if (!account || !account.account_name) return resolve([]);
+        const result = new Map();
+        (accounts || []).forEach((a) => result.set(a.id, []));
         db.all(
             `SELECT * FROM recurring_transactions
-             WHERE is_active = 1 AND next_run_date IS NOT NULL AND financing_id IS NULL
-               AND company_name = ? AND account_name = ?
-               AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))`,
-            [account.company_name || '', account.account_name, account.account_number || null, account.account_number || null],
+             WHERE is_active = 1 AND next_run_date IS NOT NULL AND financing_id IS NULL`,
+            [],
             (err, templates) => {
                 if (err) {
                     console.error('[範本投影] 查詢 recurring_transactions 失敗:', err.message);
-                    return resolve([]);
+                    return resolve(result);
                 }
-                const rows = [];
-                (templates || []).forEach((t) => rows.push(...projectTemplateOccurrences(t, todayStr, maxDateStr)));
-                resolve(rows);
+                (accounts || []).forEach((account) => {
+                    if (!account.account_name) return;
+                    const company = account.company_name || '';
+                    const number = account.account_number || null;
+                    (templates || []).forEach((t) => {
+                        const sameNumber = number !== null ? t.account_number === number : t.account_number == null;
+                        if (t.company_name === company && t.account_name === account.account_name && sameNumber) {
+                            result.get(account.id).push(...projectTemplateOccurrences(t, todayStr, maxDateStr));
+                        }
+                    });
+                });
+                resolve(result);
             }
         );
     });
 }
 
-module.exports = { getProjectedTemplateRows, projectTemplateOccurrences };
+// 單一帳戶版本
+function getProjectedTemplateRows(db, account, todayStr, maxDateStr) {
+    if (!account || !account.account_name) return Promise.resolve([]);
+    return getProjectedTemplateRowsByAccount(db, [account], todayStr, maxDateStr)
+        .then((map) => map.get(account.id) || []);
+}
+
+module.exports = { getProjectedTemplateRows, getProjectedTemplateRowsByAccount, projectTemplateOccurrences };

@@ -33,4 +33,40 @@ function getLatestSettlement(db, { companyName, accountName, accountNumber }) {
     });
 }
 
-module.exports = { getLatestSettlement };
+// 一次查詢取回多個帳戶各自「最近一次結算」，比對規則跟上面 getLatestSettlement 完全一致，
+// 只是改成一次撈出相關帳戶名稱的所有結算、在記憶體裡依帳戶挑選，避免每個帳戶各查一次。
+// 同一天有多筆結算時取 id 較小（較早建立）的那一筆，跟上面單筆查詢（ORDER BY settlement_date DESC LIMIT 1）
+// 實際回傳的結果一致，確保批次與單筆兩種算法算出同一個起算基準。
+// accounts: [{ id, company_name, account_name, account_number }]；回傳 Map<account.id, 結算列|null>
+async function getLatestSettlementsForAccounts(db, accounts) {
+    const result = new Map();
+    const names = [...new Set(accounts.map((a) => a.account_name).filter(Boolean))];
+    accounts.forEach((a) => result.set(a.id, null));
+    if (names.length === 0) return result;
+
+    const rows = await new Promise((resolve, reject) => {
+        db.all(
+            `SELECT settlement_date, company_name, account_name, account_number, actual_balance
+             FROM balance_settlements
+             WHERE account_name IN (${names.map(() => '?').join(',')})
+             ORDER BY settlement_date DESC, id ASC`,
+            names,
+            (err, r) => (err ? reject(err) : resolve(r || []))
+        );
+    });
+
+    accounts.forEach((a) => {
+        if (!a.account_name) return;
+        const companyName = a.company_name || null;
+        const accountNumber = a.account_number || null;
+        const match = rows.find((r) =>
+            r.account_name === a.account_name
+            && (!companyName || r.company_name === companyName)
+            && (!accountNumber || r.account_number === accountNumber || r.account_number == null)
+        );
+        result.set(a.id, match || null);
+    });
+    return result;
+}
+
+module.exports = { getLatestSettlement, getLatestSettlementsForAccounts };

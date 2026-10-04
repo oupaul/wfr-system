@@ -92,34 +92,44 @@ function projectRepaymentOccurrences(loan, todayStr, maxDateStr, remainingPrinci
 }
 
 /**
- * 查出某銀行帳戶關聯的所有啟用中借款，投影出未來還款事件。
- * 永遠 resolve（內部查詢失敗只記錄錯誤、回傳空陣列），呼叫端不需要另外處理
- * .catch，避免影響既有資金流水帳/帳戶卡片端點的錯誤處理路徑。
+ * 一次查出多個銀行帳戶關聯的所有啟用中借款，投影出未來還款事件。
+ * 回傳 Map<bankAccountId, 還款事件[]>。永遠 resolve（內部查詢失敗只記錄錯誤、各帳戶回傳空陣列），
+ * 呼叫端不需要另外處理 .catch，避免影響既有資金流水帳/帳戶卡片端點的錯誤處理路徑。
  */
-function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
+function getProjectedRepaymentRowsByAccount(db, bankAccountIds, todayStr, maxDateStr) {
     return new Promise((resolve) => {
-        if (!bankAccountId) return resolve([]);
+        const result = new Map();
+        const ids = [...new Set((bankAccountIds || []).filter(Boolean))];
+        ids.forEach((id) => result.set(id, []));
+        if (ids.length === 0) return resolve(result);
         db.all(
-            `SELECT f.facility_name, f.next_payment_date, f.next_payment_amount, f.repayment_frequency, f.maturity_date,
+            `SELECT f.bank_account_id, f.facility_name, f.next_payment_date, f.next_payment_amount, f.repayment_frequency, f.maturity_date,
                     (f.principal_amount - COALESCE((
                         SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
                     ), 0)) as remaining_principal
              FROM financing f
-             WHERE f.bank_account_id = ? AND f.is_active = 1`,
-            [bankAccountId],
+             WHERE f.bank_account_id IN (${ids.map(() => '?').join(',')}) AND f.is_active = 1`,
+            ids,
             (err, loans) => {
                 if (err) {
                     console.error('[借款投影] 查詢 financing 失敗:', err.message);
-                    return resolve([]);
+                    return resolve(result);
                 }
-                const rows = [];
                 (loans || []).forEach((loan) => {
-                    rows.push(...projectRepaymentOccurrences(loan, todayStr, maxDateStr, loan.remaining_principal));
+                    result.get(loan.bank_account_id)
+                        .push(...projectRepaymentOccurrences(loan, todayStr, maxDateStr, loan.remaining_principal));
                 });
-                resolve(rows);
+                resolve(result);
             }
         );
     });
 }
 
-module.exports = { getProjectedRepaymentRows, projectRepaymentOccurrences, addMonthsClamped };
+// 單一帳戶版本（保留給只需要一個帳戶的呼叫端）
+function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
+    if (!bankAccountId) return Promise.resolve([]);
+    return getProjectedRepaymentRowsByAccount(db, [bankAccountId], todayStr, maxDateStr)
+        .then((map) => map.get(bankAccountId) || []);
+}
+
+module.exports = { getProjectedRepaymentRows, getProjectedRepaymentRowsByAccount, projectRepaymentOccurrences, addMonthsClamped };

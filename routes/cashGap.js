@@ -2,19 +2,107 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
-const { getProjectedRepaymentRows } = require('../utils/financingProjection');
-const { getProjectedTemplateRows } = require('../utils/templateProjection');
-
-// 借款還款投影 + 週期範本投影，一起併入未來預測
-function getProjectedFutureRows(account, today, maxDate) {
-    return Promise.all([
-        getProjectedRepaymentRows(db, account.id, today, maxDate),
-        getProjectedTemplateRows(db, account, today, maxDate)
-    ]).then(([repayments, templates]) => repayments.concat(templates));
-}
-const { getLatestSettlement } = require('../utils/settlementLookup');
+const { getProjectedRepaymentRowsByAccount } = require('../utils/financingProjection');
+const { getProjectedTemplateRowsByAccount } = require('../utils/templateProjection');
+const { getLatestSettlementsForAccounts } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
+
+// ==================== 批次載入（避免每個帳戶各查好幾次資料庫） ====================
+// 原本每個端點都對「每個帳戶」各查一次結算、一次交易、一次借款、一次範本（N+1），
+// 帳戶越多查詢次數線性成長；現在整批各只查一次，再在記憶體裡依帳戶分配，
+// 比對規則（公司/帳戶名稱/帳號、結算日期起算）跟原本逐帳戶查詢完全一致。
+
+function dbAll(sql, params = []) {
+    return new Promise((resolve, reject) => {
+        db.all(sql, params, (err, rows) => (err ? reject(err) : resolve(rows || [])));
+    });
+}
+
+function loadActiveAccounts(extraWhere = '', params = []) {
+    return dbAll(`
+        SELECT ba.*, c.name as company_name
+        FROM bank_accounts ba
+        LEFT JOIN companies c ON ba.company_id = c.id
+        WHERE ba.is_active = 1 ${extraWhere}
+        ORDER BY c.name, ba.account_name
+    `, params);
+}
+
+// 回傳 Map<account.id, { settlement, openingBalance, startDate, rows }>
+// rows：該帳戶從最近一次結算日起到 endDate 為止的真實交易（依日期、id 排序）。
+// 查詢失敗只記錄錯誤、當作沒有資料繼續（跟原本逐帳戶查詢時的容錯行為一致）。
+async function loadAccountInputs(accounts, endDate) {
+    let settlements = new Map();
+    try {
+        settlements = await getLatestSettlementsForAccounts(db, accounts);
+    } catch (err) {
+        logger.error('查詢結算記錄錯誤:', err);
+    }
+
+    const infos = new Map();
+    let minStart = null;
+    accounts.forEach((account) => {
+        const settlement = settlements.get(account.id) || null;
+        const info = {
+            settlement,
+            openingBalance: settlement ? parseFloat(settlement.actual_balance) : 0,
+            startDate: settlement ? settlement.settlement_date : '2000-01-01',
+            rows: []
+        };
+        infos.set(account.id, info);
+        if (minStart === null || info.startDate < minStart) minStart = info.startDate;
+    });
+
+    const names = [...new Set(accounts.map((a) => a.account_name).filter(Boolean))];
+    if (names.length === 0) return infos;
+
+    try {
+        const txRows = await dbAll(`
+            SELECT transaction_date, type, amount, description, company_name, account_name, account_number
+            FROM transactions
+            WHERE account_name IN (${names.map(() => '?').join(',')})
+              AND transaction_date >= ? AND transaction_date <= ?
+            ORDER BY transaction_date, id
+        `, [...names, minStart, endDate]);
+
+        const byName = new Map();
+        txRows.forEach((t) => {
+            if (!byName.has(t.account_name)) byName.set(t.account_name, []);
+            byName.get(t.account_name).push(t);
+        });
+        accounts.forEach((account) => {
+            if (!account.account_name) return;
+            const info = infos.get(account.id);
+            const company = account.company_name || '';
+            const number = account.account_number || null;
+            info.rows = (byName.get(account.account_name) || []).filter((t) =>
+                t.company_name === company
+                && (number !== null ? t.account_number === number : t.account_number === null)
+                && t.transaction_date >= info.startDate
+            );
+        });
+    } catch (err) {
+        logger.error('查詢交易錯誤:', err);
+    }
+    return infos;
+}
+
+// 借款還款投影 + 週期範本投影，一起併入未來預測；回傳 Map<account.id, 預計事件[]>
+async function loadProjectedFutureRows(accounts, today, maxDate) {
+    const [repayments, templates] = await Promise.all([
+        getProjectedRepaymentRowsByAccount(db, accounts.map((a) => a.id), today, maxDate),
+        getProjectedTemplateRowsByAccount(db, accounts, today, maxDate)
+    ]);
+    const result = new Map();
+    accounts.forEach((a) => result.set(a.id, (repayments.get(a.id) || []).concat(templates.get(a.id) || [])));
+    return result;
+}
+
+function sendQueryError(res, logMessage, err) {
+    logger.error(logMessage, err);
+    res.status(500).json({ error: '查詢失敗', details: err.message });
+}
 
 function toLocalDateStr(d) {
     const y = d.getFullYear();
@@ -47,202 +135,132 @@ function buildMonthlyTargetDates(monthsAhead = 3) {
 }
 
 // 資金預估週報儀表板
-router.get('/cash-gap-dashboard', (req, res) => {
+router.get('/cash-gap-dashboard', async (req, res) => {
     const { forecastDays = 28 } = req.query;
     const today = new Date().toISOString().split('T')[0];
     const forecastEndDate = new Date(Date.now() + parseInt(forecastDays) * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    db.all(`
-        SELECT ba.*, c.name as company_name 
-        FROM bank_accounts ba
-        LEFT JOIN companies c ON ba.company_id = c.id
-        WHERE ba.is_active = 1
-        ORDER BY c.name, ba.account_name
-    `, [], (err, accounts) => {
-        if (err) {
-            logger.error('查詢帳戶錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
-        }
-
-        const dashboardData = [];
-        let processedCount = 0;
-
+    try {
+        const accounts = await loadActiveAccounts();
         if (accounts.length === 0) {
             return res.json({ data: [], summary: { totalAccounts: 0, totalBalance: 0, gapAccounts: 0, nearestGapDate: null, totalGap: 0, currentDate: today } });
         }
+        const inputs = await loadAccountInputs(accounts, forecastEndDate);
 
-        accounts.forEach((account) => {
-            getLatestSettlement(db, {
-                companyName: account.company_name || null,
-                accountName: account.account_name || null,
-                accountNumber: account.account_number || null
-            }).catch((err) => {
-                logger.error('查詢結算記錄錯誤:', err);
-                return null;
-            }).then((settlement) => {
+        const dashboardData = accounts.map((account) => {
+            const { settlement, openingBalance, rows } = inputs.get(account.id);
 
-                const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
-                const startDate = settlement ? settlement.settlement_date : '2000-01-01';
-
-                db.all(`
-                    SELECT
-                        type,
-                        SUM(CASE WHEN transaction_date >= ? AND transaction_date <= ? THEN amount ELSE 0 END) as future_amount,
-                        COUNT(CASE WHEN transaction_date >= ? AND transaction_date <= ? THEN 1 ELSE NULL END) as future_count
-                    FROM transactions
-                    WHERE company_name = ?
-                      AND account_name = ?
-                      AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))
-                      AND transaction_date >= ?
-                      AND transaction_date <= ?
-                    GROUP BY type
-                `, [today, forecastEndDate, today, forecastEndDate,
-                    account.company_name || '', account.account_name || null, account.account_number || null, account.account_number || null,
-                    startDate, forecastEndDate], (err, futureTransactions) => {
-                    if (err) {
-                        logger.error('查詢未來交易錯誤:', err);
-                    }
-
-                    db.all(`
-                        SELECT 
-                            type,
-                            SUM(amount) as total_amount
-                        FROM transactions
-                        WHERE company_name = ?
-                          AND account_name = ?
-                          AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))
-                          AND transaction_date >= ?
-                          AND transaction_date <= ?
-                        GROUP BY type
-                    `, [account.company_name || '', account.account_name || null, account.account_number || null, account.account_number || null,
-                        startDate, today], (err, pastTransactions) => {
-                        if (err) {
-                            logger.error('查詢過去交易錯誤:', err);
-                        }
-
-                        let pastIncome = 0;
-                        let pastExpense = 0;
-                        pastTransactions?.forEach(t => {
-                            if (t.type === 'income') pastIncome += parseFloat(t.total_amount) || 0;
-                            else pastExpense += parseFloat(t.total_amount) || 0;
-                        });
-
-                        let futureIncome = 0;
-                        let futureExpense = 0;
-                        futureTransactions?.forEach(t => {
-                            if (t.type === 'income') futureIncome += parseFloat(t.future_amount) || 0;
-                            else futureExpense += parseFloat(t.future_amount) || 0;
-                        });
-
-                        const currentBalance = openingBalance + pastIncome - pastExpense;
-                        const projectedBalance = currentBalance + futureIncome - futureExpense;
-                        const safetyLevel = parseFloat(account.safety_level) || 0;
-                        const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
-                        const isGap = gap > 0;
-
-                        let gapDate = null;
-                        if (isGap) {
-                            if (currentBalance < safetyLevel) {
-                                gapDate = today;
-                            } else {
-                                const netCashFlow = futureIncome - futureExpense;
-                                const daysToForecast = parseInt(forecastDays);
-
-                                if (netCashFlow < 0 && daysToForecast > 0) {
-                                    const dailyNetFlow = Math.abs(netCashFlow) / daysToForecast;
-                                    const balanceBuffer = currentBalance - safetyLevel;
-                                    if (dailyNetFlow > 0) {
-                                        const daysToGap = Math.ceil(balanceBuffer / dailyNetFlow);
-                                        if (daysToGap > 0 && daysToGap <= daysToForecast) {
-                                            const gapDateObj = new Date(Date.now() + daysToGap * 24 * 60 * 60 * 1000);
-                                            gapDate = gapDateObj.toISOString().split('T')[0];
-                                        } else {
-                                            gapDate = forecastEndDate;
-                                        }
-                                    } else {
-                                        gapDate = forecastEndDate;
-                                    }
-                                } else {
-                                    gapDate = forecastEndDate;
-                                }
-                            }
-                        }
-
-                        dashboardData.push({
-                            account_id: account.id,
-                            company_name: account.company_name || '',
-                            account_name: account.account_name || '',
-                            account_number: account.account_number || '',
-                            opening_balance: openingBalance,
-                            current_balance: currentBalance,
-                            past_income: pastIncome,
-                            past_expense: pastExpense,
-                            future_income: futureIncome,
-                            future_expense: futureExpense,
-                            projected_balance: projectedBalance,
-                            safety_level: safetyLevel,
-                            gap: gap,
-                            is_gap: isGap,
-                            gap_date: gapDate,
-                            last_settlement_date: settlement?.settlement_date || null
-                        });
-
-                        processedCount++;
-                        if (processedCount === accounts.length) {
-                            const gapAccounts = dashboardData.filter(d => d.is_gap);
-                            const totalGap = dashboardData.reduce((sum, d) => sum + d.gap, 0);
-                            const totalBalance = dashboardData.reduce((sum, d) => sum + (d.current_balance || 0), 0);
-
-                            let nearestGapDate = null;
-                            if (gapAccounts.length > 0) {
-                                const gapDates = gapAccounts
-                                    .map(d => d.gap_date)
-                                    .filter(date => date !== null)
-                                    .sort();
-                                if (gapDates.length > 0) {
-                                    nearestGapDate = gapDates[0];
-                                }
-                            }
-
-                            res.json({
-                                data: dashboardData,
-                                summary: {
-                                    totalAccounts: accounts.length,
-                                    totalBalance: totalBalance,
-                                    gapAccounts: gapAccounts.length,
-                                    nearestGapDate: nearestGapDate,
-                                    totalGap: totalGap,
-                                    forecastDays: parseInt(forecastDays),
-                                    forecastEndDate: forecastEndDate,
-                                    currentDate: today
-                                }
-                            });
-                        }
-                    });
-                });
+            let pastIncome = 0;
+            let pastExpense = 0;
+            let futureIncome = 0;
+            let futureExpense = 0;
+            rows.forEach((t) => {
+                const amt = parseFloat(t.amount) || 0;
+                const isIncome = t.type === 'income';
+                if (t.transaction_date <= today) {
+                    if (isIncome) pastIncome += amt; else pastExpense += amt;
+                }
+                if (t.transaction_date >= today) {
+                    if (isIncome) futureIncome += amt; else futureExpense += amt;
+                }
             });
+
+            const currentBalance = openingBalance + pastIncome - pastExpense;
+            const projectedBalance = currentBalance + futureIncome - futureExpense;
+            const safetyLevel = parseFloat(account.safety_level) || 0;
+            const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
+            const isGap = gap > 0;
+
+            let gapDate = null;
+            if (isGap) {
+                if (currentBalance < safetyLevel) {
+                    gapDate = today;
+                } else {
+                    const netCashFlow = futureIncome - futureExpense;
+                    const daysToForecast = parseInt(forecastDays);
+
+                    if (netCashFlow < 0 && daysToForecast > 0) {
+                        const dailyNetFlow = Math.abs(netCashFlow) / daysToForecast;
+                        const balanceBuffer = currentBalance - safetyLevel;
+                        if (dailyNetFlow > 0) {
+                            const daysToGap = Math.ceil(balanceBuffer / dailyNetFlow);
+                            if (daysToGap > 0 && daysToGap <= daysToForecast) {
+                                const gapDateObj = new Date(Date.now() + daysToGap * 24 * 60 * 60 * 1000);
+                                gapDate = gapDateObj.toISOString().split('T')[0];
+                            } else {
+                                gapDate = forecastEndDate;
+                            }
+                        } else {
+                            gapDate = forecastEndDate;
+                        }
+                    } else {
+                        gapDate = forecastEndDate;
+                    }
+                }
+            }
+
+            return {
+                account_id: account.id,
+                company_name: account.company_name || '',
+                account_name: account.account_name || '',
+                account_number: account.account_number || '',
+                opening_balance: openingBalance,
+                current_balance: currentBalance,
+                past_income: pastIncome,
+                past_expense: pastExpense,
+                future_income: futureIncome,
+                future_expense: futureExpense,
+                projected_balance: projectedBalance,
+                safety_level: safetyLevel,
+                gap: gap,
+                is_gap: isGap,
+                gap_date: gapDate,
+                last_settlement_date: settlement?.settlement_date || null
+            };
         });
-    });
+
+        const gapAccounts = dashboardData.filter(d => d.is_gap);
+        const totalGap = dashboardData.reduce((sum, d) => sum + d.gap, 0);
+        const totalBalance = dashboardData.reduce((sum, d) => sum + (d.current_balance || 0), 0);
+
+        let nearestGapDate = null;
+        if (gapAccounts.length > 0) {
+            const gapDates = gapAccounts
+                .map(d => d.gap_date)
+                .filter(date => date !== null)
+                .sort();
+            if (gapDates.length > 0) {
+                nearestGapDate = gapDates[0];
+            }
+        }
+
+        res.json({
+            data: dashboardData,
+            summary: {
+                totalAccounts: accounts.length,
+                totalBalance: totalBalance,
+                gapAccounts: gapAccounts.length,
+                nearestGapDate: nearestGapDate,
+                totalGap: totalGap,
+                forecastDays: parseInt(forecastDays),
+                forecastEndDate: forecastEndDate,
+                currentDate: today
+            }
+        });
+    } catch (err) {
+        sendQueryError(res, '資金預估週報儀表板錯誤:', err);
+    }
 });
 
 // 資金缺口：未來三個月每月 15 號、30 號
-router.get('/cash-gap-dashboard-by-dates', (req, res) => {
+router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
     const now = new Date();
     const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
     const targetDates = buildMonthlyTargetDates();
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
-    db.all(`
-        SELECT ba.*, c.name as company_name 
-        FROM bank_accounts ba
-        LEFT JOIN companies c ON ba.company_id = c.id
-        WHERE ba.is_active = 1
-        ORDER BY c.name, ba.account_name
-    `, [], (err, accounts) => {
-        if (err) {
-            logger.error('查詢帳戶錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
-        }
+    try {
+        const accounts = await loadActiveAccounts();
         if (accounts.length === 0) {
             return res.json({
                 targetDates: targetDates,
@@ -250,263 +268,187 @@ router.get('/cash-gap-dashboard-by-dates', (req, res) => {
                 summary: { totalBalance: 0, totalGapByDate: {} }
             });
         }
+        const [inputs, projections] = await Promise.all([
+            loadAccountInputs(accounts, maxDate),
+            loadProjectedFutureRows(accounts, today, maxDate)
+        ]);
 
-        const dashboardData = [];
-        let processedCount = 0;
+        const dashboardData = accounts.map((account) => {
+            const { settlement, openingBalance, rows } = inputs.get(account.id);
+            const safetyLevel = parseFloat(account.safety_level) || 0;
+            const projectedRows = projections.get(account.id) || [];
 
-        accounts.forEach((account) => {
-            getLatestSettlement(db, {
-                companyName: account.company_name || null,
-                accountName: account.account_name || null,
-                accountNumber: account.account_number || null
-            }).catch((err) => {
-                logger.error('查詢結算記錄錯誤:', err);
-                return null;
-            }).then((settlement) => {
-                const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
-                const startDate = settlement ? settlement.settlement_date : '2000-01-01';
-
-                db.all(`
-                    SELECT transaction_date, type, amount
-                    FROM transactions
-                    WHERE company_name = ?
-                      AND account_name = ?
-                      AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))
-                      AND transaction_date >= ?
-                      AND transaction_date <= ?
-                    ORDER BY transaction_date
-                `, [
-                    account.company_name || '',
-                    account.account_name || null,
-                    account.account_number || null,
-                    account.account_number || null,
-                    startDate,
-                    maxDate
-                ], (err, rows) => {
-                    if (err) {
-                        logger.error('查詢交易錯誤:', err);
-                    }
-                    const safetyLevel = parseFloat(account.safety_level) || 0;
-
-                    getProjectedFutureRows(account, today, maxDate).then((projectedRows) => {
-                        // 「未來預測」的檢查點才併入借款投影；current_balance/
-                        // transaction_count 維持只用真實交易，確保「目前」的數字
-                        // 永遠是真實資料
-                        const allRows = (rows || []).concat(projectedRows);
-                        const byDate = targetDates.map((dateStr) => {
-                            let income = 0, expense = 0;
-                            allRows.forEach((r) => {
-                                if (r.transaction_date > dateStr) return;
-                                const amt = parseFloat(r.amount) || 0;
-                                if (r.type === 'income') income += amt;
-                                else expense += amt;
-                            });
-                            const projectedBalance = openingBalance + income - expense;
-                            const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
-                            return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
-                        });
-                        let currentBalance = openingBalance;
-                        (rows || []).forEach((r) => {
-                            if (r.transaction_date > today) return;
-                            const amt = parseFloat(r.amount) || 0;
-                            if (r.type === 'income') currentBalance += amt;
-                            else currentBalance -= amt;
-                        });
-
-                        dashboardData.push({
-                            account_id: account.id,
-                            company_name: account.company_name || '',
-                            account_name: account.account_name || '',
-                            account_number: account.account_number || '',
-                            account_type: account.account_type || '',
-                            bank_name: account.bank_name || '',
-                            opening_balance: openingBalance,
-                            current_balance: currentBalance,
-                            safety_level: safetyLevel,
-                            last_settlement_date: settlement?.settlement_date || null,
-                            transaction_count: (rows || []).length,
-                            by_date: byDate
-                        });
-
-                        processedCount++;
-                        if (processedCount === accounts.length) {
-                            const totalBalance = dashboardData.reduce((s, d) => s + (d.current_balance || 0), 0);
-                            const totalGapByDate = {};
-                            targetDates.forEach((d) => {
-                                totalGapByDate[d] = dashboardData.reduce((s, a) => s + (a.by_date.find((x) => x.date === d)?.gap || 0), 0);
-                            });
-                            res.json({
-                                targetDates,
-                                data: dashboardData,
-                                summary: {
-                                    totalBalance,
-                                    totalGapByDate,
-                                    currentDate: today
-                                }
-                            });
-                        }
-                    });
+            // 「未來預測」的檢查點才併入借款投影；current_balance/
+            // transaction_count 維持只用真實交易，確保「目前」的數字
+            // 永遠是真實資料
+            const allRows = rows.concat(projectedRows);
+            const byDate = targetDates.map((dateStr) => {
+                let income = 0, expense = 0;
+                allRows.forEach((r) => {
+                    if (r.transaction_date > dateStr) return;
+                    const amt = parseFloat(r.amount) || 0;
+                    if (r.type === 'income') income += amt;
+                    else expense += amt;
                 });
+                const projectedBalance = openingBalance + income - expense;
+                const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
+                return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
             });
+            let currentBalance = openingBalance;
+            rows.forEach((r) => {
+                if (r.transaction_date > today) return;
+                const amt = parseFloat(r.amount) || 0;
+                if (r.type === 'income') currentBalance += amt;
+                else currentBalance -= amt;
+            });
+
+            return {
+                account_id: account.id,
+                company_name: account.company_name || '',
+                account_name: account.account_name || '',
+                account_number: account.account_number || '',
+                account_type: account.account_type || '',
+                bank_name: account.bank_name || '',
+                opening_balance: openingBalance,
+                current_balance: currentBalance,
+                safety_level: safetyLevel,
+                last_settlement_date: settlement?.settlement_date || null,
+                transaction_count: rows.length,
+                by_date: byDate
+            };
         });
-    });
+
+        const totalBalance = dashboardData.reduce((s, d) => s + (d.current_balance || 0), 0);
+        const totalGapByDate = {};
+        targetDates.forEach((d) => {
+            totalGapByDate[d] = dashboardData.reduce((s, a) => s + (a.by_date.find((x) => x.date === d)?.gap || 0), 0);
+        });
+        res.json({
+            targetDates,
+            data: dashboardData,
+            summary: {
+                totalBalance,
+                totalGapByDate,
+                currentDate: today
+            }
+        });
+    } catch (err) {
+        sendQueryError(res, '各檢查日預計餘額錯誤:', err);
+    }
 });
 
 // 資金流水帳檢視：帳戶為欄、逐筆交易與每月 15/30 號結餘檢查點為列
-router.get('/cash-gap-ledger', (req, res) => {
+router.get('/cash-gap-ledger', async (req, res) => {
     const now = new Date();
     const today = toLocalDateStr(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
     const targetDates = buildMonthlyTargetDates(12);
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
-    db.all(`
-        SELECT ba.*, c.name as company_name
-        FROM bank_accounts ba
-        LEFT JOIN companies c ON ba.company_id = c.id
-        WHERE ba.is_active = 1
-        ORDER BY c.name, ba.account_name
-    `, [], (err, accounts) => {
-        if (err) {
-            logger.error('查詢帳戶錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
-        }
+    try {
+        const accounts = await loadActiveAccounts();
         if (accounts.length === 0) {
             return res.json({ targetDates, columns: [], rows: [] });
         }
+        const [inputs, projections] = await Promise.all([
+            loadAccountInputs(accounts, maxDate),
+            loadProjectedFutureRows(accounts, today, maxDate)
+        ]);
 
         const columns = [];
         const accountFutureTxns = {};
-        let processedCount = 0;
-
         accounts.forEach((account) => {
-            getLatestSettlement(db, {
-                companyName: account.company_name || null,
-                accountName: account.account_name || null,
-                accountNumber: account.account_number || null
-            }).catch((err) => {
-                logger.error('查詢結算記錄錯誤:', err);
-                return null;
-            }).then((settlement) => {
-                const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
-                const startDate = settlement ? settlement.settlement_date : '2000-01-01';
+            const { openingBalance, rows } = inputs.get(account.id);
 
-                db.all(`
-                    SELECT transaction_date, type, amount, description
-                    FROM transactions
-                    WHERE company_name = ?
-                      AND account_name = ?
-                      AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))
-                      AND transaction_date >= ?
-                      AND transaction_date <= ?
-                    ORDER BY transaction_date, id
-                `, [
-                    account.company_name || '', account.account_name || null, account.account_number || null, account.account_number || null,
-                    startDate, maxDate
-                ], (err, rows) => {
-                    if (err) {
-                        logger.error('查詢交易錯誤:', err);
-                    }
-
-                    let currentBalance = openingBalance;
-                    (rows || []).forEach((r) => {
-                        if (r.transaction_date > today) return;
-                        const amt = parseFloat(r.amount) || 0;
-                        currentBalance += (r.type === 'income' ? amt : -amt);
-                    });
-
-                    getProjectedFutureRows(account, today, maxDate).then((projectedRows) => {
-                    columns.push({
-                        account_id: account.id,
-                        company_name: account.company_name || '',
-                        account_name: account.account_name || '',
-                        account_number: account.account_number || '',
-                        account_type: account.account_type || '',
-                        bank_name: account.bank_name || '',
-                        opening_balance: openingBalance,
-                        current_balance: currentBalance
-                    });
-                    // 真實未來交易 + 借款投影還款合併成同一份「未來事件」清單，
-                    // 下面的 eventDateSet 建立與逐日累加餘額邏輯對兩者一視同仁
-                    accountFutureTxns[account.id] = (rows || [])
-                        .filter((r) => r.transaction_date > today)
-                        .concat(projectedRows);
-
-                    processedCount++;
-                    if (processedCount === accounts.length) {
-                        // 還原成查詢時的帳戶順序（各帳戶的非同步查詢完成順序不保證一致）
-                        columns.sort((a, b) =>
-                            accounts.findIndex((x) => x.id === a.account_id) - accounts.findIndex((x) => x.id === b.account_id)
-                        );
-
-                        const rowsOut = [];
-
-                        const balancesToday = {};
-                        columns.forEach((c) => { balancesToday[c.account_id] = c.current_balance; });
-                        rowsOut.push({ type: 'balance', date: today, label: '資金餘額', balances: balancesToday });
-
-                        const eventDateSet = new Set(targetDates.filter((d) => d > today));
-                        columns.forEach((c) => {
-                            accountFutureTxns[c.account_id].forEach((t) => eventDateSet.add(t.transaction_date));
-                        });
-                        const eventDates = Array.from(eventDateSet).sort();
-
-                        const running = {};
-                        columns.forEach((c) => { running[c.account_id] = c.current_balance; });
-
-                        eventDates.forEach((dateStr) => {
-                            columns.forEach((c) => {
-                                accountFutureTxns[c.account_id]
-                                    .filter((t) => t.transaction_date === dateStr)
-                                    .forEach((t) => {
-                                        const amt = parseFloat(t.amount) || 0;
-                                        running[c.account_id] += (t.type === 'income' ? amt : -amt);
-                                        rowsOut.push({
-                                            type: 'transaction',
-                                            date: dateStr,
-                                            account_id: c.account_id,
-                                            description: t.description || '',
-                                            txn_type: t.type,
-                                            amount: amt,
-                                            is_projected: !!t.is_projected
-                                        });
-                                    });
-                            });
-
-                            if (targetDates.includes(dateStr)) {
-                                const balancesSnapshot = {};
-                                columns.forEach((c) => { balancesSnapshot[c.account_id] = running[c.account_id]; });
-                                rowsOut.push({ type: 'balance', date: dateStr, label: '資金餘額', balances: balancesSnapshot });
-                            }
-                        });
-
-                        // 帳戶餘額在整段檢視期間都是 0（沒有結算金額也沒有任何交易）就不顯示，減少表格雜訊
-                        const balanceRows = rowsOut.filter((r) => r.type === 'balance');
-                        const zeroAccountIds = new Set(
-                            columns
-                                .filter((c) => balanceRows.every((r) => (r.balances[c.account_id] || 0) === 0))
-                                .map((c) => c.account_id)
-                        );
-                        const visibleColumns = columns.filter((c) => !zeroAccountIds.has(c.account_id));
-                        const visibleRows = rowsOut
-                            .filter((r) => r.type !== 'transaction' || !zeroAccountIds.has(r.account_id))
-                            .map((r) => {
-                                if (r.type !== 'balance') return r;
-                                const balances = { ...r.balances };
-                                zeroAccountIds.forEach((id) => delete balances[id]);
-                                return { ...r, balances };
-                            });
-
-                        res.json({ targetDates, columns: visibleColumns, rows: visibleRows });
-                    }
-                    });
-                });
+            let currentBalance = openingBalance;
+            rows.forEach((r) => {
+                if (r.transaction_date > today) return;
+                const amt = parseFloat(r.amount) || 0;
+                currentBalance += (r.type === 'income' ? amt : -amt);
             });
+
+            columns.push({
+                account_id: account.id,
+                company_name: account.company_name || '',
+                account_name: account.account_name || '',
+                account_number: account.account_number || '',
+                account_type: account.account_type || '',
+                bank_name: account.bank_name || '',
+                opening_balance: openingBalance,
+                current_balance: currentBalance
+            });
+            // 真實未來交易 + 借款投影還款 + 週期範本投影合併成同一份「未來事件」清單，
+            // 下面的 eventDateSet 建立與逐日累加餘額邏輯對三者一視同仁
+            accountFutureTxns[account.id] = rows
+                .filter((r) => r.transaction_date > today)
+                .concat(projections.get(account.id) || []);
         });
-    });
+
+        const rowsOut = [];
+
+        const balancesToday = {};
+        columns.forEach((c) => { balancesToday[c.account_id] = c.current_balance; });
+        rowsOut.push({ type: 'balance', date: today, label: '資金餘額', balances: balancesToday });
+
+        const eventDateSet = new Set(targetDates.filter((d) => d > today));
+        columns.forEach((c) => {
+            accountFutureTxns[c.account_id].forEach((t) => eventDateSet.add(t.transaction_date));
+        });
+        const eventDates = Array.from(eventDateSet).sort();
+
+        const running = {};
+        columns.forEach((c) => { running[c.account_id] = c.current_balance; });
+
+        eventDates.forEach((dateStr) => {
+            columns.forEach((c) => {
+                accountFutureTxns[c.account_id]
+                    .filter((t) => t.transaction_date === dateStr)
+                    .forEach((t) => {
+                        const amt = parseFloat(t.amount) || 0;
+                        running[c.account_id] += (t.type === 'income' ? amt : -amt);
+                        rowsOut.push({
+                            type: 'transaction',
+                            date: dateStr,
+                            account_id: c.account_id,
+                            description: t.description || '',
+                            txn_type: t.type,
+                            amount: amt,
+                            is_projected: !!t.is_projected
+                        });
+                    });
+            });
+
+            if (targetDates.includes(dateStr)) {
+                const balancesSnapshot = {};
+                columns.forEach((c) => { balancesSnapshot[c.account_id] = running[c.account_id]; });
+                rowsOut.push({ type: 'balance', date: dateStr, label: '資金餘額', balances: balancesSnapshot });
+            }
+        });
+
+        // 帳戶餘額在整段檢視期間都是 0（沒有結算金額也沒有任何交易）就不顯示，減少表格雜訊
+        const balanceRows = rowsOut.filter((r) => r.type === 'balance');
+        const zeroAccountIds = new Set(
+            columns
+                .filter((c) => balanceRows.every((r) => (r.balances[c.account_id] || 0) === 0))
+                .map((c) => c.account_id)
+        );
+        const visibleColumns = columns.filter((c) => !zeroAccountIds.has(c.account_id));
+        const visibleRows = rowsOut
+            .filter((r) => r.type !== 'transaction' || !zeroAccountIds.has(r.account_id))
+            .map((r) => {
+                if (r.type !== 'balance') return r;
+                const balances = { ...r.balances };
+                zeroAccountIds.forEach((id) => delete balances[id]);
+                return { ...r, balances };
+            });
+
+        res.json({ targetDates, columns: visibleColumns, rows: visibleRows });
+    } catch (err) {
+        sendQueryError(res, '資金流水帳錯誤:', err);
+    }
 });
 
 // 資金缺口對帳 API
-router.get('/cash-gap-reconciliation', (req, res) => {
+router.get('/cash-gap-reconciliation', async (req, res) => {
     const company = (req.query.company || '').trim();
     const account = (req.query.account || '').trim();
     const now = new Date();
@@ -514,19 +456,12 @@ router.get('/cash-gap-reconciliation', (req, res) => {
     const targetDates = buildMonthlyTargetDates();
     const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
-    db.all(`
-        SELECT ba.*, c.name as company_name 
-        FROM bank_accounts ba
-        LEFT JOIN companies c ON ba.company_id = c.id
-        WHERE ba.is_active = 1
-          AND (? = '' OR c.name = ? OR c.name LIKE ?)
-          AND (? = '' OR ba.account_name = ? OR ba.account_name LIKE ?)
-        ORDER BY c.name, ba.account_name
-    `, [company, company, company ? `%${company}%` : '%', account, account, account ? `%${account}%` : '%'], (err, accounts) => {
-        if (err) {
-            logger.error('查詢帳戶錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
-        }
+    try {
+        const accounts = await loadActiveAccounts(
+            `AND (? = '' OR c.name = ? OR c.name LIKE ?)
+             AND (? = '' OR ba.account_name = ? OR ba.account_name LIKE ?)`,
+            [company, company, company ? `%${company}%` : '%', account, account, account ? `%${account}%` : '%']
+        );
         if (accounts.length === 0) {
             return res.json({
                 targetDates,
@@ -535,75 +470,45 @@ router.get('/cash-gap-reconciliation', (req, res) => {
                 note: '系統計算：預計餘額 = 期初餘額 + 收入合計 - 支出合計；資金缺口 = 安全水位 - 預計餘額（若預計餘額 < 安全水位）。期初餘額來自「結算」功能，請確認與 Excel 的期初一致。'
             });
         }
+        const inputs = await loadAccountInputs(accounts, maxDate);
 
-        const result = [];
-        let done = 0;
-        accounts.forEach((acc) => {
-            getLatestSettlement(db, {
-                companyName: acc.company_name || null,
-                accountName: acc.account_name || null,
-                accountNumber: acc.account_number || null
-            }).catch((err) => {
-                logger.error('查詢結算記錄錯誤:', err);
-                return null;
-            }).then((settlement) => {
-                const openingBalance = settlement ? parseFloat(settlement.actual_balance) : 0;
-                const startDate = settlement ? settlement.settlement_date : '2000-01-01';
-                db.all(`
-                    SELECT transaction_date, type, amount
-                    FROM transactions
-                    WHERE company_name = ?
-                      AND account_name = ?
-                      AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))
-                      AND transaction_date >= ?
-                      AND transaction_date <= ?
-                    ORDER BY transaction_date
-                `, [
-                    acc.company_name || '', acc.account_name || null, acc.account_number || null, acc.account_number || null,
-                    startDate, maxDate
-                ], (err, rows) => {
-                    if (err) {
-                        done++;
-                        if (done === accounts.length) res.json({ targetDates, currentDate: today, data: result });
-                        return;
-                    }
-                    const safetyLevel = parseFloat(acc.safety_level) || 0;
-                    const byDate = targetDates.map((dateStr) => {
-                        let income = 0, expense = 0;
-                        (rows || []).forEach((r) => {
-                            if (r.transaction_date > dateStr) return;
-                            const amt = parseFloat(r.amount) || 0;
-                            if (r.type === 'income') income += amt;
-                            else expense += amt;
-                        });
-                        const projectedBalance = openingBalance + income - expense;
-                        const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
-                        return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
-                    });
-                    result.push({
-                        account_id: acc.id,
-                        company_name: acc.company_name || '',
-                        account_name: acc.account_name || '',
-                        account_number: acc.account_number || '',
-                        opening_balance: openingBalance,
-                        settlement_date: settlement?.settlement_date || null,
-                        safety_level: safetyLevel,
-                        transaction_count: (rows || []).length,
-                        by_date: byDate
-                    });
-                    done++;
-                    if (done === accounts.length) {
-                        res.json({
-                            targetDates,
-                            currentDate: today,
-                            data: result,
-                            note: '預計餘額 = 期初餘額 + 收入合計 - 支出合計。資金缺口 = 安全水位 - 預計餘額（當預計餘額 < 安全水位）。請確認 Excel 的期初餘額與系統「結算」一致，且公司/帳戶/帳號與系統完全一致。'
-                        });
-                    }
+        const result = accounts.map((acc) => {
+            const { settlement, openingBalance, rows } = inputs.get(acc.id);
+            const safetyLevel = parseFloat(acc.safety_level) || 0;
+            const byDate = targetDates.map((dateStr) => {
+                let income = 0, expense = 0;
+                rows.forEach((r) => {
+                    if (r.transaction_date > dateStr) return;
+                    const amt = parseFloat(r.amount) || 0;
+                    if (r.type === 'income') income += amt;
+                    else expense += amt;
                 });
+                const projectedBalance = openingBalance + income - expense;
+                const gap = projectedBalance < safetyLevel ? safetyLevel - projectedBalance : 0;
+                return { date: dateStr, income_sum: income, expense_sum: expense, projected_balance: projectedBalance, gap };
             });
+            return {
+                account_id: acc.id,
+                company_name: acc.company_name || '',
+                account_name: acc.account_name || '',
+                account_number: acc.account_number || '',
+                opening_balance: openingBalance,
+                settlement_date: settlement?.settlement_date || null,
+                safety_level: safetyLevel,
+                transaction_count: rows.length,
+                by_date: byDate
+            };
         });
-    });
+
+        res.json({
+            targetDates,
+            currentDate: today,
+            data: result,
+            note: '預計餘額 = 期初餘額 + 收入合計 - 支出合計。資金缺口 = 安全水位 - 預計餘額（當預計餘額 < 安全水位）。請確認 Excel 的期初餘額與系統「結算」一致，且公司/帳戶/帳號與系統完全一致。'
+        });
+    } catch (err) {
+        sendQueryError(res, '資金缺口對帳錯誤:', err);
+    }
 });
 
 // 取得匯入記錄
