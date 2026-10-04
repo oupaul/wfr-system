@@ -593,6 +593,22 @@
             color: #64748B;
         }
 
+        /* 可用資金扣掉貸款餘額後的結果：夠還貸款用藍底、不夠用紅底（資訊性顏色，跟收支正負數字同類） */
+        .ledger-stat-net.net-enough {
+            background: #DBEAFE;
+            border-color: #93C5FD;
+        }
+        .ledger-stat-net.net-enough .ledger-stat-value,
+        .ledger-stat-net.net-enough .ledger-stat-label,
+        .ledger-stat-net.net-enough .ledger-stat-note { color: #1E3A8A; }
+        .ledger-stat-net.net-short {
+            background: #FEE2E2;
+            border-color: #FCA5A5;
+        }
+        .ledger-stat-net.net-short .ledger-stat-value,
+        .ledger-stat-net.net-short .ledger-stat-label,
+        .ledger-stat-net.net-short .ledger-stat-note { color: #991B1B; }
+
         .ledger-stat-label {
             font-size: 13px;
             color: #64748B;
@@ -837,12 +853,8 @@
                 <div class="ledger-toolbar">
                     <div class="ledger-stats">
                         <div class="ledger-stat">
-                            <span class="ledger-stat-label">活存總額</span>
-                            <span class="ledger-stat-value" id="currentDepositTotal">$0</span>
-                        </div>
-                        <div class="ledger-stat">
-                            <span class="ledger-stat-label">定存總額</span>
-                            <span class="ledger-stat-value" id="fixedDepositTotal">$0</span>
+                            <span class="ledger-stat-label">可用資金（活存＋定存）</span>
+                            <span class="ledger-stat-value" id="availableFundsTotal">$0</span>
                         </div>
                         <div class="ledger-stat">
                             <label class="ledger-stat-label" for="loanBalanceInput">目前貸款餘額</label>
@@ -850,6 +862,11 @@
                                    placeholder="手動填入" autocomplete="off" disabled
                                    onblur="saveLoanBalance()" onkeydown="if (event.key === 'Enter') this.blur()">
                             <span class="ledger-stat-note" id="loanBalanceNote"></span>
+                        </div>
+                        <div class="ledger-stat ledger-stat-net" id="netFundsStat">
+                            <span class="ledger-stat-label">可用資金－貸款餘額</span>
+                            <span class="ledger-stat-value" id="netFundsValue">-</span>
+                            <span class="ledger-stat-note" id="netFundsNote">請先填入目前貸款餘額</span>
                         </div>
                     </div>
                     <div class="ledger-toolbar-actions">
@@ -1134,15 +1151,12 @@
         function renderLedger() {
             const visibleColumns = ledgerColumns.filter(c => selectedAccountIds.has(c.account_id));
 
-            const fixedDepositTotal = visibleColumns
-                .filter(c => c.account_type === '定存')
+            // 可用資金 = 活存 + 定存（依目前勾選的帳戶加總）
+            availableFunds = visibleColumns
+                .filter(c => c.account_type === '活存' || c.account_type === '定存')
                 .reduce((sum, c) => sum + (c.current_balance || 0), 0);
-            document.getElementById('fixedDepositTotal').textContent = formatCurrency(fixedDepositTotal);
-
-            const currentDepositTotal = visibleColumns
-                .filter(c => c.account_type === '活存')
-                .reduce((sum, c) => sum + (c.current_balance || 0), 0);
-            document.getElementById('currentDepositTotal').textContent = formatCurrency(currentDepositTotal);
+            document.getElementById('availableFundsTotal').textContent = formatCurrency(availableFunds);
+            updateNetFunds();
 
             displayLedger(buildLedgerDisplayColumns(visibleColumns), ledgerRows);
         }
@@ -1400,6 +1414,29 @@
 
         // ==================== 目前貸款餘額（手動填寫，所有使用者看到同一個數字） ====================
         let savedLoanBalance = null;
+        let availableFunds = 0;
+
+        // 可用資金 − 貸款餘額：夠還（>= 0）藍底、不夠還紅底；尚未填貸款餘額時不顯示結果
+        function updateNetFunds() {
+            const box = document.getElementById('netFundsStat');
+            const valueEl = document.getElementById('netFundsValue');
+            const noteEl = document.getElementById('netFundsNote');
+            box.classList.remove('net-enough', 'net-short');
+            if (savedLoanBalance == null) {
+                valueEl.textContent = '-';
+                noteEl.textContent = '請先填入目前貸款餘額';
+                return;
+            }
+            const net = availableFunds - savedLoanBalance;
+            valueEl.textContent = formatCurrency(net);
+            if (net >= 0) {
+                box.classList.add('net-enough');
+                noteEl.textContent = '可用資金足以償還目前貸款';
+            } else {
+                box.classList.add('net-short');
+                noteEl.textContent = `可用資金不足以償還目前貸款，短少 ${formatCurrency(-net)}`;
+            }
+        }
 
         function formatLoanBalanceInput(amount) {
             return amount == null ? '' : amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -1415,6 +1452,7 @@
                 .then(data => {
                     savedLoanBalance = data.amount;
                     input.value = formatLoanBalanceInput(data.amount);
+                    updateNetFunds();
                     if (data.updated_at) {
                         document.getElementById('loanBalanceNote').textContent = `更新於 ${new Date(data.updated_at).toLocaleDateString('zh-TW')}`;
                     }
@@ -1452,6 +1490,7 @@
                     savedLoanBalance = result.amount;
                     input.value = formatLoanBalanceInput(result.amount);
                     note.textContent = '已儲存';
+                    updateNetFunds();
                 })
                 .catch(err => {
                     console.error('儲存貸款餘額失敗:', err);
