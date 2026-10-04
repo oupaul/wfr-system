@@ -854,7 +854,7 @@
                     <div class="ledger-stats">
                         <div class="ledger-stat">
                             <span class="ledger-stat-label">可用資金（活存＋定存）</span>
-                            <span class="ledger-stat-value" id="availableFundsTotal">$0</span>
+                            <span class="ledger-stat-value" id="availableFundsTotal">-</span>
                         </div>
                         <div class="ledger-stat">
                             <label class="ledger-stat-label" for="loanBalanceInput">目前貸款餘額</label>
@@ -1402,19 +1402,25 @@
             }, 5000);
         }
 
-        // 頁面載入時執行（先檢查登入 → 自動重新計算餘額 → 載入預設頁籤「資金流水帳」）
+        // 頁面載入時執行
         document.addEventListener('DOMContentLoaded', async function() {
-            const authenticated = await checkAuth();
-            if (!authenticated) return;
-            await recalculateBalances();
+            // 資料請求跟登入檢查同時發出，不用等彼此：資金流水帳、貸款餘額、到期範本提醒的 API
+            // 本身都有登入保護，沒登入時只會回錯誤、頁面也會被 checkAuth 導去登入頁。
+            // 原本是「登入檢查 → 重算全部帳戶餘額 → 才開始載入資料」依序等待，使用者要多等好幾趟來回；
+            // 資金流水帳的餘額是由結算與交易即時算出來的，不依賴重算結果，所以重算改在背景執行
+            const authPromise = checkAuth();
             loadLedger();
             loadDueTemplatesNotice();
-            initLoanBalance(authenticated);
+            initLoanBalance(authPromise);
+
+            const authenticated = await authPromise;
+            if (!authenticated) return;
+            recalculateBalances(); // 只是順便更新「銀行帳戶管理」用的快取餘額，不等它
         });
 
         // ==================== 目前貸款餘額（手動填寫，所有使用者看到同一個數字） ====================
         let savedLoanBalance = null;
-        let availableFunds = 0;
+        let availableFunds = null; // 資金流水帳資料還沒載入完成前為 null，不顯示成誤導的 $0
 
         // 可用資金 − 貸款餘額：夠還（>= 0）藍底、不夠還紅底；尚未填貸款餘額時不顯示結果
         function updateNetFunds() {
@@ -1422,6 +1428,11 @@
             const valueEl = document.getElementById('netFundsValue');
             const noteEl = document.getElementById('netFundsNote');
             box.classList.remove('net-enough', 'net-short');
+            if (availableFunds == null) {
+                valueEl.textContent = '-';
+                noteEl.textContent = '載入中...';
+                return;
+            }
             if (savedLoanBalance == null) {
                 valueEl.textContent = '-';
                 noteEl.textContent = '請先填入目前貸款餘額';
@@ -1442,22 +1453,23 @@
             return amount == null ? '' : amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
         }
 
-        function initLoanBalance(user) {
+        function initLoanBalance(userPromise) {
             const input = document.getElementById('loanBalanceInput');
-            const canEditLoan = user && (user.role === 'admin' || user.role === 'finance');
-            input.disabled = !canEditLoan;
-            if (!canEditLoan) input.placeholder = '尚未填寫';
-            fetch(`${API_BASE}/cash-gap-loan-balance`)
+            const dataPromise = fetch(`${API_BASE}/cash-gap-loan-balance`)
                 .then(res => res.json())
-                .then(data => {
-                    savedLoanBalance = data.amount;
-                    input.value = formatLoanBalanceInput(data.amount);
-                    updateNetFunds();
-                    if (data.updated_at) {
-                        document.getElementById('loanBalanceNote').textContent = `更新於 ${new Date(data.updated_at).toLocaleDateString('zh-TW')}`;
-                    }
-                })
-                .catch(err => console.error('載入貸款餘額失敗:', err));
+                .catch(err => { console.error('載入貸款餘額失敗:', err); return null; });
+            Promise.all([dataPromise, userPromise]).then(([data, user]) => {
+                const canEditLoan = user && (user.role === 'admin' || user.role === 'finance');
+                input.disabled = !canEditLoan;
+                if (!canEditLoan) input.placeholder = '尚未填寫';
+                if (!data) return;
+                savedLoanBalance = data.amount;
+                input.value = formatLoanBalanceInput(data.amount);
+                updateNetFunds();
+                if (data.updated_at) {
+                    document.getElementById('loanBalanceNote').textContent = `更新於 ${new Date(data.updated_at).toLocaleDateString('zh-TW')}`;
+                }
+            });
         }
 
         function saveLoanBalance() {
