@@ -5,7 +5,7 @@
 // - 線上：最後活動在 ONLINE_WINDOW_MS（5 分鐘）內
 // - 閒置：超過 5 分鐘，但還沒到 session 逾時（預設 30 分鐘）；超過就視為已離線並移除
 // - 服務重啟後記憶體清空，已登入的人下一次操作時會自動重新出現
-// 管理員頁面自己的背景輪詢（/api/admin/online-users）不算活動，否則管理員永遠「線上」。
+// 各頁面的背景輪詢（/api/admin/online-users、/api/notice）不算活動，否則管理員永遠「線上」。
 
 const SESSION_TIMEOUT_MS = parseInt(process.env.SESSION_TIMEOUT) || 30 * 60 * 1000;
 const ONLINE_WINDOW_MS = 5 * 60 * 1000;
@@ -25,7 +25,7 @@ function prune(now = Date.now()) {
 // Express middleware：掛在 session 之後、已確認登入的 /api 請求
 function trackActivity(req, res, next) {
     const s = req.session;
-    if (s && s.userId && req.sessionID && !req.path.startsWith('/admin/online-users')) {
+    if (s && s.userId && req.sessionID && !req.path.startsWith('/admin/online-users') && !req.path.startsWith('/notice')) {
         const now = Date.now();
         const prev = entries.get(req.sessionID);
         entries.set(req.sessionID, {

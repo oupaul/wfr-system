@@ -70,6 +70,8 @@
                 });
             }
 
+            _startNoticePolling();
+
             // 啟動自動登出計時器
             _startSessionTimers();
 
@@ -195,6 +197,113 @@
             handleLogout(true);
         });
     }
+
+    // ==================== 系統更新通知橫幅 ====================
+    // 管理員在「人員管理」發佈通知後，所有已登入使用者的每個頁面頂端都會顯示橫幅（含預計更新時間倒數）。
+    // 每 60 秒背景檢查一次（帶 X-Background-Poll，不會延後閒置自動登出）；使用者可按「我知道了」暫時收起，
+    // 通知內容更新、或距離更新不到 10 分鐘時會再次顯示。
+    const NOTICE_POLL_MS = 60 * 1000;
+    const NOTICE_URGENT_MS = 10 * 60 * 1000;
+    let _noticePollTimer = null;
+    let _noticeCountdownTimer = null;
+    let _currentNotice = null;
+
+    function _noticeDismissKey(notice, urgent) {
+        return 'noticeDismissed:' + notice.created_at + (urgent ? ':urgent' : '');
+    }
+
+    function _formatNoticeTime(scheduledAt) {
+        // scheduledAt 是台北時間 'YYYY-MM-DDTHH:mm'
+        return scheduledAt.replace('T', ' ');
+    }
+
+    function _renderNotice() {
+        let bar = document.getElementById('system-notice-bar');
+        const notice = _currentNotice;
+        if (!notice) {
+            if (bar) bar.remove();
+            return;
+        }
+        let remainingMs = null;
+        if (notice.scheduled_at) {
+            remainingMs = Date.parse(notice.scheduled_at + ':00+08:00') - Date.now();
+        }
+        const urgent = remainingMs !== null && remainingMs <= NOTICE_URGENT_MS;
+        let dismissed = false;
+        try { dismissed = sessionStorage.getItem(_noticeDismissKey(notice, urgent)) === '1'; } catch (e) { /* 無痕模式等 */ }
+        if (dismissed) {
+            if (bar) bar.remove();
+            return;
+        }
+
+        const defaultText = '系統即將進行更新，更新期間可能暫時無法使用，請儘早儲存正在編輯的資料。';
+        let timeText = '';
+        if (notice.scheduled_at) {
+            if (remainingMs > 0) {
+                const mins = Math.ceil(remainingMs / 60000);
+                const human = mins >= 1440 ? `${Math.floor(mins / 1440)} 天 ${Math.floor((mins % 1440) / 60)} 小時`
+                    : mins >= 60 ? `${Math.floor(mins / 60)} 小時 ${mins % 60} 分鐘` : `${mins} 分鐘`;
+                timeText = `預計更新時間：${_formatNoticeTime(notice.scheduled_at)}（約 ${human}後）`;
+            } else {
+                timeText = `預計更新時間：${_formatNoticeTime(notice.scheduled_at)}（更新進行中或即將完成，若頁面異常請稍後重新整理）`;
+            }
+        }
+
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.id = 'system-notice-bar';
+            bar.setAttribute('role', 'status');
+            bar.style.cssText = 'position:sticky;top:0;z-index:9000;display:flex;align-items:center;justify-content:center;'
+                + 'gap:14px;flex-wrap:wrap;padding:10px 16px;background:#1E293B;color:#fff;font-size:14px;line-height:1.5;'
+                + "font-family:'Microsoft JhengHei',Arial,sans-serif;border-bottom:3px solid #F06000;";
+            document.body.insertBefore(bar, document.body.firstChild);
+        }
+        bar.innerHTML = '';
+        const text = document.createElement('span');
+        const strong = document.createElement('strong');
+        strong.textContent = '📢 系統更新通知　';
+        text.appendChild(strong);
+        text.appendChild(document.createTextNode(notice.message || defaultText));
+        bar.appendChild(text);
+        if (timeText) {
+            const timeEl = document.createElement('span');
+            timeEl.textContent = timeText;
+            timeEl.style.cssText = 'font-weight:bold;' + (urgent ? 'color:#F06000;background:#fff;padding:1px 8px;border-radius:4px;' : 'color:#F06000;');
+            bar.appendChild(timeEl);
+        }
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = '我知道了';
+        btn.style.cssText = 'border:1px solid rgba(255,255,255,0.6);background:transparent;color:#fff;border-radius:5px;padding:3px 12px;cursor:pointer;font-size:13px;';
+        btn.addEventListener('click', () => {
+            try { sessionStorage.setItem(_noticeDismissKey(notice, urgent), '1'); } catch (e) { /* 無法記住就算了，下次輪詢會再出現 */ }
+            bar.remove();
+        });
+        bar.appendChild(btn);
+    }
+
+    function _fetchNotice() {
+        fetch(`${API_BASE}/notice`, { credentials: 'include', cache: 'no-store', headers: { 'X-Background-Poll': '1' } })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!data) return;
+                _currentNotice = data.notice || null;
+                _renderNotice();
+            })
+            .catch(() => { /* 通知抓不到不影響頁面其他功能 */ });
+    }
+
+    function _startNoticePolling() {
+        if (_noticePollTimer) return; // 每個頁面只啟動一次
+        _fetchNotice();
+        _noticePollTimer = setInterval(() => { if (!document.hidden) _fetchNotice(); }, NOTICE_POLL_MS);
+        // 倒數文字與「快到時間重新顯示」每 30 秒用本地時間刷新一次，不需要再打 API
+        _noticeCountdownTimer = setInterval(() => { if (_currentNotice) _renderNotice(); }, 30 * 1000);
+        document.addEventListener('visibilitychange', () => { if (!document.hidden) _fetchNotice(); });
+    }
+
+    // 管理員發佈／撤除通知後，讓目前這頁立刻更新橫幅
+    window.refreshSystemNotice = _fetchNotice;
 
     // ==================== HTML 跳脫（避免使用者輸入內容造成 XSS） ====================
 

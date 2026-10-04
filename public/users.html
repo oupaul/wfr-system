@@ -392,6 +392,26 @@
         .online-dot { color: #F06000; }
         .online-idle { color: #94A3B8; }
 
+        .notice-panel textarea, .notice-panel input[type="datetime-local"] {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #CBD5E1;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+        .notice-panel label { display: block; font-size: 13px; color: #475569; margin: 10px 0 4px; }
+        .notice-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+        .notice-current {
+            background: #F8FAFC;
+            border-left: 3px solid #F06000;
+            padding: 8px 12px;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #1E293B;
+            white-space: pre-wrap;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -462,6 +482,22 @@
                             <tr><td colspan="7" class="loading" style="padding: 16px;">載入中...</td></tr>
                         </tbody>
                     </table>
+                </div>
+            </div>
+
+            <div class="online-panel notice-panel">
+                <div class="online-panel-head">
+                    <h3>📢 系統更新通知</h3>
+                    <span class="online-panel-meta">發佈後所有已登入使用者的頁面頂端會顯示橫幅（約 1 分鐘內出現）</span>
+                </div>
+                <div id="noticeCurrent" class="online-panel-meta">載入中...</div>
+                <label for="noticeMessage">通知內容（選填，留空會顯示預設文字）</label>
+                <textarea id="noticeMessage" rows="2" maxlength="500" placeholder="例如：系統將進行版本更新，更新約需 5 分鐘，期間無法使用，請先儲存正在編輯的資料。"></textarea>
+                <label for="noticeScheduledAt">預計更新時間（選填，台北時間；橫幅會顯示倒數，過了 1 小時自動消失）</label>
+                <input type="datetime-local" id="noticeScheduledAt">
+                <div class="notice-actions">
+                    <button class="btn btn-primary" onclick="publishNotice()">發佈通知</button>
+                    <button class="btn btn-secondary" id="noticeClearBtn" onclick="clearNotice()" style="display:none;">撤除目前通知</button>
                 </div>
             </div>
 
@@ -849,12 +885,75 @@
         }
         document.addEventListener('visibilitychange', () => { if (!document.hidden && onlineTimer) loadOnlineUsers(); });
 
+        // ==================== 系統更新通知（管理員發佈／撤除） ====================
+        function loadNoticeAdmin() {
+            fetch(`${API_BASE}/notice`, { credentials: 'include', cache: 'no-store', headers: { 'X-Background-Poll': '1' } })
+                .then(res => res.json())
+                .then(data => {
+                    const box = document.getElementById('noticeCurrent');
+                    const clearBtn = document.getElementById('noticeClearBtn');
+                    const n = data.notice;
+                    if (!n) {
+                        box.className = 'online-panel-meta';
+                        box.textContent = '目前沒有發佈中的通知';
+                        clearBtn.style.display = 'none';
+                        return;
+                    }
+                    box.className = 'notice-current';
+                    box.textContent = `發佈中：${n.message || '（使用預設文字）'}`
+                        + (n.scheduled_at ? `\n預計更新時間：${n.scheduled_at.replace('T', ' ')}` : '')
+                        + `\n發佈者：${n.created_by || '-'}，發佈時間：${new Date(n.created_at).toLocaleString('zh-TW', { hour12: false })}`;
+                    clearBtn.style.display = 'inline-block';
+                })
+                .catch(err => console.error('載入系統通知失敗:', err));
+        }
+
+        function publishNotice() {
+            const message = document.getElementById('noticeMessage').value.trim();
+            const scheduledAt = document.getElementById('noticeScheduledAt').value;
+            if (!message && !scheduledAt) {
+                showMessage('請至少填寫通知內容或預計更新時間', 'error');
+                return;
+            }
+            if (!confirm('確定要發佈這則通知給所有已登入的使用者嗎？')) return;
+            fetch(`${API_BASE}/notice`, {
+                method: 'PUT',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, scheduled_at: scheduledAt || null })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { showMessage(data.error, 'error'); return; }
+                    showMessage('通知已發佈', 'success');
+                    document.getElementById('noticeMessage').value = '';
+                    document.getElementById('noticeScheduledAt').value = '';
+                    loadNoticeAdmin();
+                    if (window.refreshSystemNotice) window.refreshSystemNotice();
+                })
+                .catch(() => showMessage('發佈失敗', 'error'));
+        }
+
+        function clearNotice() {
+            if (!confirm('確定要撤除目前的通知嗎？')) return;
+            fetch(`${API_BASE}/notice`, { method: 'DELETE', credentials: 'include' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) { showMessage(data.error, 'error'); return; }
+                    showMessage('通知已撤除', 'success');
+                    loadNoticeAdmin();
+                    if (window.refreshSystemNotice) window.refreshSystemNotice();
+                })
+                .catch(() => showMessage('撤除失敗', 'error'));
+        }
+
         // 頁面載入時執行
         document.addEventListener('DOMContentLoaded', async function() {
             const authenticated = await checkAuth({ adminOnly: true });
             if (authenticated) {
                 loadUsers();
                 startOnlinePolling();
+                loadNoticeAdmin();
             }
         });
     </script>
