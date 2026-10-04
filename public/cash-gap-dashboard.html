@@ -806,7 +806,7 @@
                     <div class="summary-card success">
                         <h3>檢視方式</h3>
                         <div class="value" style="font-size: 18px;">未來三個月</div>
-                        <div style="font-size: 12px; margin-top: 5px;">每個月 15 號、30 號</div>
+                        <div style="font-size: 12px; margin-top: 5px;">各公司設定的檢查日（預設 15、30 號）</div>
                     </div>
                 </div>
 
@@ -838,7 +838,7 @@
                 </div>
 
                 <!-- 說明 -->
-                <p class="data-source-note">以下顯示<strong>未來三個月的每個月 15 號、30 號</strong>的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。</p>
+                <p class="data-source-note">以下顯示<strong>未來三個月、各公司設定的檢查日</strong>（預設每月 15 號、30 號；可在「公司管理」自訂）的預計餘額與資金缺口（依「收支記錄」中該日前的交易計算）。各日資金缺口總計只加總「當天是檢查日」的公司。</p>
 
                 <!-- 帳戶列表 -->
                 <div id="accountsList">
@@ -848,7 +848,7 @@
 
             <!-- 資金流水帳檢視 -->
             <div id="ledgerView">
-                <p class="data-source-note">帳戶為欄、交易與結餘檢查點為列，黃底列為每月 15 號、30 號的結餘檢查點。</p>
+                <p class="data-source-note">帳戶為欄、交易與結餘檢查點為列，黃底列為結餘檢查點（各公司的檢查日預設為每月 15 號、30 號，可在「公司管理」自訂；某天只有部分公司適用時，列標題會註明公司，其他公司欄位留白）。</p>
 
                 <div class="ledger-toolbar">
                     <div class="ledger-stats">
@@ -923,7 +923,7 @@
                 .catch(() => ({}));
         }
 
-        // 載入儀表板資料（未來三個月 15 號、30 號）
+        // 載入儀表板資料（未來三個月，各公司的檢查日）
         function loadDashboard() {
             const loading = document.getElementById('accountsList');
             loading.innerHTML = '<div class="loading">載入中...</div>';
@@ -1308,6 +1308,8 @@
 
                 if (row.type === 'balance') {
                     const cells = columns.map(c => {
+                        // 這一天不是該公司的檢查日 → 欄位留白（不是 $0）
+                        if (!c.merged_account_ids.some(id => row.balances[id] != null)) return '<td></td>';
                         const val = c.merged_account_ids.reduce((sum, id) => {
                             const v = row.balances[id];
                             return v != null ? sum + v : sum;

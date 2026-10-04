@@ -80,6 +80,8 @@ CREATE INDEX IF NOT EXISTS idx_settlements_company ON balance_settlements(compan
 CREATE INDEX IF NOT EXISTS idx_settlements_account ON balance_settlements(account_name, account_number);
 
 -- 公司資訊表
+-- 注意：companies.check_days（資金預估週報的結餘檢查日，例如 '15,30'，NULL = 預設）由 database/db.js 的
+-- migrateCompaniesCheckDays() 補欄位，這裡不列，避免跟既有資料庫的遷移重複。
 CREATE TABLE IF NOT EXISTS companies (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL UNIQUE,

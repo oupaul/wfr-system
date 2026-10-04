@@ -9,6 +9,7 @@ const { requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
 const { todayInTaipei, addDaysStr } = require('../utils/dateUtil');
 const { transactionBelongsToAccount } = require('../utils/accountMatch');
+const { DEFAULT_CHECK_DAYS, getAccountCheckDays, buildCheckDates } = require('../utils/checkDays');
 
 // ==================== 批次載入（避免每個帳戶各查好幾次資料庫） ====================
 // 原本每個端點都對「每個帳戶」各查一次結算、一次交易、一次借款、一次範本（N+1），
@@ -23,7 +24,7 @@ function dbAll(sql, params = []) {
 
 function loadActiveAccounts(extraWhere = '', params = []) {
     return dbAll(`
-        SELECT ba.*, c.name as company_name
+        SELECT ba.*, c.name as company_name, c.check_days as company_check_days
         FROM bank_accounts ba
         LEFT JOIN companies c ON ba.company_id = c.id
         WHERE ba.is_active = 1 ${extraWhere}
@@ -102,34 +103,21 @@ function sendQueryError(res, logMessage, err) {
     res.status(500).json({ error: '查詢失敗', details: err.message });
 }
 
-function toLocalDateStr(d) {
-    const y = d.getFullYear();
-    const mo = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${y}-${mo}-${day}`;
-}
-
-// 若該月天數不足（例如 2 月沒有 30 號），改用該月最後一天，避免日期滾動到下個月
-function clampToMonth(year, month, day) {
-    const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
-    return new Date(year, month, Math.min(day, lastDayOfMonth));
-}
-
-// monthsAhead 預設 3（資金缺口卡片、對帳 API 維持原本的近三個月），
-// 資金流水帳改傳 12，可以看到未來一整年的 15/30 號結餘檢查點
-function buildMonthlyTargetDates(monthsAhead = 3) {
-    const [ty, tm, td] = todayInTaipei().split('-').map(Number);
-    const today = new Date(ty, tm - 1, td);
-    const y = today.getFullYear();
-    const m = today.getMonth();
-    const out = [];
-    for (let i = 0; i < monthsAhead; i++) {
-        const d15 = clampToMonth(y, m + i, 15);
-        const d30 = clampToMonth(y, m + i, 30);
-        if (d15 >= today) out.push(toLocalDateStr(d15));
-        if (d30 >= today) out.push(toLocalDateStr(d30));
-    }
-    return out.sort();
+// 每個帳戶的結餘檢查日由所屬公司設定（預設每月 15、30 號，見 utils/checkDays.js）。
+// monthsAhead：資金缺口卡片、對帳 API 用 3（近三個月），資金流水帳用 12（未來一整年）。
+// 回傳 perAccount: Map<account.id, 該帳戶的檢查日[]>、targetDates: 所有帳戶檢查日的聯集（排序）
+function planCheckDates(accounts, monthsAhead, today) {
+    const perAccount = new Map();
+    const union = new Set();
+    accounts.forEach((a) => {
+        const dates = buildCheckDates(getAccountCheckDays(a), monthsAhead, today);
+        perAccount.set(a.id, dates);
+        dates.forEach((d) => union.add(d));
+    });
+    const targetDates = accounts.length === 0
+        ? buildCheckDates(DEFAULT_CHECK_DAYS, monthsAhead, today)
+        : Array.from(union).sort();
+    return { perAccount, targetDates };
 }
 
 // 資金預估週報儀表板
@@ -249,14 +237,14 @@ router.get('/cash-gap-dashboard', async (req, res) => {
     }
 });
 
-// 資金缺口：未來三個月每月 15 號、30 號
+// 資金缺口：未來三個月，各帳戶依所屬公司設定的檢查日（預設每月 15 號、30 號）
 router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
     const today = todayInTaipei();
-    const targetDates = buildMonthlyTargetDates();
-    const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
     try {
         const accounts = await loadActiveAccounts();
+        const { perAccount, targetDates } = planCheckDates(accounts, 3, today);
+        const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
         if (accounts.length === 0) {
             return res.json({
                 targetDates: targetDates,
@@ -278,7 +266,7 @@ router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
             // transaction_count 維持只用真實交易，確保「目前」的數字
             // 永遠是真實資料
             const allRows = rows.concat(projectedRows);
-            const byDate = targetDates.map((dateStr) => {
+            const byDate = perAccount.get(account.id).map((dateStr) => {
                 let income = 0, expense = 0;
                 allRows.forEach((r) => {
                     if (r.transaction_date > dateStr) return;
@@ -333,17 +321,21 @@ router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
     }
 });
 
-// 資金流水帳檢視：帳戶為欄、逐筆交易與每月 15/30 號結餘檢查點為列
+// 資金流水帳檢視：帳戶為欄、逐筆交易與結餘檢查點為列。
+// 檢查日由各公司自訂（預設每月 15/30 號）：某天的結餘列只顯示「該天是檢查日的公司」的帳戶，
+// 其他公司的欄位留白；只有部分公司適用時，列的標題會註明是哪些公司。
 router.get('/cash-gap-ledger', async (req, res) => {
     const today = todayInTaipei();
-    const targetDates = buildMonthlyTargetDates(12);
-    const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
     try {
         const accounts = await loadActiveAccounts();
+        const { perAccount, targetDates } = planCheckDates(accounts, 12, today);
+        const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
         if (accounts.length === 0) {
             return res.json({ targetDates, columns: [], rows: [] });
         }
+        const accountById = new Map(accounts.map((a) => [a.id, a]));
+        const allCompanyNames = new Set(accounts.map((a) => a.company_name || '未分類'));
         const [inputs, projections] = await Promise.all([
             loadAccountInputs(accounts, maxDate),
             loadProjectedFutureRows(accounts, today, maxDate)
@@ -414,8 +406,16 @@ router.get('/cash-gap-ledger', async (req, res) => {
 
             if (targetDates.includes(dateStr)) {
                 const balancesSnapshot = {};
-                columns.forEach((c) => { balancesSnapshot[c.account_id] = running[c.account_id]; });
-                rowsOut.push({ type: 'balance', date: dateStr, label: '資金餘額', balances: balancesSnapshot });
+                const companiesHere = new Set();
+                columns.forEach((c) => {
+                    if (!perAccount.get(c.account_id).includes(dateStr)) return;
+                    balancesSnapshot[c.account_id] = running[c.account_id];
+                    companiesHere.add(accountById.get(c.account_id).company_name || '未分類');
+                });
+                const label = companiesHere.size === allCompanyNames.size
+                    ? '資金餘額'
+                    : `資金餘額（${Array.from(companiesHere).join('、')}）`;
+                rowsOut.push({ type: 'balance', date: dateStr, label, balances: balancesSnapshot });
             }
         });
 
@@ -447,8 +447,6 @@ router.get('/cash-gap-reconciliation', async (req, res) => {
     const company = (req.query.company || '').trim();
     const account = (req.query.account || '').trim();
     const today = todayInTaipei();
-    const targetDates = buildMonthlyTargetDates();
-    const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
 
     try {
         const accounts = await loadActiveAccounts(
@@ -456,6 +454,8 @@ router.get('/cash-gap-reconciliation', async (req, res) => {
              AND (? = '' OR ba.account_name = ? OR ba.account_name LIKE ?)`,
             [company, company, company ? `%${company}%` : '%', account, account, account ? `%${account}%` : '%']
         );
+        const { perAccount, targetDates } = planCheckDates(accounts, 3, today);
+        const maxDate = targetDates.length ? targetDates[targetDates.length - 1] : today;
         if (accounts.length === 0) {
             return res.json({
                 targetDates,
@@ -469,7 +469,7 @@ router.get('/cash-gap-reconciliation', async (req, res) => {
         const result = accounts.map((acc) => {
             const { settlement, openingBalance, rows } = inputs.get(acc.id);
             const safetyLevel = parseFloat(acc.safety_level) || 0;
-            const byDate = targetDates.map((dateStr) => {
+            const byDate = perAccount.get(acc.id).map((dateStr) => {
                 let income = 0, expense = 0;
                 rows.forEach((r) => {
                     if (r.transaction_date > dateStr) return;

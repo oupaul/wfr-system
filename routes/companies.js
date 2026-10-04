@@ -4,6 +4,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
+const { parseCheckDays } = require('../utils/checkDays');
 
 // 取得所有公司
 router.get('/', (req, res) => {
@@ -53,26 +54,30 @@ router.post('/', requireEditor, (req, res) => {
         contact_email,
         address,
         remarks,
-        is_active
+        is_active,
+        check_days
     } = req.body;
 
     if (!name) {
         return res.status(400).json({ error: 'name 為必填欄位' });
     }
+    const checkDays = parseCheckDays(check_days);
+    if (checkDays.error) return res.status(400).json({ error: checkDays.error });
+    const checkDaysValue = checkDays.days ? checkDays.days.join(',') : null;
 
     db.run(
         `INSERT INTO companies 
-         (name, code, contact_person, contact_phone, contact_email, address, remarks, is_active) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (name, code, contact_person, contact_phone, contact_email, address, remarks, is_active, check_days) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [name, code || null, contact_person || null, contact_phone || null,
-         contact_email || null, address || null, remarks || null, is_active !== undefined ? is_active : 1],
+         contact_email || null, address || null, remarks || null, is_active !== undefined ? is_active : 1, checkDaysValue],
         function(err) {
             if (err) {
                 logger.error('新增錯誤:', err);
                 return res.status(500).json({ error: '新增失敗', details: err.message });
             }
             const newId = this.lastID;
-            const afterData = { id: newId, name, code: code || null, contact_person: contact_person || null, contact_phone: contact_phone || null, contact_email: contact_email || null, address: address || null, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1 };
+            const afterData = { id: newId, name, code: code || null, contact_person: contact_person || null, contact_phone: contact_phone || null, contact_email: contact_email || null, address: address || null, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1, check_days: checkDaysValue };
             writeOperationLog(req, 'create', 'company', newId, null, afterData, '公司 #' + newId + ' ' + (name || ''));
             res.json({ success: true, id: newId, message: '公司已新增' });
         }
@@ -82,16 +87,19 @@ router.post('/', requireEditor, (req, res) => {
 // 更新公司
 router.put('/:id', requireEditor, (req, res) => {
     const { id } = req.params;
-    const { name, code, contact_person, contact_phone, contact_email, address, remarks, is_active } = req.body;
+    const { name, code, contact_person, contact_phone, contact_email, address, remarks, is_active, check_days } = req.body;
+    const checkDays = parseCheckDays(check_days);
+    if (checkDays.error) return res.status(400).json({ error: checkDays.error });
+    const checkDaysValue = checkDays.days ? checkDays.days.join(',') : null;
     db.get('SELECT * FROM companies WHERE id = ?', [id], (err, oldRow) => {
         if (err || !oldRow) {
             if (!oldRow) return res.status(404).json({ error: '找不到記錄' });
             return res.status(500).json({ error: '更新失敗', details: err && err.message });
         }
-        const afterData = { id: parseInt(id, 10), name, code: code || null, contact_person: contact_person || null, contact_phone: contact_phone || null, contact_email: contact_email || null, address: address || null, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1 };
+        const afterData = { id: parseInt(id, 10), name, code: code || null, contact_person: contact_person || null, contact_phone: contact_phone || null, contact_email: contact_email || null, address: address || null, remarks: remarks || null, is_active: is_active !== undefined ? is_active : 1, check_days: checkDaysValue };
         db.run(
-            `UPDATE companies SET name = ?, code = ?, contact_person = ?, contact_phone = ?, contact_email = ?, address = ?, remarks = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
-            [name, code || null, contact_person || null, contact_phone || null, contact_email || null, address || null, remarks || null, is_active !== undefined ? is_active : 1, id],
+            `UPDATE companies SET name = ?, code = ?, contact_person = ?, contact_phone = ?, contact_email = ?, address = ?, remarks = ?, is_active = ?, check_days = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
+            [name, code || null, contact_person || null, contact_phone || null, contact_email || null, address || null, remarks || null, is_active !== undefined ? is_active : 1, checkDaysValue, id],
             function(updateErr) {
                 if (updateErr) {
                     logger.error('更新錯誤:', updateErr);

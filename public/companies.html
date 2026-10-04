@@ -412,13 +412,14 @@
                             <th>電話</th>
                             <th>Email</th>
                             <th>地址</th>
+                            <th>資金檢查日</th>
                             <th>狀態</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="companiesTable">
                         <tr>
-                            <td colspan="9" class="loading">載入中...</td>
+                            <td colspan="10" class="loading">載入中...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -467,6 +468,12 @@
                     <div class="form-group">
                         <label for="modalAddress">地址</label>
                         <input type="text" id="modalAddress" placeholder="公司地址">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="modalCheckDays">資金檢查日（每月幾號）</label>
+                        <input type="text" id="modalCheckDays" placeholder="預設 15,30" autocomplete="off">
+                        <small style="color:#64748B;">資金預估週報會在這些日期檢查該公司帳戶的預計餘額與資金缺口。用逗號分隔，例如 <strong>5,20</strong>；最多 6 個；<strong>31 代表月底</strong>；當月沒有那一天會自動取月底。留空＝預設每月 15、30 號。</small>
                     </div>
 
                     <div class="form-group">
@@ -520,6 +527,7 @@
                     document.getElementById('modalContactPhone').value = record.contact_phone || '';
                     document.getElementById('modalContactEmail').value = record.contact_email || '';
                     document.getElementById('modalAddress').value = record.address || '';
+                    document.getElementById('modalCheckDays').value = record.check_days || '';
                     document.getElementById('modalRemarks').value = record.remarks || '';
                     document.getElementById('modalIsActive').checked = record.is_active !== 0;
                     document.getElementById('dataModal').style.display = 'block';
@@ -547,6 +555,7 @@
                 contact_phone: document.getElementById('modalContactPhone').value,
                 contact_email: document.getElementById('modalContactEmail').value,
                 address: document.getElementById('modalAddress').value,
+                check_days: document.getElementById('modalCheckDays').value.trim(),
                 remarks: document.getElementById('modalRemarks').value,
                 is_active: document.getElementById('modalIsActive').checked ? 1 : 0
             };
@@ -630,7 +639,7 @@
             const tbody = document.getElementById('companiesTable');
             
             if (companies.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #666;">尚無公司記錄</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" style="text-align: center; padding: 40px; color: #666;">尚無公司記錄</td></tr>';
                 return;
             }
 
@@ -643,6 +652,7 @@
                     <td>${escapeHtml(c.contact_phone) || '-'}</td>
                     <td>${escapeHtml(c.contact_email) || '-'}</td>
                     <td>${escapeHtml(c.address) || '-'}</td>
+                    <td>${c.check_days ? escapeHtml(c.check_days.split(',').join('、')) + ' 號' : '<span style="color:#94A3B8;">預設（15、30 號）</span>'}</td>
                     <td><span class="${c.is_active ? 'status-active' : 'status-inactive'}">${c.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
                         ${canEdit ? `

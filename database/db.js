@@ -49,6 +49,7 @@ const initDatabase = () => {
                     await migrateUserRoleFinanceTier();
                     await migrateFinancingRepaymentFrequency();
                     await migrateFinancingManualBalance();
+                    await migrateCompaniesCheckDays();
                     await migrateTransactionsTransferGroup();
                     resolve();
                 } catch (error) {
@@ -342,6 +343,27 @@ const migrateTransactionsTransferGroup = () => {
 // 借款「目前本金餘額」可手動輸入：manual_principal_balance 是使用者填的餘額，
 // manual_balance_date 是填寫當天（基準日）。有填的話，目前本金餘額 = 手動餘額 − 基準日「之後」
 // 才記錄的還款本金；沒填（NULL）就維持原本「原始本金 − 全部還款本金」的自動計算。
+// companies.check_days：資金預估週報的「結餘檢查日」（每月幾號，逗號分隔，例如 "15,30"）；NULL = 用預設 15、30
+const migrateCompaniesCheckDays = () => {
+    return new Promise((resolve, reject) => {
+        db.all("PRAGMA table_info(companies)", [], (err, columns) => {
+            if (err) {
+                console.error('檢查 companies 表結構失敗:', err.message);
+                return reject(err);
+            }
+            if (columns.some(col => col.name === 'check_days')) return resolve();
+            db.run("ALTER TABLE companies ADD COLUMN check_days TEXT DEFAULT NULL", (alterErr) => {
+                if (alterErr && !alterErr.message.includes('duplicate column')) {
+                    console.error('添加 check_days 欄位失敗:', alterErr.message);
+                    return reject(alterErr);
+                }
+                if (!alterErr) console.log('✓ check_days 欄位已添加到 companies 表');
+                resolve();
+            });
+        });
+    });
+};
+
 const migrateFinancingManualBalance = () => {
     const wanted = [
         ['manual_principal_balance', 'DECIMAL(15, 2) DEFAULT NULL'],
