@@ -15,6 +15,18 @@ function todayInTaipei() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
 }
 
+// 手動輸入的餘額與基準日只給有編輯權限者（admin/finance）；一般使用者的回應不帶這兩個欄位，
+// 目前本金餘額（remaining_principal）的數字本身不受影響
+function stripManualFieldsForViewer(req, rows) {
+    if (req.session && (req.session.role === 'admin' || req.session.role === 'finance')) return rows;
+    const strip = (r) => {
+        if (!r) return r;
+        const { manual_principal_balance, manual_balance_date, ...rest } = r;
+        return rest;
+    };
+    return Array.isArray(rows) ? rows.map(strip) : strip(rows);
+}
+
 // 解析手動輸入的本金餘額：空值代表清除手動餘額（回到自動計算）；回傳 { value, error }
 function parseManualBalance(raw) {
     if (raw === undefined || raw === null || raw === '') return { value: null };
@@ -62,7 +74,7 @@ router.get('/', (req, res) => {
             logger.error('查詢錯誤:', err);
             return res.status(500).json({ error: '查詢失敗', details: err.message });
         }
-        res.json({ data: rows, count: rows.length });
+        res.json({ data: stripManualFieldsForViewer(req, rows), count: rows.length });
     });
 });
 
@@ -86,7 +98,7 @@ router.get('/:id', (req, res) => {
             if (!row) {
                 return res.status(404).json({ error: '找不到記錄' });
             }
-            res.json({ data: row });
+            res.json({ data: stripManualFieldsForViewer(req, row) });
         }
     );
 });
