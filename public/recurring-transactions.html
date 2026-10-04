@@ -934,7 +934,7 @@
 
         let canEdit = false;
         document.addEventListener('DOMContentLoaded', async function() {
-            const user = await checkAuth();
+            const user = await checkAuth({ editorOnly: true });
             if (!user) return;
             canEdit = user.role === 'admin' || user.role === 'finance';
             if (!canEdit) {

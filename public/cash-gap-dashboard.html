@@ -1410,11 +1410,12 @@
             // 資金流水帳的餘額是由結算與交易即時算出來的，不依賴重算結果，所以重算改在背景執行
             const authPromise = checkAuth();
             loadLedger();
-            loadDueTemplatesNotice();
             initLoanBalance(authPromise);
 
             const authenticated = await authPromise;
             if (!authenticated) return;
+            // 週期範本到期提醒只給管理員/財務人員（一般使用者看不到週期範本，API 也不回資料）
+            if (authenticated.role === 'admin' || authenticated.role === 'finance') loadDueTemplatesNotice();
             recalculateBalances(); // 只是順便更新「銀行帳戶管理」用的快取餘額，不等它
         });
 

@@ -19,6 +19,7 @@
      * 檢查登入狀態，未登入則跳轉至登入頁
      * @param {Object} [options]
      * @param {boolean} [options.adminOnly] - 是否只允許管理員進入
+     * @param {boolean} [options.editorOnly] - 是否只允許管理員/財務人員進入
      * @returns {Promise<Object|false>} user 物件或 false
      */
     async function checkAuth(options = {}) {
@@ -40,6 +41,13 @@
                 return false;
             }
 
+            const isEditorRole = result.user && (result.user.role === 'admin' || result.user.role === 'finance');
+            if (options.editorOnly && !isEditorRole) {
+                alert('此頁面需要財務人員或管理員權限');
+                window.location.replace('/index.html');
+                return false;
+            }
+
             // 顯示使用者名稱
             const el = document.getElementById('currentUser');
             if (el && result.user) {
@@ -52,6 +60,13 @@
             if (result.user && result.user.role !== 'admin') {
                 document.querySelectorAll('a[href="/users.html"]').forEach((link) => {
                     link.style.display = 'none';
+                });
+            }
+
+            // 一般使用者：隱藏「週期範本」入口（導覽列連結與頁面上標了 data-editor-only 的元素）
+            if (result.user && !isEditorRole) {
+                document.querySelectorAll('a[href="/recurring-transactions.html"], [data-editor-only]').forEach((el) => {
+                    el.style.display = 'none';
                 });
             }
 

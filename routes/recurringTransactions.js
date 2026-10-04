@@ -10,8 +10,9 @@ const { addMonthsClamped } = require('../utils/financingProjection');
 
 const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 
+// 週期範本只給管理員/財務人員看；一般使用者不顯示入口、API 也不回資料
 // 取得所有週期性收支範本
-router.get('/', (req, res) => {
+router.get('/', requireEditor, (req, res) => {
     const { active } = req.query;
     let query = `
         SELECT rt.*, f.facility_name as financing_facility_name
@@ -36,7 +37,7 @@ router.get('/', (req, res) => {
 });
 
 // 取得單一範本
-router.get('/:id', (req, res) => {
+router.get('/:id', requireEditor, (req, res) => {
     db.get(
         `SELECT rt.*, f.facility_name as financing_facility_name
          FROM recurring_transactions rt
