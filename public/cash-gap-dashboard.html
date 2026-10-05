@@ -414,9 +414,13 @@
         }
 
         /* 資金流水帳表格 */
+        /* border-collapse: collapse 的表格，凍結欄位（sticky）的邊框不會跟著儲存格一起固定，
+           橫向捲動時左緣會漏出被捲走的欄位文字；改用 separate，邊框畫在儲存格自己身上 */
         .ledger-table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: separate;
+            border-spacing: 0;
+            border-top: 1px solid #E2E8F0;
             font-size: 13px;
             white-space: nowrap;
         }
@@ -424,8 +428,16 @@
         .ledger-table th,
         .ledger-table td {
             padding: 8px 12px;
-            border: 1px solid #E2E8F0;
+            border: 0;
+            border-right: 1px solid #E2E8F0;
+            border-bottom: 1px solid #E2E8F0;
             text-align: right;
+        }
+
+        .ledger-table th.ledger-date-col,
+        .ledger-table td.ledger-date-col,
+        .ledger-table td.ledger-month-label {
+            border-left: 1px solid #E2E8F0;
         }
 
         .ledger-table th.ledger-desc-col,
@@ -509,9 +521,10 @@
         }
 
         /* 資金流水帳的月份分組標題列：可點擊收合/展開，維持單色，箭頭用強調色點綴。
-           這一列整列合併成一個 <td colspan>，表格預設 text-align: right 會把文字推到
-           最右邊、橫向捲動時整個跑出可視範圍外，這裡要蓋回 left 並固定在最左側，
-           跟日期/收支項目兩個 sticky 欄位一樣橫向捲動時仍看得到 */
+           標題拆成兩個儲存格：左邊「月份標籤」只橫跨日期+收支項目兩個凍結欄、固定在最左側
+           （橫向捲動時月份不會跟著跑掉；手機上尤其重要），右邊補滿帳戶欄位的灰底。
+           不能把整列合併成一個 colspan 的 sticky 儲存格：它跟整張表一樣寬，沒有可以「黏住」的空間，
+           捲動時還是會整個移出畫面 */
         .ledger-table tr.ledger-month-header td {
             background: #F8FAFC;
             color: #1E293B;
@@ -519,9 +532,14 @@
             cursor: pointer;
             padding: 10px 12px;
             text-align: left;
+        }
+
+        .ledger-table tr.ledger-month-header td.ledger-month-label {
             position: sticky;
             left: 0;
             z-index: 2;
+            white-space: nowrap;
+            box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
         }
 
         .ledger-table tr.ledger-month-header:hover td {
@@ -752,6 +770,10 @@
                 padding: 6px 8px;
             }
 
+            .ledger-year {
+                display: none;
+            }
+
             .ledger-table th.ledger-date-col,
             .ledger-table td.ledger-date-col {
                 width: 56px;
@@ -920,6 +942,14 @@
         }
 
         // 格式化日期為 年/月/日
+        // 流水帳的日期欄：年份包在 .ledger-year 裡，手機版隱藏（月份標題列已經有「2026年10月」），
+        // 否則凍結的日期欄放不下完整的 2026/10/04，會被截掉
+        function formatLedgerDate(dateStr) {
+            const full = formatDateFull(dateStr);
+            const i = full.indexOf('/');
+            return i < 0 ? full : `<span class="ledger-year">${full.slice(0, i + 1)}</span>${full.slice(i + 1)}`;
+        }
+
         function formatDateFull(dateStr) {
             const d = new Date(dateStr + 'T00:00:00');
             return d.toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1297,7 +1327,6 @@
                     expandedLedgerMonths.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
                 }
             }
-            const colCount = 2 + columns.length;
 
             let lastMonthKey = null;
             const bodyRows = rows.map((row) => {
@@ -1309,7 +1338,8 @@
                     const isExpanded = expandedLedgerMonths.has(monthKey);
                     monthHeader = `
                         <tr class="ledger-month-header${isExpanded ? ' expanded' : ''}" data-month="${monthKey}" onclick="toggleLedgerMonth('${monthKey}')">
-                            <td colspan="${colCount}"><span class="ledger-month-toggle">${isExpanded ? '▼' : '▶'}</span>${y}年${parseInt(m, 10)}月</td>
+                            <td class="ledger-month-label" colspan="2"><span class="ledger-month-toggle">${isExpanded ? '▼' : '▶'}</span>${y}年${parseInt(m, 10)}月</td>
+                            <td colspan="${columns.length}"></td>
                         </tr>
                     `;
                 }
@@ -1328,7 +1358,7 @@
                     }).join('');
                     return monthHeader + `
                         <tr class="ledger-row-balance" data-month="${monthKey}"${rowHiddenStyle}>
-                            <td class="ledger-date-col">${formatDateFull(row.date)}</td>
+                            <td class="ledger-date-col">${formatLedgerDate(row.date)}</td>
                             <td class="ledger-desc-col">${escapeHtml(row.label)}</td>
                             ${cells}
                         </tr>
@@ -1347,7 +1377,7 @@
 
                 return monthHeader + `
                     <tr data-month="${monthKey}"${rowHiddenStyle}>
-                        <td class="ledger-date-col">${formatDateFull(row.date)}</td>
+                        <td class="ledger-date-col">${formatLedgerDate(row.date)}</td>
                         <td class="ledger-desc-col${projectedCls}">${escapeHtml(row.description) || ''}</td>
                         ${cells}
                     </tr>
