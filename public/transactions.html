@@ -890,6 +890,8 @@
                         </div>
                     </div>
 
+                    <div id="transferDepositHint" style="display:none; background:#F8FAFC; border:1px solid #E2E8F0; border-left:3px solid #F06000; border-radius:6px; padding:10px 14px; margin-bottom:16px; font-size:13px; color:#1E293B; line-height:1.7;"></div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label for="transferCategory">類別</label>
@@ -1018,6 +1020,25 @@
             const balanceEl = document.getElementById(side === 'from' ? 'transferFromBalance' : 'transferToBalance');
             const account = transferAccountsCache[side].find(a => String(a.id) === accountId);
             balanceEl.textContent = account ? `目前餘額：${formatCurrency(account.current_balance)}` : '';
+            updateTransferDepositHint();
+        }
+
+        // 轉入／轉出的是「定存」帳戶時，建議改用銀行帳戶頁的「轉定存」「解約／到期」：
+        // 那邊除了同樣記一筆帳戶間轉帳，還會記錄利率與到期日、讓預測自動帶入到期回到活存、並把利息記成收入。
+        // 只是提示，仍可繼續使用一般轉帳。
+        function updateTransferDepositHint() {
+            const hintEl = document.getElementById('transferDepositHint');
+            const pick = (side) => transferAccountsCache[side].find(a => String(a.id) === document.getElementById(side === 'from' ? 'transferFromAccountId' : 'transferToAccountId').value);
+            const fromAcc = pick('from'), toAcc = pick('to');
+            const parts = [];
+            if (toAcc && toAcc.account_type === '定存') {
+                parts.push(`轉入的「${escapeHtml(toAcc.account_name)}」是<strong>定存帳戶</strong>。活存轉定存建議改用 <a href="/bank-accounts.html">銀行帳戶</a> 頁活存列的<strong>「轉定存」</strong>：會一併記錄年利率與到期日，預測會自動帶入到期回到活存的本金與利息。`);
+            }
+            if (fromAcc && fromAcc.account_type === '定存') {
+                parts.push(`轉出的「${escapeHtml(fromAcc.account_name)}」是<strong>定存帳戶</strong>。解約或到期建議改用 <a href="/bank-accounts.html">銀行帳戶</a> 頁定存列的<strong>「解約／到期」</strong>：會自動把利息記為活存收入、結束這筆定存並更新預測。`);
+            }
+            hintEl.innerHTML = parts.join('<br>');
+            hintEl.style.display = parts.length ? 'block' : 'none';
         }
 
         window.onTransferAccountChange = function(side) {
