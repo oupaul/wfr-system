@@ -9,6 +9,7 @@ const { requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
 const { todayInTaipei, addDaysStr } = require('../utils/dateUtil');
 const { transactionBelongsToAccount } = require('../utils/accountMatch');
+const { projectDepositRows } = require('../utils/deposit');
 const { DEFAULT_CHECK_DAYS, getAccountCheckDays, buildCheckDates } = require('../utils/checkDays');
 
 // ==================== 批次載入（避免每個帳戶各查好幾次資料庫） ====================
@@ -87,14 +88,20 @@ async function loadAccountInputs(accounts, endDate) {
     return infos;
 }
 
-// 借款還款投影 + 週期範本投影，一起併入未來預測；回傳 Map<account.id, 預計事件[]>
-async function loadProjectedFutureRows(accounts, today, maxDate) {
-    const [repayments, templates] = await Promise.all([
+// 借款還款投影 + 週期範本投影 + 定存到期投影，一起併入未來預測；回傳 Map<account.id, 預計事件[]>
+// inputsPromise：loadAccountInputs 的結果（Promise）。定存到期需要各帳戶的期初與交易來算到期日的本金，
+// 讓借款、範本的查詢可以跟它並行，不用等它算完才開始。
+async function loadProjectedFutureRows(accounts, today, maxDate, inputsPromise) {
+    const [repayments, templates, inputs] = await Promise.all([
         getProjectedRepaymentRowsByAccount(db, accounts.map((a) => a.id), today, maxDate),
-        getProjectedTemplateRowsByAccount(db, accounts, today, maxDate)
+        getProjectedTemplateRowsByAccount(db, accounts, today, maxDate),
+        inputsPromise
     ]);
+    const deposits = projectDepositRows(accounts, inputs, today, maxDate);
     const result = new Map();
-    accounts.forEach((a) => result.set(a.id, (repayments.get(a.id) || []).concat(templates.get(a.id) || [])));
+    accounts.forEach((a) => result.set(a.id, (repayments.get(a.id) || [])
+        .concat(templates.get(a.id) || [])
+        .concat(deposits.get(a.id) || [])));
     return result;
 }
 
@@ -252,9 +259,10 @@ router.get('/cash-gap-dashboard-by-dates', async (req, res) => {
                 summary: { totalBalance: 0, totalGapByDate: {} }
             });
         }
+        const inputsPromise = loadAccountInputs(accounts, maxDate);
         const [inputs, projections] = await Promise.all([
-            loadAccountInputs(accounts, maxDate),
-            loadProjectedFutureRows(accounts, today, maxDate)
+            inputsPromise,
+            loadProjectedFutureRows(accounts, today, maxDate, inputsPromise)
         ]);
 
         const dashboardData = accounts.map((account) => {
@@ -336,9 +344,10 @@ router.get('/cash-gap-ledger', async (req, res) => {
         }
         const accountById = new Map(accounts.map((a) => [a.id, a]));
         const allCompanyNames = new Set(accounts.map((a) => a.company_name || '未分類'));
+        const inputsPromise = loadAccountInputs(accounts, maxDate);
         const [inputs, projections] = await Promise.all([
-            loadAccountInputs(accounts, maxDate),
-            loadProjectedFutureRows(accounts, today, maxDate)
+            inputsPromise,
+            loadProjectedFutureRows(accounts, today, maxDate, inputsPromise)
         ]);
 
         const columns = [];

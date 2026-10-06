@@ -457,7 +457,7 @@
                     
                     <div class="form-group">
                         <label for="modalCompanyId">所屬公司</label>
-                        <select id="modalCompanyId">
+                        <select id="modalCompanyId" onchange="toggleDepositFields()">
                             <option value="">請選擇公司</option>
                         </select>
                     </div>
@@ -487,7 +487,7 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="modalAccountType">帳戶類型</label>
-                            <select id="modalAccountType">
+                            <select id="modalAccountType" onchange="toggleDepositFields()">
                                 <option value="">請選擇</option>
                                 <option value="活存">活存</option>
                                 <option value="定存">定存</option>
@@ -507,6 +507,31 @@
                                 <option value="JPY">日圓 (JPY)</option>
                                 <option value="HKD">港幣 (HKD)</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <div id="depositFields" style="display:none; border:1px solid #E2E8F0; border-left:3px solid #F06000; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+                        <strong>定存資訊（選填）</strong>
+                        <small style="display:block; color:#64748B; margin:4px 0 10px;">設定到期日後，未到期的定存會以「（預計）」出現在資金預估週報，到期日本金與預估利息自動回到下方指定的活存帳戶。一般建議用帳戶列表的「轉定存」「解約／到期」按鈕操作，這裡用來補登既有定存的資訊。</small>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="modalDepositRate">年利率 (%)</label>
+                                <input type="number" id="modalDepositRate" step="0.001" min="0" max="100" placeholder="例如 1.6">
+                            </div>
+                            <div class="form-group">
+                                <label for="modalDepositStart">起存日</label>
+                                <input type="date" id="modalDepositStart">
+                            </div>
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="modalDepositMaturity">到期日</label>
+                                <input type="date" id="modalDepositMaturity">
+                            </div>
+                            <div class="form-group">
+                                <label for="modalDepositReturn">到期／解約轉回的活存帳戶</label>
+                                <select id="modalDepositReturn"></select>
+                            </div>
                         </div>
                     </div>
 
@@ -535,6 +560,113 @@
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeModal()">取消</button>
                         <button type="submit" class="btn btn-primary">儲存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 轉定存：從活存轉一筆到定存帳戶（真實的帳戶間轉帳） -->
+    <div id="depositOpenModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🏦 轉定存</h2>
+                <button class="close" onclick="closeDepositOpenModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="depositOpenForm" onsubmit="submitDepositOpen(event)">
+                    <p id="depositOpenSource" style="margin-bottom:14px; color:#1E293B;"></p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="depositOpenDate">存入日期 <span class="required">*</span></label>
+                            <input type="date" id="depositOpenDate" required oninput="updateDepositOpenPreview()">
+                        </div>
+                        <div class="form-group">
+                            <label for="depositOpenAmount">存入金額 <span class="required">*</span></label>
+                            <input type="number" id="depositOpenAmount" step="0.01" min="0.01" required placeholder="0" oninput="updateDepositOpenPreview()">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="depositOpenTarget">定存帳戶 <span class="required">*</span></label>
+                        <select id="depositOpenTarget" onchange="onDepositOpenTargetChange()"></select>
+                    </div>
+                    <div id="depositOpenNewFields" class="form-row">
+                        <div class="form-group">
+                            <label for="depositOpenNewName">新定存帳戶名稱 <span class="required">*</span></label>
+                            <input type="text" id="depositOpenNewName" placeholder="例如：台新一年期定存">
+                        </div>
+                        <div class="form-group">
+                            <label for="depositOpenNewBank">銀行名稱</label>
+                            <input type="text" id="depositOpenNewBank">
+                        </div>
+                        <div class="form-group">
+                            <label for="depositOpenNewNumber">帳號（選填）</label>
+                            <input type="text" id="depositOpenNewNumber">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="depositOpenRate">年利率 (%)</label>
+                            <input type="number" id="depositOpenRate" step="0.001" min="0" max="100" placeholder="例如 1.6" oninput="updateDepositOpenPreview()">
+                        </div>
+                        <div class="form-group">
+                            <label for="depositOpenMaturity">到期日</label>
+                            <input type="date" id="depositOpenMaturity" oninput="updateDepositOpenPreview()">
+                        </div>
+                    </div>
+                    <p id="depositOpenPreview" style="font-size:13px; color:#475569; margin:-4px 0 14px;"></p>
+                    <div class="form-group">
+                        <label for="depositOpenRemarks">備註</label>
+                        <input type="text" id="depositOpenRemarks" placeholder="例如：定存單號">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeDepositOpenModal()">取消</button>
+                        <button type="submit" class="btn btn-primary" id="depositOpenSubmit">確認轉定存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 定存解約／到期：本金轉回活存，利息記為活存收入 -->
+    <div id="depositCloseModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>💰 定存解約／到期</h2>
+                <button class="close" onclick="closeDepositCloseModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="depositCloseForm" onsubmit="submitDepositClose(event)">
+                    <p id="depositCloseInfo" style="margin-bottom:14px; color:#1E293B; line-height:1.7;"></p>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="depositCloseDate">解約／到期日期 <span class="required">*</span></label>
+                            <input type="date" id="depositCloseDate" required oninput="updateDepositCloseInterest(false)">
+                        </div>
+                        <div class="form-group">
+                            <label for="depositCloseTarget">轉回的活存帳戶 <span class="required">*</span></label>
+                            <select id="depositCloseTarget" required></select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="depositClosePrincipal">轉回本金 <span class="required">*</span></label>
+                            <input type="number" id="depositClosePrincipal" step="0.01" min="0.01" required oninput="updateDepositCloseInterest(false)">
+                            <small style="color:#64748B;">全部餘額轉回＝這筆定存結束；只轉回一部分則保留到期日與利率</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="depositCloseInterest">利息（銀行實際入帳）</label>
+                            <input type="number" id="depositCloseInterest" step="0.01" min="0" oninput="depositCloseInterestEdited = true">
+                            <small id="depositCloseInterestHint" style="color:#64748B;"></small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="depositCloseRemarks">備註</label>
+                        <input type="text" id="depositCloseRemarks">
+                    </div>
+                    <div class="form-actions">
+                        <button type="button" class="btn btn-cancel" onclick="closeDepositCloseModal()">取消</button>
+                        <button type="submit" class="btn btn-primary" id="depositCloseSubmit">確認解約／到期</button>
                     </div>
                 </form>
             </div>
@@ -578,6 +710,9 @@
             document.getElementById('modalIsActive').checked = true;
             document.getElementById('modalCurrency').value = 'TWD';
             document.getElementById('modalSafetyLevel').value = '';
+            ['modalDepositRate', 'modalDepositStart', 'modalDepositMaturity'].forEach(id => { document.getElementById(id).value = ''; });
+            document.getElementById('modalDepositReturn').innerHTML = '<option value="">（未指定）</option>';
+            toggleDepositFields();
             loadCompanies();
             document.getElementById('dataModal').style.display = 'block';
         };
@@ -623,6 +758,11 @@
                         document.getElementById('modalSafetyLevel').value = record.safety_level || '';
                         document.getElementById('modalRemarks').value = record.remarks || '';
                         document.getElementById('modalIsActive').checked = record.is_active !== 0;
+                        document.getElementById('modalDepositRate').value = record.deposit_interest_rate != null ? record.deposit_interest_rate : '';
+                        document.getElementById('modalDepositStart').value = record.deposit_start_date || '';
+                        document.getElementById('modalDepositMaturity').value = record.deposit_maturity_date || '';
+                        populateReturnAccountSelect(document.getElementById('modalDepositReturn'), companyId, record.id, record.deposit_return_account_id);
+                        toggleDepositFields();
                         
                         // 顯示模態框
                         document.getElementById('dataModal').style.display = 'block';
@@ -655,7 +795,11 @@
                 currency: document.getElementById('modalCurrency').value,
                 safety_level: document.getElementById('modalSafetyLevel').value ? parseFloat(document.getElementById('modalSafetyLevel').value) : 0,
                 remarks: document.getElementById('modalRemarks').value,
-                is_active: document.getElementById('modalIsActive').checked ? 1 : 0
+                is_active: document.getElementById('modalIsActive').checked ? 1 : 0,
+                deposit_interest_rate: document.getElementById('modalDepositRate').value,
+                deposit_start_date: document.getElementById('modalDepositStart').value,
+                deposit_maturity_date: document.getElementById('modalDepositMaturity').value,
+                deposit_return_account_id: document.getElementById('modalDepositReturn').value
             };
 
             const url = id ? `${API_BASE}/bank-accounts/${id}` : `${API_BASE}/bank-accounts`;
@@ -718,6 +862,200 @@
                 });
         };
 
+        // ==================== 定存：轉定存／解約／定存欄位 ====================
+        const todayStr = () => todayInTaipei();
+
+        function daysBetweenStr(startStr, endStr) {
+            const s = Date.parse(startStr + 'T00:00:00Z'), e = Date.parse(endStr + 'T00:00:00Z');
+            return (isNaN(s) || isNaN(e)) ? 0 : Math.max(0, Math.round((e - s) / 86400000));
+        }
+        // 單利估算，跟後端 utils/deposit.js 的 estimateInterest 同一個公式
+        function estimateDepositInterest(principal, ratePct, startDate, endDate) {
+            const p = parseFloat(principal), r = parseFloat(ratePct);
+            if (!(p > 0) || !(r > 0) || !startDate || !endDate) return 0;
+            return Math.round(p * (r / 100) * daysBetweenStr(startDate, endDate) / 365);
+        }
+        const fmt = (n) => (Number(n) || 0).toLocaleString('en-US');
+
+        // 編輯視窗：帳戶類型是「定存」才顯示定存欄位；轉回帳戶下拉選單依所選公司列出非定存的啟用帳戶
+        function populateReturnAccountSelect(selectEl, companyId, excludeId, selectedId) {
+            const list = bankAccountsListCache.filter(a => a.is_active && a.account_type !== '定存'
+                && String(a.id) !== String(excludeId || '')
+                && (!companyId || String(a.company_id || '') === String(companyId)));
+            selectEl.innerHTML = '<option value="">（未指定）</option>'
+                + list.map(a => `<option value="${a.id}">${AccountSelect.buildAccountLabel(a, !companyId)}</option>`).join('');
+            if (selectedId) selectEl.value = String(selectedId);
+        }
+
+        window.toggleDepositFields = function() {
+            const isDeposit = document.getElementById('modalAccountType').value === '定存';
+            document.getElementById('depositFields').style.display = isDeposit ? 'block' : 'none';
+            if (isDeposit) {
+                populateReturnAccountSelect(document.getElementById('modalDepositReturn'),
+                    document.getElementById('modalCompanyId').value, document.getElementById('recordId').value,
+                    document.getElementById('modalDepositReturn').value);
+            }
+        };
+
+        // 轉定存視窗
+        let depositOpenSource = null;
+        window.openDepositOpenModal = function(id) {
+            const src = bankAccountsListCache.find(a => a.id === id);
+            if (!src) return;
+            depositOpenSource = src;
+            document.getElementById('depositOpenForm').reset();
+            document.getElementById('depositOpenSource').innerHTML = '從 <strong>' + escapeHtml(src.account_name) + '</strong>'
+                + (src.company_name ? '（' + escapeHtml(src.company_name) + '）' : '') + ' 轉出，目前餘額 ' + formatCurrency(src.current_balance);
+            document.getElementById('depositOpenDate').value = todayStr();
+            document.getElementById('depositOpenNewBank').value = src.bank_name || '';
+            // 同公司、目前餘額為 0 的定存帳戶（例如解約後）可以直接重複使用；否則新增一個
+            const candidates = bankAccountsListCache.filter(a => a.is_active && a.account_type === '定存'
+                && String(a.company_id || '') === String(src.company_id || '')
+                && !((parseFloat(a.current_balance) || 0) > 0.005));
+            const sel = document.getElementById('depositOpenTarget');
+            sel.innerHTML = '<option value="__new__">＋ 新增定存帳戶</option>'
+                + candidates.map(a => `<option value="${a.id}">${AccountSelect.buildAccountLabel(a, false)}</option>`).join('');
+            sel.value = '__new__';
+            onDepositOpenTargetChange();
+            updateDepositOpenPreview();
+            document.getElementById('depositOpenModal').style.display = 'block';
+        };
+        window.closeDepositOpenModal = function() { document.getElementById('depositOpenModal').style.display = 'none'; };
+        window.onDepositOpenTargetChange = function() {
+            const isNew = document.getElementById('depositOpenTarget').value === '__new__';
+            document.getElementById('depositOpenNewFields').style.display = isNew ? '' : 'none';
+            document.getElementById('depositOpenNewName').required = isNew;
+        };
+        window.updateDepositOpenPreview = function() {
+            const el = document.getElementById('depositOpenPreview');
+            const amount = parseFloat(document.getElementById('depositOpenAmount').value);
+            const rate = document.getElementById('depositOpenRate').value;
+            const date = document.getElementById('depositOpenDate').value;
+            const maturity = document.getElementById('depositOpenMaturity').value;
+            if (!(amount > 0) || !maturity || !date) { el.textContent = ''; return; }
+            if (maturity < date) { el.textContent = '到期日不可早於存入日期'; return; }
+            const interest = estimateDepositInterest(amount, rate, date, maturity);
+            el.textContent = `到期日 ${maturity}：預計本金 ${fmt(amount)} 元`
+                + (interest > 0 ? ` ＋ 預估利息約 ${fmt(interest)} 元，合計 ${fmt(amount + interest)} 元回到「${depositOpenSource.account_name}」` : ` 回到「${depositOpenSource.account_name}」（未填年利率，不估算利息）`);
+        };
+        window.submitDepositOpen = function(event) {
+            event.preventDefault();
+            const target = document.getElementById('depositOpenTarget').value;
+            const body = {
+                date: document.getElementById('depositOpenDate').value,
+                amount: parseFloat(document.getElementById('depositOpenAmount').value),
+                interest_rate: document.getElementById('depositOpenRate').value,
+                maturity_date: document.getElementById('depositOpenMaturity').value,
+                remarks: document.getElementById('depositOpenRemarks').value
+            };
+            if (target === '__new__') {
+                body.new_account = {
+                    account_name: document.getElementById('depositOpenNewName').value,
+                    bank_name: document.getElementById('depositOpenNewBank').value,
+                    account_number: document.getElementById('depositOpenNewNumber').value
+                };
+            } else {
+                body.to_account_id = parseInt(target, 10);
+            }
+            if (!confirm(`確定從「${depositOpenSource.account_name}」轉出 ${fmt(body.amount)} 元存入定存嗎？\n（會記一筆帳戶間轉帳，不計入收入或支出）`)) return;
+            const btn = document.getElementById('depositOpenSubmit');
+            btn.disabled = true;
+            fetch(`${API_BASE}/bank-accounts/${depositOpenSource.id}/deposit-open`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) { showMessage(result.error, 'error'); return; }
+                    showMessage(result.message, 'success');
+                    closeDepositOpenModal();
+                    loadBankAccounts();
+                })
+                .catch(() => showMessage('轉定存失敗', 'error'))
+                .finally(() => { btn.disabled = false; });
+        };
+
+        // 解約／到期視窗
+        let depositCloseTarget = null;
+        let depositCloseInterestEdited = false;
+        window.openDepositCloseModal = function(id) {
+            const dep = bankAccountsListCache.find(a => a.id === id);
+            if (!dep) return;
+            fetch(`${API_BASE}/bank-accounts/${id}/deposit-estimate?date=${todayStr()}`)
+                .then(res => res.json())
+                .then(est => {
+                    if (est.error) { showMessage(est.error, 'error'); return; }
+                    depositCloseTarget = { account: dep, est };
+                    depositCloseInterestEdited = false;
+                    document.getElementById('depositCloseForm').reset();
+                    const maturity = est.maturity_date;
+                    document.getElementById('depositCloseInfo').innerHTML =
+                        '定存帳戶 <strong>' + escapeHtml(dep.account_name) + '</strong>'
+                        + (dep.company_name ? '（' + escapeHtml(dep.company_name) + '）' : '')
+                        + '<br>目前餘額 <strong>' + formatCurrency(est.principal) + '</strong>'
+                        + (est.interest_rate != null ? '　年利率 ' + est.interest_rate + '%' : '')
+                        + (est.start_date ? '　起存日 ' + est.start_date : '')
+                        + (maturity ? '　到期日 ' + maturity + (maturity <= todayStr() ? '（已到期）' : '（尚未到期＝提前解約）') : '');
+                    const dateEl = document.getElementById('depositCloseDate');
+                    dateEl.max = todayStr();
+                    dateEl.value = maturity && maturity <= todayStr() ? maturity : todayStr();
+                    document.getElementById('depositClosePrincipal').value = est.principal;
+                    const targetSel = document.getElementById('depositCloseTarget');
+                    const options = bankAccountsListCache.filter(a => a.is_active && a.account_type !== '定存' && a.id !== dep.id);
+                    targetSel.innerHTML = options.map(a => `<option value="${a.id}">${AccountSelect.buildAccountLabel(a, true)}</option>`).join('');
+                    const preferred = est.return_account_id && options.some(a => a.id === est.return_account_id)
+                        ? est.return_account_id
+                        : (options.find(a => String(a.company_id || '') === String(dep.company_id || '')) || options[0] || {}).id;
+                    if (preferred) targetSel.value = String(preferred);
+                    updateDepositCloseInterest(true);
+                    document.getElementById('depositCloseModal').style.display = 'block';
+                })
+                .catch(() => showMessage('載入定存資訊失敗', 'error'));
+        };
+        window.closeDepositCloseModal = function() { document.getElementById('depositCloseModal').style.display = 'none'; };
+        window.updateDepositCloseInterest = function(force) {
+            if (!depositCloseTarget) return;
+            const est = depositCloseTarget.est;
+            const date = document.getElementById('depositCloseDate').value;
+            const principal = document.getElementById('depositClosePrincipal').value;
+            // 使用者手動改過利息就不再覆蓋
+            if (depositCloseInterestEdited && !force) return;
+            // 到期日當天（或之後）按「到期日」計息，提前解約按實際日期估算；實際利息以銀行入帳為準
+            const endDate = est.maturity_date && date >= est.maturity_date ? est.maturity_date : date;
+            const interest = estimateDepositInterest(principal, est.interest_rate, est.start_date, endDate);
+            document.getElementById('depositCloseInterest').value = interest || '';
+            document.getElementById('depositCloseInterestHint').textContent = est.interest_rate != null && est.start_date
+                ? `系統依年利率估算（${est.start_date} ～ ${endDate}）；請改成銀行實際入帳的利息`
+                : '未設定年利率或起存日，請自行填入銀行實際入帳的利息';
+        };
+        window.submitDepositClose = function(event) {
+            event.preventDefault();
+            const dep = depositCloseTarget.account;
+            const body = {
+                date: document.getElementById('depositCloseDate').value,
+                principal: parseFloat(document.getElementById('depositClosePrincipal').value),
+                interest: document.getElementById('depositCloseInterest').value || 0,
+                to_account_id: parseInt(document.getElementById('depositCloseTarget').value, 10),
+                remarks: document.getElementById('depositCloseRemarks').value
+            };
+            const targetName = document.getElementById('depositCloseTarget').selectedOptions[0].textContent;
+            if (!confirm(`確定將「${dep.account_name}」的本金 ${fmt(body.principal)} 元轉回「${targetName}」`
+                + (Number(body.interest) > 0 ? `，並記錄利息收入 ${fmt(body.interest)} 元` : '') + ' 嗎？')) return;
+            const btn = document.getElementById('depositCloseSubmit');
+            btn.disabled = true;
+            fetch(`${API_BASE}/bank-accounts/${dep.id}/deposit-close`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) { showMessage(result.error, 'error'); return; }
+                    showMessage(result.message, 'success');
+                    closeDepositCloseModal();
+                    loadBankAccounts();
+                })
+                .catch(() => showMessage('解約失敗', 'error'))
+                .finally(() => { btn.disabled = false; });
+        };
+
         // 重新計算所有帳戶即時餘額（依結算+交易重算）
         window.recalculateBalances = function() {
             const btn = document.getElementById('recalcBtn');
@@ -764,6 +1102,15 @@
                 });
         }
 
+        // 定存帳戶在「帳戶類型」欄下方顯示到期日與年利率；已到期還沒確認的以強調色提醒
+        function depositInfoHtml(a, currentBalance) {
+            if (a.account_type !== '定存' || !a.deposit_maturity_date) return '';
+            const overdue = a.deposit_maturity_date <= todayInTaipei() && currentBalance > 0;
+            return `<br><small style="color:#64748B;">到期 ${escapeHtml(a.deposit_maturity_date)}`
+                + (a.deposit_interest_rate != null ? `・年利率 ${escapeHtml(String(a.deposit_interest_rate))}%` : '') + '</small>'
+                + (overdue ? ' <small style="color:#F06000;font-weight:bold;">已到期</small>' : '');
+        }
+
         // 顯示銀行帳戶列表
         function displayBankAccounts(accounts) {
             const tbody = document.getElementById('bankAccountsTable');
@@ -786,7 +1133,7 @@
                     <td>${escapeHtml(a.account_number) || '-'}</td>
                     <td>${escapeHtml(a.bank_name) || '-'}</td>
                     <td>${escapeHtml(a.branch_name) || '-'}</td>
-                    <td>${escapeHtml(a.account_type) || '-'}</td>
+                    <td>${escapeHtml(a.account_type) || '-'}${depositInfoHtml(a, currentBalance)}</td>
                     <td>${escapeHtml(a.currency) || 'TWD'}</td>
                     <td style="text-align: right; font-weight: bold; color: ${isBelowSafety ? '#dc3545' : '#28a745'}">
                         ${formatCurrency(currentBalance)}
@@ -797,6 +1144,8 @@
                     <td class="actions">
                         <button class="btn btn-secondary btn-sm" onclick="viewTransactionDetails(${a.id})">交易明細</button>
                         ${canEdit ? `
+                        ${a.is_active && a.account_type === '活存' ? `<button class="btn btn-secondary btn-sm" onclick="openDepositOpenModal(${a.id})">轉定存</button>` : ''}
+                        ${a.is_active && a.account_type === '定存' && currentBalance > 0 ? `<button class="btn btn-secondary btn-sm" onclick="openDepositCloseModal(${a.id})">解約／到期</button>` : ''}
                         <button class="btn btn-edit btn-sm" onclick="editBankAccount(${a.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteBankAccount(${a.id})">刪除</button>
                         ` : ''}

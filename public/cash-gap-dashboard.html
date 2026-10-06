@@ -819,6 +819,7 @@
 
             <!-- 檢視方式頁籤 -->
             <div id="dueTemplatesNotice" class="due-templates-notice" style="display: none;"></div>
+            <div id="dueDepositsNotice" class="due-templates-notice" style="display: none;"></div>
 
             <div class="view-tabs">
                 <button type="button" class="view-tab active" id="tabLedgerView" onclick="switchView('ledger')">📋 資金流水帳</button>
@@ -1446,7 +1447,7 @@
             const authenticated = await authPromise;
             if (!authenticated) return;
             // 週期範本到期提醒只給管理員/財務人員（一般使用者看不到週期範本，API 也不回資料）
-            if (authenticated.role === 'admin' || authenticated.role === 'finance') loadDueTemplatesNotice();
+            if (authenticated.role === 'admin' || authenticated.role === 'finance') { loadDueTemplatesNotice(); loadDueDepositsNotice(); }
             recalculateBalances(); // 只是順便更新「銀行帳戶管理」用的快取餘額，不等它
         });
 
@@ -1540,6 +1541,21 @@
                     console.error('儲存貸款餘額失敗:', err);
                     note.textContent = '儲存失敗，請稍後再試';
                 });
+        }
+
+        // 已到期、尚未按「解約／到期」確認入帳的定存：預測目前以預計轉回計算，提醒去銀行帳戶確認實際利息
+        function loadDueDepositsNotice() {
+            fetch(`${API_BASE}/bank-accounts/deposits/due`)
+                .then(res => res.json())
+                .then(data => {
+                    const due = data.data || [];
+                    const el = document.getElementById('dueDepositsNotice');
+                    if (due.length === 0) { el.style.display = 'none'; return; }
+                    const names = due.slice(0, 3).map(d => escapeHtml(d.account_name)).join('、') + (due.length > 3 ? ' 等' : '');
+                    el.innerHTML = `有 ${due.length} 筆定存已到期尚未確認（${names}；預測目前以預計轉回活存計算），請到<a href="/bank-accounts.html">銀行帳戶</a>按「解約／到期」確認本金與實際利息入帳`;
+                    el.style.display = 'block';
+                })
+                .catch(err => console.error('載入到期定存提醒失敗:', err));
         }
 
         // 已到期（下次產生日 <= 今天）還沒確認的週期範本，提醒使用者去確認實際金額

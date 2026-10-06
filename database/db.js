@@ -50,6 +50,7 @@ const initDatabase = () => {
                     await migrateFinancingRepaymentFrequency();
                     await migrateFinancingManualBalance();
                     await migrateCompaniesCheckDays();
+                    await migrateBankAccountsDeposit();
                     await migrateTransactionsTransferGroup();
                     resolve();
                 } catch (error) {
@@ -343,6 +344,42 @@ const migrateTransactionsTransferGroup = () => {
 // 借款「目前本金餘額」可手動輸入：manual_principal_balance 是使用者填的餘額，
 // manual_balance_date 是填寫當天（基準日）。有填的話，目前本金餘額 = 手動餘額 − 基準日「之後」
 // 才記錄的還款本金；沒填（NULL）就維持原本「原始本金 − 全部還款本金」的自動計算。
+// bank_accounts 的定存資訊（只有帳戶類型為「定存」才會用到，皆為選填）：
+//   deposit_interest_rate 年利率(%)、deposit_start_date 起存日、deposit_maturity_date 到期日、
+//   deposit_return_account_id 到期／解約時轉回的活存帳戶（bank_accounts.id）
+const migrateBankAccountsDeposit = () => {
+    const wanted = [
+        ['deposit_interest_rate', 'DECIMAL(6, 3) DEFAULT NULL'],
+        ['deposit_start_date', 'DATE DEFAULT NULL'],
+        ['deposit_maturity_date', 'DATE DEFAULT NULL'],
+        ['deposit_return_account_id', 'INTEGER DEFAULT NULL']
+    ];
+    return new Promise((resolve, reject) => {
+        db.all("PRAGMA table_info(bank_accounts)", [], async (err, columns) => {
+            if (err) {
+                console.error('檢查 bank_accounts 表結構失敗:', err.message);
+                return reject(err);
+            }
+            try {
+                for (const [name, def] of wanted) {
+                    if (columns.some(col => col.name === name)) continue;
+                    await new Promise((res, rej) => {
+                        db.run(`ALTER TABLE bank_accounts ADD COLUMN ${name} ${def}`, (alterErr) => {
+                            if (alterErr && !alterErr.message.includes('duplicate column')) return rej(alterErr);
+                            if (!alterErr) console.log(`✓ ${name} 欄位已添加到 bank_accounts 表`);
+                            res();
+                        });
+                    });
+                }
+                resolve();
+            } catch (e) {
+                console.error('添加定存欄位失敗:', e.message);
+                reject(e);
+            }
+        });
+    });
+};
+
 // companies.check_days：資金預估週報的「結餘檢查日」（每月幾號，逗號分隔，例如 "15,30"）；NULL = 用預設 15、30
 const migrateCompaniesCheckDays = () => {
     return new Promise((resolve, reject) => {

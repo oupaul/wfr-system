@@ -4,7 +4,6 @@ const ExcelJS = require('exceljs');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const crypto = require('crypto');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
@@ -12,6 +11,7 @@ const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 const { getLatestSettlement } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
 const bulk = require('../utils/bulkTransactions');
+const { createTransfer } = require('../utils/transfer');
 
 // 確保上傳目錄存在
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -779,51 +779,12 @@ router.post('/transfer', requireEditor, async (req, res) => {
         return res.status(400).json({ error: '轉出帳戶與轉入帳戶不能是同一個帳戶' });
     }
 
-    const transferGroupId = crypto.randomUUID();
-    const transferCategory = category || '轉帳';
-
-    const insertOne = (type, companyName, accountName, accountNumber, description) => new Promise((resolve, reject) => {
-        db.run(
-            `INSERT INTO transactions
-             (transaction_date, type, amount, category, description, company_name, account_name, account_number, remarks, transfer_group_id)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [transfer_date, type, amount, transferCategory, description,
-             companyName || null, accountName || null, accountNumber || null, remarks || null, transferGroupId],
-            function (err) {
-                if (err) return reject(err);
-                resolve(this.lastID);
-            }
-        );
-    });
-
-    let fromId = null;
     try {
-        fromId = await insertOne('expense', from.company_name, from.account_name, from.account_number, `轉帳至 ${to.account_name}`);
-        const toId = await insertOne('income', to.company_name, to.account_name, to.account_number, `轉帳自 ${from.account_name}`);
-
-        const fromAfter = { id: fromId, transaction_date: transfer_date, type: 'expense', amount, category: transferCategory, company_name: from.company_name || null, account_name: from.account_name, account_number: from.account_number || null, transfer_group_id: transferGroupId };
-        const toAfter = { id: toId, transaction_date: transfer_date, type: 'income', amount, category: transferCategory, company_name: to.company_name || null, account_name: to.account_name, account_number: to.account_number || null, transfer_group_id: transferGroupId };
-        writeOperationLog(req, 'create', 'transaction', fromId, null, fromAfter, `轉帳 #${fromId} 轉出 ${from.account_name} → ${to.account_name}`);
-        writeOperationLog(req, 'create', 'transaction', toId, null, toAfter, `轉帳 #${toId} 轉入 ${to.account_name} ← ${from.account_name}`);
-
-        try {
-            await updateBankAccountBalance(from.account_name, from.account_number, from.company_name || null);
-            await updateBankAccountBalance(to.account_name, to.account_number, to.company_name || null);
-        } catch (balanceErr) {
-            logger.error('更新帳戶餘額失敗:', balanceErr);
-        }
-
+        const { fromId, toId } = await createTransfer(req, {
+            date: transfer_date, amount, from, to, category, remarks
+        });
         res.json({ success: true, fromId, toId, message: '轉帳已完成' });
     } catch (err) {
-        // 轉出那一腿成功、轉入那一腿失敗的話要撤銷，避免留下只扣款沒入帳的孤兒交易
-        // （這時候帳戶餘額還沒被更新過，不用額外重算）
-        if (fromId) {
-            db.run('DELETE FROM transactions WHERE id = ?', [fromId], (delErr) => {
-                if (delErr) {
-                    logger.error('回滾轉帳記錄失敗，交易 #' + fromId + ' 可能殘留，請手動檢查:', delErr);
-                }
-            });
-        }
         logger.error('轉帳錯誤:', err);
         res.status(500).json({ error: '轉帳失敗', details: err.message });
     }
