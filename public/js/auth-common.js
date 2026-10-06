@@ -20,6 +20,7 @@
      * @param {Object} [options]
      * @param {boolean} [options.adminOnly] - 是否只允許管理員進入
      * @param {boolean} [options.editorOnly] - 是否只允許管理員/財務人員進入
+     * @param {boolean} [options.reportsOnly] - 是否只允許「被開放檢視統計報表」的人進入
      * @returns {Promise<Object|false>} user 物件或 false
      */
     async function checkAuth(options = {}) {
@@ -48,6 +49,13 @@
                 return false;
             }
 
+            const canSeeReports = !!(result.features && result.features.reports);
+            if (options.reportsOnly && !canSeeReports) {
+                alert('您沒有檢視統計報表的權限，請洽管理員');
+                window.location.replace('/index.html');
+                return false;
+            }
+
             // 顯示使用者名稱
             const el = document.getElementById('currentUser');
             if (el && result.user) {
@@ -61,6 +69,11 @@
                 document.querySelectorAll('a[href="/users.html"]').forEach((link) => {
                     link.style.display = 'none';
                 });
+            }
+
+            // 統計報表的導覽列連結預設隱藏，管理員開放給這個角色時才顯示
+            if (canSeeReports) {
+                document.querySelectorAll('a[href="/reports.html"]').forEach((el) => { el.style.display = ''; });
             }
 
             // 一般使用者：隱藏「週期範本」入口（導覽列連結與頁面上標了 data-editor-only 的元素）

@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#1E293B">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="資金週報">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
+    <script src="/js/pwa.js" defer></script>
+    <title>統計報表 - 資金週報系統</title>
+    <style>
+        body { visibility: hidden; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: #F8FAFC;
+            min-height: 100vh;
+            padding: 20px;
+            color: #1E293B;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        header {
+            background: #FFFFFF;
+            color: #1E293B;
+            border-bottom: 1px solid #E2E8F0;
+            padding: 30px;
+            text-align: center;
+            position: relative;
+        }
+        header h1 { font-size: 2.5em; margin-bottom: 10px; }
+
+        .nav-links { margin-top: 20px; display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+        .nav-links a {
+            color: #1E293B; text-decoration: none; padding: 10px 20px; border-radius: 5px;
+            background: #F8FAFC; transition: all 0.3s; font-size: 14px;
+        }
+        .nav-links a:hover { background: #F1F5F9; transform: translateY(-2px); }
+        .user-info { position: absolute; top: 30px; right: 30px; display: flex; align-items: center; gap: 15px; }
+        .user-info span { font-size: 0.9em; }
+        .user-info button { padding: 6px 12px; border: none; border-radius: 5px; background: #F8FAFC; color: #1E293B; cursor: pointer; }
+        .user-info button:hover { background: #F1F5F9; }
+
+        .content { padding: 30px; }
+
+        #message { display: none; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; }
+        #message.success { background: #F0FDF4; border: 1px solid #BBF7D0; color: #166534; }
+        #message.error { background: #FEF2F2; border: 1px solid #FECACA; color: #991B1B; }
+
+        /* 管理員：報表開放範圍 */
+        .settings-bar {
+            display: none; align-items: center; gap: 12px; flex-wrap: wrap;
+            border: 1px solid #E2E8F0; border-left: 3px solid #F06000; border-radius: 8px;
+            padding: 12px 16px; margin-bottom: 20px; font-size: 14px; background: #F8FAFC;
+        }
+        .settings-bar select { padding: 7px 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; font-family: inherit; }
+        .settings-bar small { color: #64748B; flex-basis: 100%; }
+
+        .tabs { display: flex; gap: 4px; border-bottom: 1px solid #E2E8F0; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab {
+            padding: 11px 20px; border: none; background: none; cursor: pointer; font-size: 15px; font-weight: bold;
+            color: #64748B; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit;
+        }
+        .tab.active { color: #F06000; border-bottom-color: #F06000; }
+
+        .filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 18px; }
+        .filters .f { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: #475569; }
+        .filters select, .filters input[type="date"] {
+            padding: 8px 10px; border: 1px solid #CBD5E1; border-radius: 6px; font-size: 14px; font-family: inherit; background: #fff;
+        }
+        .btn { padding: 9px 18px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; font-family: inherit; }
+        .btn-primary { background: #1E293B; color: #fff; }
+        .btn-primary:hover { box-shadow: 0 4px 12px rgba(30, 41, 59, 0.3); }
+        .btn-ghost { background: #F8FAFC; color: #1E293B; border: 1px solid #E2E8F0; }
+        .btn-ghost:hover { background: #F1F5F9; }
+        .spacer { flex: 1; }
+
+        .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .kpi { border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px; }
+        .kpi .label { font-size: 12px; color: #64748B; }
+        .kpi .value { font-size: 22px; font-weight: bold; margin-top: 4px; }
+        .kpi .value.accent { color: #F06000; }
+        .kpi .sub { font-size: 12px; color: #64748B; margin-top: 2px; }
+
+        .card { border: 1px solid #E2E8F0; border-radius: 10px; padding: 16px 18px; margin-bottom: 20px; }
+        .card h3 { font-size: 16px; margin-bottom: 4px; }
+        .card .hint { font-size: 12px; color: #64748B; margin-bottom: 12px; line-height: 1.6; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        .chart svg { width: 100%; height: auto; display: block; }
+        .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: #475569; margin-top: 6px; }
+        .legend i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+
+        .tbl-wrap { overflow-x: auto; }
+        table.rpt { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.rpt th { background: #F8FAFC; text-align: left; padding: 8px 10px; border-bottom: 1px solid #E2E8F0; white-space: nowrap; }
+        table.rpt td { padding: 7px 10px; border-bottom: 1px solid #F1F5F9; white-space: nowrap; }
+        table.rpt .num { text-align: right; }
+        table.rpt tr.total td { font-weight: bold; border-top: 2px solid #E2E8F0; background: #F8FAFC; }
+        table.rpt .neg { color: #DC2626; }
+        table.rpt .warn { color: #F06000; font-weight: bold; }
+        .muted { color: #94A3B8; padding: 20px; text-align: center; }
+
+        .bars .row { display: grid; grid-template-columns: 110px 1fr 120px; gap: 10px; align-items: center; font-size: 13px; padding: 4px 0; }
+        .bars .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .bars .track { background: #F1F5F9; border-radius: 4px; height: 14px; overflow: hidden; }
+        .bars .fill { height: 100%; background: #1E293B; border-radius: 4px; }
+        .bars .row:first-child .fill { background: #F06000; }
+        .bars .amt { text-align: right; white-space: nowrap; }
+        .bars .amt small { color: #64748B; margin-left: 4px; }
+
+        .loading { color: #64748B; padding: 30px; text-align: center; }
+
+        @media (max-width: 768px) {
+            body { padding: 10px; }
+            header { padding: 20px 14px; }
+            header h1 { font-size: 1.8em; }
+            .user-info { position: static; margin-top: 14px; justify-content: center; }
+            .content { padding: 16px 12px; }
+            .two-col { grid-template-columns: 1fr; }
+            .bars .row { grid-template-columns: 80px 1fr 100px; }
+            .tab { padding: 9px 12px; font-size: 14px; }
+        }
+        @media print {
+            body { background: #fff; padding: 0; }
+            .container { box-shadow: none; }
+            .nav-links, .user-info, .tabs, .filters, .settings-bar, .btn { display: none !important; }
+        }
+    </style>
+    <script src="/js/auth-common.js"></script>
+    <script src="/js/account-select.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 統計報表</h1>
+            <div class="nav-links">
+                <a href="/">🏠 首頁</a>
+                <a href="/cash-gap-dashboard.html">⚠️ 資金預估週報</a>
+                <a href="/transactions.html">💰 收支記錄</a>
+                <a href="/settlement.html">✅ 餘額結算</a>
+                <a href="/companies.html">🏢 公司管理</a>
+                <a href="/bank-accounts.html">🏦 銀行帳戶</a>
+                <a href="/financing.html">💳 借款管理</a>
+                <a href="/recurring-transactions.html">🔁 週期範本</a>
+                <a href="/reports.html" id="navReports">📊 統計報表</a>
+                <a href="/users.html">👥 人員管理</a>
+            </div>
+            <div class="user-info">
+                <span id="currentUser">載入中...</span>
+                <button onclick="handleLogout()">登出</button>
+            </div>
+        </header>
+
+        <div class="content">
+            <div id="message"></div>
+
+            <div class="settings-bar" id="settingsBar">
+                <strong>報表開放範圍（僅管理員可調整）</strong>
+                <select id="accessSelect">
+                    <option value="admin">僅管理員</option>
+                    <option value="finance">管理員與財務人員</option>
+                    <option value="all">所有登入人員</option>
+                </select>
+                <button class="btn btn-primary" onclick="saveAccess()">儲存</button>
+                <small>決定誰的導覽列會出現「📊 統計報表」，也決定誰能開啟這個頁面與匯出 Excel。管理員永遠看得到。使用者重新整理頁面後生效。</small>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="cashflow">💧 現金流走勢</button>
+                <button class="tab" data-tab="income">📈 月別收支與類別</button>
+                <button class="tab" data-tab="debt">🏦 借款與定存到期</button>
+            </div>
+
+            <!-- ============ 1. 現金流走勢 ============ -->
+            <section id="tab-cashflow">
+                <div class="filters">
+                    <div class="f"><label for="cfCompany">公司</label><select id="cfCompany"></select></div>
+                    <div class="f"><label for="cfScope">帳戶範圍</label>
+                        <select id="cfScope">
+                            <option value="available">可用資金（活存＋定存）</option>
+                            <option value="all">全部帳戶</option>
+                        </select></div>
+                    <div class="f"><label for="cfBack">過去</label>
+                        <select id="cfBack"><option value="3">3 個月</option><option value="6" selected>6 個月</option><option value="12">12 個月</option></select></div>
+                    <div class="f"><label for="cfAhead">未來</label>
+                        <select id="cfAhead"><option value="6">6 個月</option><option value="12" selected>12 個月</option><option value="18">18 個月</option></select></div>
+                    <button class="btn btn-ghost" onclick="loadCashflow()">🔄 重新整理</button>
+                    <span class="spacer"></span>
+                    <button class="btn btn-primary" onclick="exportReport('cashflow')">📥 匯出 Excel</button>
+                </div>
+                <div id="cfBody"><div class="loading">載入中...</div></div>
+            </section>
+
+            <!-- ============ 2. 月別收支與類別 ============ -->
+            <section id="tab-income" style="display:none;">
+                <div class="filters">
+                    <div class="f"><label for="ieCompany">公司</label><select id="ieCompany"></select></div>
+                    <div class="f"><label for="ieStart">起</label><input type="date" id="ieStart"></div>
+                    <div class="f"><label for="ieEnd">迄</label><input type="date" id="ieEnd"></div>
+                    <button class="btn btn-ghost" onclick="setIncomePreset('12m')">近 12 個月</button>
+                    <button class="btn btn-ghost" onclick="setIncomePreset('3m')">近 3 個月</button>
+                    <button class="btn btn-ghost" onclick="setIncomePreset('year')">今年</button>
+                    <button class="btn btn-ghost" onclick="loadIncome()">🔄 查詢</button>
+                    <span class="spacer"></span>
+                    <button class="btn btn-primary" onclick="exportReport('income-expense')">📥 匯出 Excel</button>
+                </div>
+                <div id="ieBody"><div class="loading">載入中...</div></div>
+            </section>
+
+            <!-- ============ 3. 借款與定存到期 ============ -->
+            <section id="tab-debt" style="display:none;">
+                <div class="filters">
+                    <div class="f"><label for="ddCompany">公司</label><select id="ddCompany"></select></div>
+                    <button class="btn btn-ghost" onclick="loadDebt()">🔄 重新整理</button>
+                    <span class="spacer"></span>
+                    <button class="btn btn-primary" onclick="exportReport('debt-deposit')">📥 匯出 Excel</button>
+                </div>
+                <div id="ddBody"><div class="loading">載入中...</div></div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const INK = '#1E293B', ACCENT = '#F06000', MUTED = '#64748B', GRID = '#E2E8F0';
+
+        // ==================== 共用小工具 ====================
+        const money = (n) => {
+            const v = Math.round(Number(n) || 0);
+            return (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString('en-US');
+        };
+        // 圖表座標軸用的簡短金額：1,234,567 → 123萬、250,000,000 → 2.5億
+        const compact = (n) => {
+            const a = Math.abs(n), sign = n < 0 ? '-' : '';
+            if (a >= 1e8) return sign + (a / 1e8).toFixed(a % 1e8 === 0 ? 0 : 1) + '億';
+            if (a >= 1e4) return sign + (a / 1e4).toFixed(a % 1e4 === 0 ? 0 : 1).replace(/\.0$/, '') + '萬';
+            return sign + Math.round(a).toLocaleString('en-US');
+        };
+        const pct = (v) => (v * 100).toFixed(1) + '%';
+        const cls = (n) => (n < 0 ? ' neg' : '');
+        const fetchJson = (url) => fetch(url, { credentials: 'include', cache: 'no-store' }).then(async (res) => {
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(data.error || '載入失敗');
+            return data;
+        });
+
+        function toast(text, type = 'error') {
+            showMessage(text, type);
+        }
+
+        // ==================== SVG 圖表（不依賴外部套件） ====================
+        function niceScale(min, max, ticks = 5) {
+            if (min === max) { max = min + 1; }
+            const span = max - min;
+            const rawStep = span / ticks;
+            const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+            const norm = rawStep / mag;
+            const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+            const lo = Math.floor(min / step) * step;
+            const hi = Math.ceil(max / step) * step;
+            const out = [];
+            for (let v = lo; v <= hi + step / 2; v += step) out.push(v);
+            return { lo, hi, ticks: out };
+        }
+
+        function axes(W, H, m, lo, hi, ticks) {
+            const y = (v) => m.t + (H - m.t - m.b) * (1 - (v - lo) / (hi - lo));
+            const grid = ticks.map((t) => `<line x1="${m.l}" x2="${W - m.r}" y1="${y(t)}" y2="${y(t)}" stroke="${GRID}"/>`
+                + `<text x="${m.l - 8}" y="${y(t) + 4}" text-anchor="end" font-size="11" fill="${MUTED}">${compact(t)}</text>`).join('');
+            return { y, grid };
+        }
+
+        // 折線圖：points = [{label, value, kind('past'|'today'|'future'), tip}]；refLine = {value, label}
+        function lineChart(points, refLine) {
+            const W = 900, H = 320, m = { l: 64, r: 24, t: 20, b: 44 };
+            // 安全水位線離餘額太遠時不納入座標範圍，否則整條曲線會被壓扁；改在圖例註明
+            const dataMin = Math.min(...points.map((p) => p.value)), dataMax = Math.max(...points.map((p) => p.value));
+            const pad = Math.max((dataMax - dataMin) * 0.25, Math.abs(dataMax) * 0.05, 1);
+            const refVisible = !!refLine && refLine.value >= dataMin - 3 * pad && refLine.value <= dataMax + 3 * pad;
+            const vals = points.map((p) => p.value).concat(refVisible ? [refLine.value] : []);
+            const sc = niceScale(Math.min(...vals) - pad * 0.3, Math.max(...vals) + pad * 0.3);
+            const { y, grid } = axes(W, H, m, sc.lo, sc.hi, sc.ticks);
+            const x = (i) => m.l + (W - m.l - m.r) * (points.length === 1 ? 0.5 : i / (points.length - 1));
+            const todayIdx = Math.max(0, points.findIndex((p) => p.kind === 'today'));
+            const path = (from, to) => points.slice(from, to + 1).map((p, i) => `${i ? 'L' : 'M'}${x(from + i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+            const step = points.length > 14 ? 2 : 1;
+            const xl = points.map((p, i) => (i % step === 0 || p.kind === 'today')
+                ? `<text x="${x(i)}" y="${H - 18}" text-anchor="middle" font-size="11" fill="${p.kind === 'today' ? ACCENT : MUTED}" ${p.kind === 'today' ? 'font-weight="bold"' : ''}>${p.label}</text>` : '').join('');
+            const dots = points.map((p, i) => `<circle cx="${x(i)}" cy="${y(p.value)}" r="${p.kind === 'today' ? 5 : 3.5}" fill="${p.kind === 'today' ? ACCENT : '#fff'}" stroke="${p.kind === 'today' ? ACCENT : INK}" stroke-width="2"><title>${p.tip}</title></circle>`).join('');
+            const ref = refVisible ? `<line x1="${m.l}" x2="${W - m.r}" y1="${y(refLine.value)}" y2="${y(refLine.value)}" stroke="${ACCENT}" stroke-dasharray="6 4"/>`
+                + `<text x="${W - m.r}" y="${y(refLine.value) - 6}" text-anchor="end" font-size="11" fill="${ACCENT}">${refLine.label}</text>` : '';
+            return `<svg viewBox="0 0 ${W} ${H}" role="img">${grid}${xl}${ref}`
+                + `<path d="${path(0, todayIdx)}" fill="none" stroke="${INK}" stroke-width="2.5"/>`
+                + (todayIdx < points.length - 1 ? `<path d="${path(todayIdx, points.length - 1)}" fill="none" stroke="${INK}" stroke-width="2.5" stroke-dasharray="7 5"/>` : '')
+                + `${dots}</svg>`;
+        }
+
+        // 群組長條圖：series = [{name, color, values}]
+        function barChart(labels, series) {
+            const W = 900, H = 300, m = { l: 64, r: 16, t: 16, b: 44 };
+            const all = series.flatMap((s) => s.values).concat([0]);
+            const sc = niceScale(Math.min(...all), Math.max(...all));
+            const { y, grid } = axes(W, H, m, sc.lo, sc.hi, sc.ticks);
+            const slot = (W - m.l - m.r) / labels.length;
+            const bw = Math.min(26, (slot * 0.7) / series.length);
+            const step = labels.length > 14 ? 2 : 1;
+            const bars = labels.map((lb, i) => series.map((s, k) => {
+                const v = s.values[i];
+                const cx = m.l + slot * i + slot / 2 - (bw * series.length) / 2 + bw * k;
+                const y0 = y(0), y1 = y(v);
+                return `<rect x="${cx.toFixed(1)}" y="${Math.min(y0, y1).toFixed(1)}" width="${bw}" height="${Math.max(1, Math.abs(y0 - y1)).toFixed(1)}" fill="${s.color}" rx="2"><title>${lb}　${s.name}：${money(v)}</title></rect>`;
+            }).join('')).join('');
+            const xl = labels.map((lb, i) => (i % step === 0)
+                ? `<text x="${m.l + slot * i + slot / 2}" y="${H - 18}" text-anchor="middle" font-size="11" fill="${MUTED}">${lb}</text>` : '').join('');
+            return `<svg viewBox="0 0 ${W} ${H}" role="img">${grid}<line x1="${m.l}" x2="${W - m.r}" y1="${y(0)}" y2="${y(0)}" stroke="#94A3B8"/>${bars}${xl}</svg>`;
+        }
+
+        const legend = (items) => `<div class="legend">${items.map(([c, t, dashed]) =>
+            `<span><i style="background:${dashed ? 'transparent' : c};${dashed ? `border-top:3px dashed ${c};height:0;` : ''}"></i>${t}</span>`).join('')}</div>`;
+
+        function barList(rows, valueKey, labelKey, extra) {
+            if (!rows.length) return '<div class="muted">這段期間沒有資料</div>';
+            const max = Math.max(...rows.map((r) => r[valueKey])) || 1;
+            return '<div class="bars">' + rows.map((r) => `<div class="row">
+                <span class="name" title="${escapeHtml(r[labelKey])}">${escapeHtml(r[labelKey])}</span>
+                <span class="track"><span class="fill" style="width:${Math.max(2, r[valueKey] / max * 100)}%; display:block;"></span></span>
+                <span class="amt">${money(r[valueKey])}${extra ? `<small>${extra(r)}</small>` : ''}</span></div>`).join('') + '</div>';
+        }
+
+        // ==================== 分頁、公司下拉 ====================
+        const loaded = {};
+        document.querySelectorAll('.tab').forEach((btn) => btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab').forEach((b) => b.classList.toggle('active', b === btn));
+            ['cashflow', 'income', 'debt'].forEach((t) => { document.getElementById('tab-' + t).style.display = t === btn.dataset.tab ? '' : 'none'; });
+            if (!loaded[btn.dataset.tab]) { loaded[btn.dataset.tab] = true; ({ cashflow: loadCashflow, income: loadIncome, debt: loadDebt })[btn.dataset.tab](); }
+        }));
+        ['cfCompany', 'ieCompany', 'ddCompany'].forEach((id) => document.getElementById(id).addEventListener('change', () => {
+            ({ cfCompany: loadCashflow, ieCompany: loadIncome, ddCompany: loadDebt })[id]();
+        }));
+        ['cfScope', 'cfBack', 'cfAhead'].forEach((id) => document.getElementById(id).addEventListener('change', () => loadCashflow()));
+
+        const qs = (obj) => Object.entries(obj).filter(([, v]) => v !== '' && v != null).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+        const cashflowQuery = () => qs({ company_id: cfCompany.value, scope: cfScope.value, months_back: cfBack.value, months_ahead: cfAhead.value });
+        const incomeQuery = () => qs({ company_id: ieCompany.value, start: ieStart.value, end: ieEnd.value });
+        const debtQuery = () => qs({ company_id: ddCompany.value });
+
+        // ==================== 1. 現金流走勢 ====================
+        function loadCashflow() {
+            const box = document.getElementById('cfBody');
+            box.innerHTML = '<div class="loading">載入中...</div>';
+            fetchJson(`${API_BASE}/reports/cashflow?${cashflowQuery()}`).then((d) => {
+                if (!d.points.length) { box.innerHTML = '<div class="muted">沒有符合條件的帳戶</div>'; return; }
+                const label = { past: '實際', today: '今天', future: '預測' };
+                const pts = d.points.map((p) => ({ label: p.label, value: p.total, kind: p.kind,
+                    tip: `${p.date}（${label[p.kind]}）餘額 ${money(p.total)}` }));
+                const s = d.summary;
+                const cols = d.companies;
+                box.innerHTML = `
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">目前餘額（今天）</div><div class="value">${money(s.current_total)}</div><div class="sub">${s.account_count} 個帳戶・${d.scope === 'all' ? '全部帳戶' : '活存＋定存'}</div></div>
+                        <div class="kpi"><div class="label">未來期間最低預計餘額</div><div class="value ${s.below_safety ? 'accent' : ''}">${s.lowest_future ? money(s.lowest_future.total) : '-'}</div><div class="sub">${s.lowest_future ? s.lowest_future.date : ''}</div></div>
+                        <div class="kpi"><div class="label">安全水位合計</div><div class="value">${money(d.safety_level_total)}</div><div class="sub">${s.below_safety ? '⚠ 未來有低於安全水位的月底' : '預測期間均高於安全水位'}</div></div>
+                    </div>
+                    <div class="card"><h3>月底餘額走勢</h3>
+                        <div class="hint">實線為實際餘額，虛線為預測（已含借款還款、週期範本、定存到期等預計事件）；橘色虛線為各帳戶安全水位加總。滑過圓點可看金額。</div>
+                        <div class="chart">${lineChart(pts, d.safety_level_total > 0 ? { value: d.safety_level_total, label: '安全水位 ' + compact(d.safety_level_total) } : null)}</div>
+                        ${legend([[INK, '實際'], [INK, '預測', true], [ACCENT, '安全水位', true]])}
+                        ${d.safety_level_total > 0 ? `<div class="hint" style="margin-top:6px;">安全水位合計 ${money(d.safety_level_total)}（橘色虛線；若與餘額差距過大，圖上不畫線，請看上方數字與下方明細的「與安全水位差額」）</div>` : ''}
+                    </div>
+                    <div class="card"><h3>明細</h3><div class="tbl-wrap"><table class="rpt">
+                        <thead><tr><th>日期</th><th>期間</th><th>類型</th><th class="num">餘額合計</th>${cols.length > 1 ? cols.map((c) => `<th class="num">${escapeHtml(c)}</th>`).join('') : ''}<th class="num">與安全水位差額</th></tr></thead>
+                        <tbody>${d.points.map((p) => { const diff = p.total - d.safety_level_total; return `<tr>
+                            <td>${p.date}</td><td>${p.label}</td><td>${label[p.kind]}</td><td class="num${cls(p.total)}">${money(p.total)}</td>
+                            ${cols.length > 1 ? cols.map((c) => `<td class="num${cls(p.byCompany[c])}">${money(p.byCompany[c])}</td>`).join('') : ''}
+                            <td class="num${cls(diff)}">${d.safety_level_total > 0 ? money(diff) : '-'}</td></tr>`; }).join('')}</tbody></table></div>
+                        <div class="hint" style="margin-top:10px;">餘額起算點與資金預估週報相同（各帳戶最近一次結算）；早於結算日的月份由結算金額往回推算。</div></div>`;
+            }).catch((e) => { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; });
+        }
+
+        // ==================== 2. 月別收支與類別 ====================
+        function setIncomePreset(kind) {
+            const today = todayInTaipei();
+            const [y, m] = today.split('-').map(Number);
+            const monthStart = (back) => { const idx = (m - 1) - back; const yy = y + Math.floor(idx / 12); const mm = ((idx % 12) + 12) % 12 + 1; return `${yy}-${String(mm).padStart(2, '0')}-01`; };
+            ieEnd.value = today;
+            ieStart.value = kind === 'year' ? `${y}-01-01` : monthStart(kind === '3m' ? 2 : 11);
+            loadIncome();
+        }
+
+        function loadIncome() {
+            const box = document.getElementById('ieBody');
+            box.innerHTML = '<div class="loading">載入中...</div>';
+            fetchJson(`${API_BASE}/reports/income-expense?${incomeQuery()}`).then((d) => {
+                if (!ieStart.value) { ieStart.value = d.start; ieEnd.value = d.end; }
+                const t = d.totals;
+                const topTbl = (rows) => rows.length ? `<div class="tbl-wrap"><table class="rpt"><thead><tr><th>日期</th><th class="num">金額</th><th>類別</th><th>說明</th><th>公司／帳戶</th></tr></thead><tbody>${rows.map((r) => `<tr>
+                    <td>${r.transaction_date}</td><td class="num">${money(r.amount)}</td><td>${escapeHtml(r.category || '-')}</td><td>${escapeHtml(r.description || '-')}</td>
+                    <td>${escapeHtml(r.company_name || '-')}／${escapeHtml(r.account_name || '-')}</td></tr>`).join('')}</tbody></table></div>` : '<div class="muted">沒有資料</div>';
+                box.innerHTML = `
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">總收入</div><div class="value">${money(t.income)}</div></div>
+                        <div class="kpi"><div class="label">總支出</div><div class="value">${money(t.expense)}</div></div>
+                        <div class="kpi"><div class="label">淨收支</div><div class="value ${t.net < 0 ? 'accent' : ''}">${money(t.net)}</div><div class="sub">${d.start} ～ ${d.end}</div></div>
+                    </div>
+                    <div class="card"><h3>月別收入與支出</h3>
+                        <div class="hint">已排除帳戶間轉帳（含轉定存、定存解約本金）；定存利息計入收入。</div>
+                        <div class="chart">${barChart(d.months.map((m) => m.month), [{ name: '收入', color: INK, values: d.months.map((m) => m.income) }, { name: '支出', color: ACCENT, values: d.months.map((m) => m.expense) }])}</div>
+                        ${legend([[INK, '收入'], [ACCENT, '支出']])}
+                        <div class="tbl-wrap" style="margin-top:12px;"><table class="rpt"><thead><tr><th>月份</th><th class="num">收入</th><th class="num">支出</th><th class="num">淨收支</th><th class="num">筆數</th></tr></thead><tbody>
+                        ${d.months.map((m) => `<tr><td>${m.month}</td><td class="num">${money(m.income)}</td><td class="num">${money(m.expense)}</td><td class="num${cls(m.net)}">${money(m.net)}</td><td class="num">${m.count}</td></tr>`).join('')}
+                        <tr class="total"><td>合計</td><td class="num">${money(t.income)}</td><td class="num">${money(t.expense)}</td><td class="num${cls(t.net)}">${money(t.net)}</td><td class="num">${d.months.reduce((s, m) => s + m.count, 0)}</td></tr></tbody></table></div>
+                    </div>
+                    <div class="two-col">
+                        <div class="card"><h3>支出類別占比</h3><div class="hint">橘色為占比最高的類別</div>${barList(d.expense_categories, 'total', 'category', (r) => pct(r.percent))}</div>
+                        <div class="card"><h3>收入類別占比</h3><div class="hint">橘色為占比最高的類別</div>${barList(d.income_categories, 'total', 'category', (r) => pct(r.percent))}</div>
+                    </div>
+                    <div class="card"><h3>最大單筆支出（前 10）</h3>${topTbl(d.top_expenses)}</div>
+                    <div class="card"><h3>最大單筆收入（前 10）</h3>${topTbl(d.top_incomes)}</div>`;
+            }).catch((e) => { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; });
+        }
+
+        // ==================== 3. 借款與定存到期 ====================
+        function loadDebt() {
+            const box = document.getElementById('ddBody');
+            box.innerHTML = '<div class="loading">載入中...</div>';
+            fetchJson(`${API_BASE}/reports/debt-deposit?${debtQuery()}`).then((d) => {
+                const loanRows = d.loans.map((l) => `<tr>
+                    <td>${escapeHtml(l.company_name)}</td><td>${escapeHtml(l.facility_name)}</td><td>${escapeHtml(l.facility_type || '-')}</td><td>${escapeHtml(l.lender || '-')}</td>
+                    <td class="num">${money(l.remaining_principal)}</td><td class="num">${l.total_limit ? money(l.total_limit) : '-'}${l.usage_rate != null ? `<small style="color:#64748B;"> (${pct(l.usage_rate)})</small>` : ''}</td>
+                    <td class="num">${l.interest_rate != null ? l.interest_rate + '%' : '-'}</td>
+                    <td>${l.maturity_date || '-'}${l.maturing_soon ? ` <span class="warn">${l.days_to_maturity < 0 ? '已逾期' : l.days_to_maturity + ' 天後'}</span>` : ''}</td>
+                    <td>${l.next_payment_date || '-'}</td><td class="num">${l.next_payment_amount != null ? money(l.next_payment_amount) : '-'}</td></tr>`).join('');
+                const depRows = d.deposits.map((x) => `<tr>
+                    <td>${escapeHtml(x.company_name)}</td><td>${escapeHtml(x.bank_name || '-')}</td><td>${escapeHtml(x.account_name)}</td><td class="num">${money(x.balance)}</td>
+                    <td class="num">${x.interest_rate != null ? x.interest_rate + '%' : '-'}</td><td>${x.start_date || '-'}</td><td>${x.maturity_date || '-'}</td>
+                    <td class="num">${x.days_left != null ? x.days_left : '-'}</td><td class="num">${x.interest_estimate ? money(x.interest_estimate) : '-'}</td>
+                    <td class="${x.status === '已到期未確認' || x.status === '30 天內到期' ? 'warn' : ''}">${x.status}</td><td>${escapeHtml(x.return_account || '-')}</td></tr>`).join('');
+                const rep = d.monthly;
+                box.innerHTML = `
+                    <div class="kpis">
+                        <div class="kpi"><div class="label">借款本金餘額</div><div class="value">${money(d.loan_total)}</div><div class="sub">${d.loans.length} 筆（啟用中）</div></div>
+                        <div class="kpi"><div class="label">定存總額</div><div class="value">${money(d.deposit_total)}</div><div class="sub">${d.deposits.length} 筆</div></div>
+                        <div class="kpi"><div class="label">定存 ÷ 借款</div><div class="value ${d.coverage != null && d.coverage < 1 ? 'accent' : ''}">${d.coverage != null ? pct(d.coverage) : '-'}</div><div class="sub">定存可覆蓋借款的比例</div></div>
+                        <div class="kpi"><div class="label">近 12 個月已付利息</div><div class="value">${money(d.paid_totals.interest)}</div><div class="sub">已付本金 ${money(d.paid_totals.principal)}</div></div>
+                        <div class="kpi"><div class="label">近 12 個月已收利息</div><div class="value">${money(d.interest_income_12m)}</div><div class="sub">定存解約時登記的利息收入</div></div>
+                    </div>
+                    <div class="card"><h3>借款與融資明細</h3><div class="tbl-wrap"><table class="rpt">
+                        <thead><tr><th>公司</th><th>借款／額度</th><th>類型</th><th>貸款機構</th><th class="num">目前本金餘額</th><th class="num">總額度（使用率）</th><th class="num">年利率</th><th>到期日</th><th>下次還款日</th><th class="num">下次還款金額</th></tr></thead>
+                        <tbody>${loanRows || '<tr><td colspan="10" class="muted">沒有借款</td></tr>'}${d.loans.length ? `<tr class="total"><td colspan="4">合計</td><td class="num">${money(d.loan_total)}</td><td colspan="5"></td></tr>` : ''}</tbody></table></div>
+                        <div class="hint" style="margin-top:8px;">到期日在 90 天內以橘字標示；授信額度以「動用金額」計入本金餘額。</div></div>
+                    <div class="card"><h3>未來 12 個月預計還款</h3>
+                        <div class="hint">依借款管理的下次還款日、金額與還款頻率投影（跟資金流水帳同一套）；預估利息＝月初本金餘額 × 年利率 ÷ 12，僅供參考，已包含在還款金額內，不另外加總。</div>
+                        <div class="chart">${barChart(rep.map((m) => m.month), [{ name: '預計還款', color: INK, values: rep.map((m) => m.repayment) }, { name: '預估利息（參考）', color: ACCENT, values: rep.map((m) => m.interest_estimate) }])}</div>
+                        ${legend([[INK, '預計還款'], [ACCENT, '預估利息（參考）']])}
+                        <div class="tbl-wrap" style="margin-top:12px;"><table class="rpt"><thead><tr><th>月份</th><th class="num">預計還款</th><th class="num">預估利息（參考）</th></tr></thead><tbody>
+                        ${rep.map((m) => `<tr><td>${m.month}</td><td class="num">${money(m.repayment)}</td><td class="num">${money(m.interest_estimate)}</td></tr>`).join('')}
+                        <tr class="total"><td>合計</td><td class="num">${money(rep.reduce((s, m) => s + m.repayment, 0))}</td><td class="num">${money(rep.reduce((s, m) => s + m.interest_estimate, 0))}</td></tr></tbody></table></div></div>
+                    <div class="card"><h3>近 12 個月實際已付</h3>
+                        ${d.paid.length ? `<div class="tbl-wrap"><table class="rpt"><thead><tr><th>月份</th><th class="num">已付本金</th><th class="num">已付利息</th></tr></thead><tbody>
+                        ${d.paid.map((r) => `<tr><td>${r.month}</td><td class="num">${money(r.principal)}</td><td class="num">${money(r.interest)}</td></tr>`).join('')}
+                        <tr class="total"><td>合計</td><td class="num">${money(d.paid_totals.principal)}</td><td class="num">${money(d.paid_totals.interest)}</td></tr></tbody></table></div>` : '<div class="muted">近 12 個月沒有還款記錄</div>'}</div>
+                    <div class="card"><h3>定存明細與到期</h3><div class="tbl-wrap"><table class="rpt">
+                        <thead><tr><th>公司</th><th>銀行</th><th>帳戶</th><th class="num">餘額</th><th class="num">年利率</th><th>起存日</th><th>到期日</th><th class="num">距到期(天)</th><th class="num">預估到期利息</th><th>狀態</th><th>到期轉回</th></tr></thead>
+                        <tbody>${depRows || '<tr><td colspan="11" class="muted">沒有定存</td></tr>'}${d.deposits.length ? `<tr class="total"><td colspan="3">合計</td><td class="num">${money(d.deposit_total)}</td><td colspan="4"></td><td class="num">${money(d.deposit_interest_estimate_total)}</td><td colspan="2"></td></tr>` : ''}</tbody></table></div></div>
+                    <div class="two-col">
+                        <div class="card"><h3>定存到期分布</h3>${barList(d.deposit_buckets.filter((b) => b.count > 0).map((b) => ({ ...b, name: `${b.label}（${b.count} 筆）` })), 'amount', 'name')}</div>
+                        <div class="card"><h3>定存依公司與銀行</h3>${barList(d.deposit_by_bank, 'amount', 'name')}</div>
+                    </div>`;
+            }).catch((e) => { box.innerHTML = `<div class="muted">${escapeHtml(e.message)}</div>`; });
+        }
+
+        // ==================== 匯出與設定 ====================
+        function exportReport(kind) {
+            const q = kind === 'cashflow' ? cashflowQuery() : (kind === 'income-expense' ? incomeQuery() : debtQuery());
+            window.location.href = `${API_BASE}/reports/export/${kind}?${q}`;
+        }
+
+        function saveAccess() {
+            fetch(`${API_BASE}/reports/settings`, {
+                method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ access: document.getElementById('accessSelect').value })
+            }).then((r) => r.json()).then((r) => {
+                if (r.error) return toast(r.error, 'error');
+                toast('開放範圍已更新；使用者重新整理頁面後，導覽列會依新設定顯示', 'success');
+            }).catch(() => toast('儲存失敗', 'error'));
+        }
+
+        document.addEventListener('DOMContentLoaded', async function () {
+            const user = await checkAuth({ reportsOnly: true });
+            if (!user) return;
+            fetchJson(`${API_BASE}/reports/settings`).then((s) => {
+                if (s.is_admin) {
+                    document.getElementById('settingsBar').style.display = 'flex';
+                    document.getElementById('accessSelect').value = s.access;
+                }
+            }).catch(() => {});
+            ['cfCompany', 'ieCompany', 'ddCompany'].forEach((id) => AccountSelect.loadCompanies(document.getElementById(id), { placeholder: '全部公司' }));
+            loaded.cashflow = true;
+            loadCashflow();
+        });
+    </script>
+</body>
+</html>

@@ -5,6 +5,7 @@ const rateLimit = require('express-rate-limit');
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { removeSession: removeOnlineSession } = require('../utils/onlineUsers');
+const { getReportsAccess, canViewReports } = require('../utils/reportAccess');
 const { isConfigured: ssoConfigured, verifyEntraIdToken } = require('../utils/entraAuth');
 
 const loginLimiter = rateLimit({
@@ -26,15 +27,19 @@ router.get('/check', (req, res) => {
                     req.session.destroy();
                     return res.json({ authenticated: false });
                 }
-                res.json({
-                    authenticated: true,
-                    user: {
-                        id: user.id,
-                        username: user.username,
-                        full_name: user.full_name,
-                        email: user.email,
-                        role: user.role
-                    }
+                getReportsAccess().then((access) => {
+                    res.json({
+                        authenticated: true,
+                        user: {
+                            id: user.id,
+                            username: user.username,
+                            full_name: user.full_name,
+                            email: user.email,
+                            role: user.role
+                        },
+                        // 前端依此決定導覽列要不要顯示的功能（目前只有統計報表，開放範圍由管理員設定）
+                        features: { reports: canViewReports(user.role, access) }
+                    });
                 });
             }
         );
