@@ -594,26 +594,29 @@
             gap: 12px;
         }
 
-        .ledger-stat-input {
-            width: 150px;
-            border: none;
-            border-bottom: 2px solid #E2E8F0;
-            background: transparent;
-            font-size: 20px;
-            font-weight: bold;
-            color: #F06000;
-            font-family: inherit;
-            padding: 2px 0;
+        /* 目前貸款餘額的明細浮層：列出加總了哪些借款 */
+        .loan-breakdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 20;
+            min-width: 280px;
+            max-width: 90vw;
+            margin-top: 6px;
+            padding: 10px 14px;
+            background: #FFFFFF;
+            border: 1px solid #E2E8F0;
+            border-radius: 8px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+            font-size: 13px;
+            color: #1E293B;
         }
 
-        .ledger-stat-input:focus {
-            outline: none;
-            border-bottom-color: #F06000;
-        }
-
-        .ledger-stat-input:disabled {
-            border-bottom-color: transparent;
-        }
+        .loan-breakdown table { width: 100%; border-collapse: collapse; }
+        .loan-breakdown td { padding: 4px 0; border-bottom: 1px solid #F1F5F9; }
+        .loan-breakdown td:last-child { text-align: right; font-weight: bold; padding-left: 16px; white-space: nowrap; }
+        .loan-breakdown small { color: #64748B; display: block; }
+        .loan-breakdown .loan-breakdown-foot { margin-top: 8px; font-size: 12px; color: #64748B; }
 
         .ledger-stat-note {
             font-size: 12px;
@@ -888,17 +891,18 @@
                             <span class="ledger-stat-label">可用資金（活存＋定存）</span>
                             <span class="ledger-stat-value" id="availableFundsTotal">-</span>
                         </div>
-                        <div class="ledger-stat">
-                            <label class="ledger-stat-label" for="loanBalanceInput">目前貸款餘額</label>
-                            <input type="text" inputmode="decimal" id="loanBalanceInput" class="ledger-stat-input"
-                                   placeholder="手動填入" autocomplete="off" disabled
-                                   onblur="saveLoanBalance()" onkeydown="if (event.key === 'Enter') this.blur()">
-                            <span class="ledger-stat-note" id="loanBalanceNote"></span>
+                        <div class="ledger-stat" style="position: relative;">
+                            <span class="ledger-stat-label">目前貸款餘額</span>
+                            <span class="ledger-stat-value" id="loanBalanceValue">-</span>
+                            <span class="ledger-stat-note"><span id="loanBalanceNote">載入中...</span>
+                                <a href="#" id="loanBreakdownToggle" onclick="toggleLoanBreakdown(event)" style="display:none; color:#F06000; margin-left:6px;">明細 ▾</a>
+                            </span>
+                            <div id="loanBreakdown" class="loan-breakdown" style="display:none;"></div>
                         </div>
                         <div class="ledger-stat ledger-stat-net" id="netFundsStat">
                             <span class="ledger-stat-label">可用資金－貸款餘額</span>
                             <span class="ledger-stat-value" id="netFundsValue">-</span>
-                            <span class="ledger-stat-note" id="netFundsNote">請先填入目前貸款餘額</span>
+                            <span class="ledger-stat-note" id="netFundsNote">載入中...</span>
                         </div>
                     </div>
                     <div class="ledger-toolbar-actions">
@@ -1442,7 +1446,7 @@
             // 資金流水帳的餘額是由結算與交易即時算出來的，不依賴重算結果，所以重算改在背景執行
             const authPromise = checkAuth();
             loadLedger();
-            initLoanBalance(authPromise);
+            initLoanBalance();
 
             const authenticated = await authPromise;
             if (!authenticated) return;
@@ -1451,11 +1455,11 @@
             recalculateBalances(); // 只是順便更新「銀行帳戶管理」用的快取餘額，不等它
         });
 
-        // ==================== 目前貸款餘額（手動填寫，所有使用者看到同一個數字） ====================
-        let savedLoanBalance = null;
+        // ==================== 目前貸款餘額（自動加總借款管理的目前本金餘額） ====================
+        let loanBalanceTotal = null; // 啟用中借款的目前本金餘額加總；null = 尚未載入
         let availableFunds = null; // 資金流水帳資料還沒載入完成前為 null，不顯示成誤導的 $0
 
-        // 可用資金 − 貸款餘額：夠還（>= 0）藍底、不夠還紅底；尚未填貸款餘額時不顯示結果
+        // 可用資金 − 貸款餘額：夠還（>= 0）藍底、不夠還紅底；貸款餘額尚未載入時不顯示結果
         function updateNetFunds() {
             const box = document.getElementById('netFundsStat');
             const valueEl = document.getElementById('netFundsValue');
@@ -1466,12 +1470,12 @@
                 noteEl.textContent = '載入中...';
                 return;
             }
-            if (savedLoanBalance == null) {
+            if (loanBalanceTotal == null) {
                 valueEl.textContent = '-';
-                noteEl.textContent = '請先填入目前貸款餘額';
+                noteEl.textContent = '載入中...';
                 return;
             }
-            const net = availableFunds - savedLoanBalance;
+            const net = availableFunds - loanBalanceTotal;
             valueEl.textContent = formatCurrency(net);
             if (net >= 0) {
                 box.classList.add('net-enough');
@@ -1482,66 +1486,50 @@
             }
         }
 
-        function formatLoanBalanceInput(amount) {
-            return amount == null ? '' : amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
-        }
-
-        function initLoanBalance(userPromise) {
-            const input = document.getElementById('loanBalanceInput');
-            const dataPromise = fetch(`${API_BASE}/cash-gap-loan-balance`)
+        function initLoanBalance() {
+            fetch(`${API_BASE}/cash-gap-loan-balance`)
                 .then(res => res.json())
-                .catch(err => { console.error('載入貸款餘額失敗:', err); return null; });
-            Promise.all([dataPromise, userPromise]).then(([data, user]) => {
-                const canEditLoan = user && (user.role === 'admin' || user.role === 'finance');
-                input.disabled = !canEditLoan;
-                if (!canEditLoan) input.placeholder = '尚未填寫';
-                if (!data) return;
-                savedLoanBalance = data.amount;
-                input.value = formatLoanBalanceInput(data.amount);
-                updateNetFunds();
-                if (data.updated_at) {
-                    document.getElementById('loanBalanceNote').textContent = `更新於 ${new Date(data.updated_at).toLocaleDateString('zh-TW')}`;
-                }
-            });
-        }
-
-        function saveLoanBalance() {
-            const input = document.getElementById('loanBalanceInput');
-            const note = document.getElementById('loanBalanceNote');
-            const text = input.value.replace(/[,\s$]/g, '');
-            const amount = text === '' ? null : Number(text);
-            if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-                note.textContent = '請輸入大於或等於 0 的數字';
-                input.value = formatLoanBalanceInput(savedLoanBalance);
-                return;
-            }
-            if (amount === savedLoanBalance) {
-                input.value = formatLoanBalanceInput(savedLoanBalance);
-                return;
-            }
-            fetch(`${API_BASE}/cash-gap-loan-balance`, {
-                method: 'PUT',
-                credentials: 'include',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ amount })
-            })
-                .then(res => res.json())
-                .then(result => {
-                    if (result.error) {
-                        note.textContent = result.error;
-                        input.value = formatLoanBalanceInput(savedLoanBalance);
-                        return;
-                    }
-                    savedLoanBalance = result.amount;
-                    input.value = formatLoanBalanceInput(result.amount);
-                    note.textContent = '已儲存';
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    loanBalanceTotal = data.amount || 0;
+                    loanBreakdownLoans = data.loans || [];
+                    document.getElementById('loanBalanceValue').textContent = formatCurrency(loanBalanceTotal);
+                    document.getElementById('loanBalanceNote').innerHTML = data.count > 0
+                        ? `自動加總 ${data.count} 筆借款（<a href="/financing.html" style="color:#F06000;">借款管理</a>）`
+                        : '目前沒有借款餘額（<a href="/financing.html" style="color:#F06000;">借款管理</a>）';
+                    document.getElementById('loanBreakdownToggle').style.display = data.count > 0 ? 'inline' : 'none';
                     updateNetFunds();
                 })
                 .catch(err => {
-                    console.error('儲存貸款餘額失敗:', err);
-                    note.textContent = '儲存失敗，請稍後再試';
+                    console.error('載入貸款餘額失敗:', err);
+                    document.getElementById('loanBalanceNote').textContent = '載入失敗，請重新整理';
                 });
         }
+
+        // 明細：哪些借款被加總、各自的目前本金餘額
+        let loanBreakdownLoans = [];
+        function toggleLoanBreakdown(event) {
+            event.preventDefault();
+            const panel = document.getElementById('loanBreakdown');
+            const toggle = document.getElementById('loanBreakdownToggle');
+            if (panel.style.display !== 'none') {
+                panel.style.display = 'none';
+                toggle.textContent = '明細 ▾';
+                return;
+            }
+            panel.innerHTML = '<table>' + loanBreakdownLoans.map(l =>
+                `<tr><td>${escapeHtml(l.facility_name)}<small>${escapeHtml(l.company_name || '未分類')}${l.facility_type ? '・' + escapeHtml(l.facility_type) : ''}</small></td><td>${formatCurrency(l.remaining_principal)}</td></tr>`
+            ).join('') + `</table><div class="loan-breakdown-foot">加總 ${formatCurrency(loanBalanceTotal)}。數字有誤時，請到借款管理修改該筆借款（可手動輸入目前本金餘額）。</div>`;
+            panel.style.display = 'block';
+            toggle.textContent = '明細 ▴';
+        }
+        document.addEventListener('click', (e) => {
+            const panel = document.getElementById('loanBreakdown');
+            if (panel && panel.style.display !== 'none' && !panel.contains(e.target) && e.target.id !== 'loanBreakdownToggle') {
+                panel.style.display = 'none';
+                document.getElementById('loanBreakdownToggle').textContent = '明細 ▾';
+            }
+        });
 
         // 已到期、尚未按「解約／到期」確認入帳的定存：預測目前以預計轉回計算，提醒去銀行帳戶確認實際利息
         function loadDueDepositsNotice() {
