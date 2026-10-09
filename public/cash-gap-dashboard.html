@@ -650,6 +650,20 @@
             color: #F06000;
         }
 
+        /* 浮動表頭：整頁往下捲動時，流水帳的欄位標題固定在畫面最上方。
+           表格要左右捲動，所以外層容器是捲動區，單靠 position: sticky 無法跟著整頁固定，
+           改用 JS 在畫面上方疊一份表頭複本，並同步左右捲動位置 */
+        .ledger-float-head {
+            position: fixed;
+            z-index: 60;
+            overflow: hidden;
+            display: none;
+            background: #F8FAFC;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+            border-bottom: 1px solid #E2E8F0;
+        }
+        .ledger-float-head table.ledger-table { table-layout: fixed; width: auto; border-top: 0; }
+
         /* 區間驗算：每個檢查點下方一列，顯示「上期餘額＋收入－支出＝本期餘額」是否對得上 */
         .ledger-verify-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1E293B; cursor: pointer; user-select: none; }
         .ledger-table tr.ledger-row-verify td { background: #F8FAFC; font-size: 11.5px; line-height: 1.55; color: #475569; white-space: normal; vertical-align: top; font-weight: normal; }
@@ -1174,6 +1188,7 @@
             document.getElementById('ledgerView').style.display = isCard ? 'none' : 'block';
             document.getElementById('tabCardView').classList.toggle('active', isCard);
             document.getElementById('tabLedgerView').classList.toggle('active', !isCard);
+            updateLedgerFloat();
 
             if (isCard && !cardViewLoaded) {
                 cardViewLoaded = true;
@@ -1522,7 +1537,76 @@
                     <tbody>${bodyRows}</tbody>
                 </table>
             `;
+            setupLedgerFloatingHeader();
         }
+
+        // ==================== 浮動表頭 ====================
+        let ledgerFloat = null;
+        let ledgerFloatTicking = false;
+
+        function setupLedgerFloatingHeader() {
+            if (ledgerFloat) { ledgerFloat.remove(); ledgerFloat = null; }
+            const container = document.getElementById('ledgerTableContainer');
+            const table = container && container.querySelector('table.ledger-table');
+            if (!table || !table.tHead) return;
+            ledgerFloat = document.createElement('div');
+            ledgerFloat.className = 'ledger-float-head';
+            const clone = document.createElement('table');
+            clone.className = 'ledger-table';
+            clone.appendChild(document.createElement('colgroup'));
+            clone.appendChild(table.tHead.cloneNode(true));
+            ledgerFloat.appendChild(clone);
+            document.body.appendChild(ledgerFloat);
+            refreshLedgerFloat();
+        }
+
+        // 複本的欄寬要跟原表格一致（欄寬由內容決定，展開／收合月份後可能改變）
+        function syncLedgerFloatWidths() {
+            if (!ledgerFloat) return;
+            const table = document.querySelector('#ledgerTableContainer table.ledger-table');
+            if (!table || !table.tHead) return;
+            const lastRow = table.tHead.rows[table.tHead.rows.length - 1]; // 第二列每一欄各一個 th
+            ledgerFloat.querySelector('colgroup').innerHTML = [...lastRow.cells]
+                .map((c) => `<col style="width:${c.getBoundingClientRect().width}px">`).join('');
+            ledgerFloat.querySelector('table').style.width = table.getBoundingClientRect().width + 'px';
+        }
+
+        function updateLedgerFloat() {
+            if (!ledgerFloat) return;
+            const container = document.getElementById('ledgerTableContainer');
+            const table = container && container.querySelector('table.ledger-table');
+            if (!table || container.offsetParent === null) { ledgerFloat.style.display = 'none'; return; }
+            const rect = container.getBoundingClientRect();
+            // 系統更新通知橫幅是固定在最上方的，表頭要往下讓開
+            const bar = document.getElementById('system-notice-bar');
+            const top = bar ? bar.getBoundingClientRect().height : 0;
+            const realHeadBottom = table.tHead.getBoundingClientRect().bottom;
+            const floatH = ledgerFloat.offsetHeight || table.tHead.getBoundingClientRect().height;
+            const show = realHeadBottom < top + 1 && rect.bottom > top + floatH + 40;
+            if (!show) { ledgerFloat.style.display = 'none'; return; }
+            ledgerFloat.style.display = 'block';
+            ledgerFloat.style.top = top + 'px';
+            ledgerFloat.style.left = rect.left + 'px';
+            ledgerFloat.style.width = rect.width + 'px';
+            ledgerFloat.scrollLeft = container.scrollLeft;
+        }
+
+        function refreshLedgerFloat() {
+            syncLedgerFloatWidths();
+            updateLedgerFloat();
+        }
+
+        function scheduleLedgerFloatUpdate() {
+            if (ledgerFloatTicking) return;
+            ledgerFloatTicking = true;
+            requestAnimationFrame(() => { ledgerFloatTicking = false; updateLedgerFloat(); });
+        }
+        window.addEventListener('scroll', scheduleLedgerFloatUpdate, { passive: true });
+        window.addEventListener('resize', () => { refreshLedgerFloat(); });
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.getElementById('ledgerTableContainer');
+            if (container) container.addEventListener('scroll', scheduleLedgerFloatUpdate, { passive: true });
+        });
 
         // 收合/展開單一月份：直接切換該月份所有列的 display，不用整個表格重新畫一次
         window.toggleLedgerMonth = function(monthKey) {
@@ -1539,6 +1623,7 @@
             document.querySelectorAll(`#ledgerTableContainer tr[data-month="${monthKey}"]:not(.ledger-month-header)`).forEach((tr) => {
                 tr.style.display = willExpand ? '' : 'none';
             });
+            refreshLedgerFloat();
         };
 
         window.expandAllLedgerMonths = function() {
