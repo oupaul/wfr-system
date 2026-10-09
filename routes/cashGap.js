@@ -4,6 +4,7 @@ const { db } = require('../database/db');
 const logger = require('../utils/logger');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { todayInTaipei, addDaysStr } = require('../utils/dateUtil');
+const { transactionBelongsToAccount } = require('../utils/accountMatch');
 const { DEFAULT_CHECK_DAYS, getAccountCheckDays, buildCheckDates } = require('../utils/checkDays');
 
 const { dbAll, loadActiveAccounts, loadAccountInputs, loadProjectedFutureRows } = require('../utils/cashGapData');
@@ -331,6 +332,54 @@ router.get('/cash-gap-ledger', async (req, res) => {
             }
         });
 
+        // ===== 區間驗算：兩個結餘檢查點之間「上期餘額 ＋ 收入 － 支出 ＝ 本期餘額」 =====
+        // 上面的餘額是逐筆累加出來的；這裡另外用 SQL 直接對資料庫「依日期彙總」真實交易，
+        // 再加上預計事件，獨立算出預期餘額跟流水帳的餘額比對（不是重複同一個迴圈的結果）。
+        // 營業收支與帳戶間轉帳分開，才跟收支記錄頁的總收入／總支出（排除轉帳）對得起來。
+        const verifyAccountSnapshots = new Map(); // account.id -> [{ date, balance }]（今天 + 該帳戶每個檢查日）
+        columns.forEach((c) => verifyAccountSnapshots.set(c.account_id, [{ date: today, balance: c.current_balance }]));
+        rowsOut.filter((r) => r.type === 'balance' && r.date > today).forEach((r) => {
+            Object.keys(r.balances).forEach((id) => verifyAccountSnapshots.get(Number(id)).push({ date: r.date, balance: r.balances[id] }));
+        });
+        const names = [...new Set(accounts.map((a) => a.account_name).filter(Boolean))];
+        const dailyRows = names.length ? await dbAll(
+            `SELECT company_name, account_name, account_number, transaction_date, type,
+                    (transfer_group_id IS NOT NULL) AS is_transfer, SUM(amount) AS total
+             FROM transactions
+             WHERE account_name IN (${names.map(() => '?').join(',')}) AND transaction_date > ? AND transaction_date <= ?
+             GROUP BY company_name, account_name, account_number, transaction_date, type, is_transfer`,
+            [...names, today, maxDate]) : [];
+        const emptySums = () => ({ biz_in: 0, biz_out: 0, tr_in: 0, tr_out: 0 });
+        const addTo = (sums, type, isTransfer, amt) => {
+            const key = (isTransfer ? 'tr_' : 'biz_') + (type === 'income' ? 'in' : 'out');
+            sums[key] += amt;
+        };
+        const verifyByRow = new Map(); // `${date}|${accountId}` -> 驗算結果
+        accounts.forEach((account) => {
+            const startDate = inputs.get(account.id).startDate;
+            const mine = dailyRows.filter((t) => transactionBelongsToAccount(t, account) && t.transaction_date >= startDate);
+            const projected = (projections.get(account.id) || []);
+            const snaps = verifyAccountSnapshots.get(account.id);
+            for (let k = 1; k < snaps.length; k++) {
+                const prev = snaps[k - 1], cur = snaps[k];
+                const real = emptySums(), proj = emptySums();
+                mine.forEach((t) => {
+                    if (t.transaction_date > prev.date && t.transaction_date <= cur.date) addTo(real, t.type, !!t.is_transfer, parseFloat(t.total) || 0);
+                });
+                // 預計事件：第一段從「今天」起算（今天到期未確認的預計事件落在今天），之後同樣是 (上一檢查日, 本檢查日]
+                const lowerOk = (d) => (k === 1 ? d >= prev.date : d > prev.date);
+                projected.forEach((t) => {
+                    if (lowerOk(t.transaction_date) && t.transaction_date <= cur.date) addTo(proj, t.type, !!t.is_transfer, parseFloat(t.amount) || 0);
+                });
+                const expected = prev.balance + (real.biz_in + real.tr_in + proj.biz_in + proj.tr_in) - (real.biz_out + real.tr_out + proj.biz_out + proj.tr_out);
+                const diff = cur.balance - expected;
+                verifyByRow.set(`${cur.date}|${account.id}`, {
+                    prev_date: prev.date, prev_balance: prev.balance, real, proj,
+                    balance: cur.balance, expected, diff, ok: Math.abs(diff) < 0.005
+                });
+            }
+        });
+
         // 帳戶餘額在整段檢視期間都是 0（沒有結算金額也沒有任何交易）就不顯示，減少表格雜訊
         const balanceRows = rowsOut.filter((r) => r.type === 'balance');
         const zeroAccountIds = new Set(
@@ -345,7 +394,12 @@ router.get('/cash-gap-ledger', async (req, res) => {
                 if (r.type !== 'balance') return r;
                 const balances = { ...r.balances };
                 zeroAccountIds.forEach((id) => delete balances[id]);
-                return { ...r, balances };
+                const verify = {};
+                Object.keys(balances).forEach((id) => {
+                    const v = verifyByRow.get(`${r.date}|${id}`);
+                    if (v) verify[id] = v;
+                });
+                return Object.keys(verify).length ? { ...r, balances, verify } : { ...r, balances };
             });
 
         res.json({ targetDates, columns: visibleColumns, rows: visibleRows });

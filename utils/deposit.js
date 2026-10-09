@@ -62,11 +62,11 @@ function projectDepositRows(accounts, inputs, todayStr, maxDateStr) {
         const tag = overdue ? '（預計・定存已到期未確認）' : '（預計）';
         result.get(dep.id).push({
             transaction_date: date, type: 'expense', amount: principal,
-            description: `${tag}${dep.account_name} 到期轉出`, is_projected: true
+            description: `${tag}${dep.account_name} 到期轉出`, is_projected: true, is_transfer: true
         });
         result.get(target.id).push({
             transaction_date: date, type: 'income', amount: principal,
-            description: `${tag}${dep.account_name} 到期轉入`, is_projected: true
+            description: `${tag}${dep.account_name} 到期轉入`, is_projected: true, is_transfer: true
         });
         if (interest > 0) {
             result.get(target.id).push({

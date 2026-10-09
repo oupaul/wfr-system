@@ -2451,6 +2451,10 @@
             const accountParam = urlParams.get('account');
             const companyParam = urlParams.get('company');
             const accountNumberParam = urlParams.get('accountNumber');
+            // 資金流水帳的「區間驗算」會帶 startDate / endDate，直接套用日期篩選，方便核對該區間的收支合計
+            const isDateParam = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+            if (isDateParam(urlParams.get('startDate'))) document.getElementById('filterStartDate').value = urlParams.get('startDate');
+            if (isDateParam(urlParams.get('endDate'))) document.getElementById('filterEndDate').value = urlParams.get('endDate');
             let filterCompanyId = null;
             if (companyParam) {
                 document.getElementById('filterCompany').value = companyParam;

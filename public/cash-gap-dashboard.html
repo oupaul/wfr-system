@@ -650,6 +650,19 @@
             color: #F06000;
         }
 
+        /* 區間驗算：每個檢查點下方一列，顯示「上期餘額＋收入－支出＝本期餘額」是否對得上 */
+        .ledger-verify-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #1E293B; cursor: pointer; user-select: none; }
+        .ledger-table tr.ledger-row-verify td { background: #F8FAFC; font-size: 11.5px; line-height: 1.55; color: #475569; white-space: normal; vertical-align: top; font-weight: normal; }
+        .ledger-table tr.ledger-row-verify td.ledger-date-col,
+        .ledger-table tr.ledger-row-verify td.ledger-desc-col { background: #F8FAFC; }
+        .ledger-row-verify a { color: #1E293B; text-decoration: underline dotted; }
+        .ledger-row-verify .v-line { display: block; white-space: nowrap; }
+        .ledger-row-verify .v-proj { color: #64748B; font-style: italic; }
+        .ledger-row-verify .v-ok { color: #475569; }
+        .ledger-row-verify .v-bad { color: #F06000; font-weight: bold; }
+        .ledger-month-summary { font-weight: normal !important; font-size: 12px; color: #475569; }
+        .ledger-month-summary .v-bad { color: #F06000; font-weight: bold; }
+
         .ledger-toolbar-actions {
             display: flex;
             flex-wrap: wrap;
@@ -907,6 +920,9 @@
                         </div>
                     </div>
                     <div class="ledger-toolbar-actions">
+                        <label class="ledger-verify-toggle" title="在每個結餘檢查點下方顯示「上期餘額＋收入－支出＝本期餘額」的獨立驗算">
+                            <input type="checkbox" id="ledgerVerifyToggle" onchange="toggleLedgerVerify(this.checked)"> 顯示區間驗算
+                        </label>
                         <button type="button" class="btn" onclick="expandAllLedgerMonths()">全部展開</button>
                         <button type="button" class="btn" onclick="collapseAllLedgerMonths()">全部收合</button>
                         <div class="account-filter">
@@ -1294,6 +1310,104 @@
             }
         });
 
+        // ==================== 區間驗算 ====================
+        let showLedgerVerify = false;
+        try { showLedgerVerify = localStorage.getItem('ledgerVerify') === '1'; } catch (e) { /* 無痕模式等 */ }
+
+        window.toggleLedgerVerify = function(on) {
+            showLedgerVerify = !!on;
+            try { localStorage.setItem('ledgerVerify', on ? '1' : '0'); } catch (e) { /* 記不住就算了 */ }
+            renderLedger();
+        };
+
+        const vNum = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+        const vSum = (a, b) => ({ biz_in: a.biz_in + b.biz_in, biz_out: a.biz_out + b.biz_out, tr_in: a.tr_in + b.tr_in, tr_out: a.tr_out + b.tr_out });
+        const vZero = () => ({ biz_in: 0, biz_out: 0, tr_in: 0, tr_out: 0 });
+        const vHas = (x) => x.biz_in || x.biz_out || x.tr_in || x.tr_out;
+
+        // 把一欄（可能是合併的多筆定存）的驗算結果加總
+        function verifyOfColumn(column, row) {
+            const list = (column.merged_account_ids || []).map((id) => row.verify && row.verify[id]).filter(Boolean);
+            if (!list.length) return null;
+            return list.reduce((acc, v) => ({
+                prev_balance: acc.prev_balance + v.prev_balance, balance: acc.balance + v.balance, diff: acc.diff + v.diff,
+                real: vSum(acc.real, v.real), proj: vSum(acc.proj, v.proj), ok: acc.ok && v.ok, prev_date: v.prev_date
+            }), { prev_balance: 0, balance: 0, diff: 0, real: vZero(), proj: vZero(), ok: true, prev_date: '' });
+        }
+
+        function addDaysLocal(dateStr, days) {
+            const d = new Date(dateStr + 'T00:00:00Z');
+            d.setUTCDate(d.getUTCDate() + days);
+            return d.toISOString().slice(0, 10);
+        }
+
+        // 收支記錄頁的核對連結：區間 (上一檢查點, 本檢查點]，單一帳戶才有（合併的多筆定存沒有單一帳戶可帶）
+        function verifyLink(column, date, prevDate, text) {
+            if ((column.merged_account_ids || []).length !== 1 || !column.account_name) return text;
+            let url = `/transactions.html?startDate=${addDaysLocal(prevDate, 1)}&endDate=${date}&account=${encodeURIComponent(column.account_name)}`;
+            if (column.company_name) url += `&company=${encodeURIComponent(column.company_name)}`;
+            if (column.account_number) url += `&accountNumber=${encodeURIComponent(column.account_number)}`;
+            return `<a href="${url}" title="到收支記錄查看 ${addDaysLocal(prevDate, 1)} ～ ${date} 的明細與合計">${text}</a>`;
+        }
+
+        function verifyCellHtml(column, row) {
+            const v = verifyOfColumn(column, row);
+            if (!v) return '<td></td>';
+            const lines = [];
+            if (v.ok && !vHas(v.real) && !vHas(v.proj)) {
+                // 這段期間沒有任何異動：只顯示一行，避免整列都是「+0 −0」
+                return `<td title="${v.prev_date} 之後 ～ ${row.date}：沒有異動，餘額維持 ${vNum(v.balance)}"><span class="v-line v-ok">無異動 ✓</span></td>`;
+            }
+            lines.push(verifyLink(column, row.date, v.prev_date, `<span class="v-line">營業 +${vNum(v.real.biz_in)} −${vNum(v.real.biz_out)}</span>`));
+            if (v.real.tr_in || v.real.tr_out) lines.push(`<span class="v-line">轉帳 +${vNum(v.real.tr_in)} −${vNum(v.real.tr_out)}</span>`);
+            if (vHas(v.proj)) lines.push(`<span class="v-line v-proj">預計 +${vNum(v.proj.biz_in + v.proj.tr_in)} −${vNum(v.proj.biz_out + v.proj.tr_out)}</span>`);
+            lines.push(v.ok
+                ? `<span class="v-line v-ok">上期 ${vNum(v.prev_balance)} ✓</span>`
+                : `<span class="v-line v-bad">⚠ 與餘額差 ${vNum(v.diff)}</span>`);
+            return `<td class="${v.ok ? '' : 'v-bad'}" title="${v.prev_date} 之後 ～ ${row.date}：上期 ${vNum(v.prev_balance)} ＋ 收入 － 支出 ＝ ${vNum(v.balance)}">${lines.join('')}</td>`;
+        }
+
+        function verifyRowHtml(columns, row, monthKey, hiddenStyle) {
+            if (!row.verify) return '';
+            let total = vZero(), proj = vZero(), bad = 0;
+            columns.forEach((c) => {
+                const v = verifyOfColumn(c, row);
+                if (!v) return;
+                total = vSum(total, v.real); proj = vSum(proj, v.proj);
+                if (!v.ok) bad++;
+            });
+            const summary = `全部帳戶：營業 +${vNum(total.biz_in + proj.biz_in)} −${vNum(total.biz_out + proj.biz_out)}`
+                + (bad ? `<br><span class="v-bad">⚠ ${bad} 個帳戶與餘額對不上</span>` : '<br>全部 ✓ 對得上');
+            return `<tr class="ledger-row-verify" data-month="${monthKey}"${hiddenStyle}>
+                <td class="ledger-date-col"></td>
+                <td class="ledger-desc-col">區間驗算<br><small>${summary}</small></td>
+                ${columns.map((c) => verifyCellHtml(c, row)).join('')}
+            </tr>`;
+        }
+
+        // 每個月的營業收入／支出（含預計）與驗算狀態，顯示在月份標題列，收合時也能對
+        function monthVerifySummaries(columns, rows) {
+            const map = new Map();
+            rows.forEach((row) => {
+                if (!row.verify) return;
+                const key = row.date.slice(0, 7);
+                const m = map.get(key) || { inc: 0, exp: 0, bad: 0 };
+                columns.forEach((c) => {
+                    const v = verifyOfColumn(c, row);
+                    if (!v) return;
+                    m.inc += v.real.biz_in + v.proj.biz_in; m.exp += v.real.biz_out + v.proj.biz_out;
+                    if (!v.ok) m.bad++;
+                });
+                map.set(key, m);
+            });
+            return map;
+        }
+
+        function monthSummaryHtml(m) {
+            if (!m) return '';
+            return `營業收入 +${vNum(m.inc)}　營業支出 −${vNum(m.exp)}　` + (m.bad ? `<span class="v-bad">⚠ ${m.bad} 處驗算對不上</span>` : '驗算 ✓');
+        }
+
         function displayLedger(columns, rows) {
             const container = document.getElementById('ledgerTableContainer');
 
@@ -1335,6 +1449,7 @@
             }
 
             let lastMonthKey = null;
+            const monthSummaries = showLedgerVerify ? monthVerifySummaries(columns, rows) : new Map();
             const bodyRows = rows.map((row) => {
                 const monthKey = row.date.slice(0, 7);
                 let monthHeader = '';
@@ -1345,7 +1460,7 @@
                     monthHeader = `
                         <tr class="ledger-month-header${isExpanded ? ' expanded' : ''}" data-month="${monthKey}" onclick="toggleLedgerMonth('${monthKey}')">
                             <td class="ledger-month-label" colspan="2"><span class="ledger-month-toggle">${isExpanded ? '▼' : '▶'}</span>${y}年${parseInt(m, 10)}月</td>
-                            <td colspan="${columns.length}"></td>
+                            <td colspan="${columns.length}" class="ledger-month-summary">${monthSummaryHtml(monthSummaries.get(monthKey))}</td>
                         </tr>
                     `;
                 }
@@ -1368,7 +1483,7 @@
                             <td class="ledger-desc-col">${escapeHtml(row.label)}</td>
                             ${cells}
                         </tr>
-                    `;
+                    ` + (showLedgerVerify ? verifyRowHtml(columns, row, monthKey, rowHiddenStyle) : '');
                 }
 
                 const projectedCls = row.is_projected ? ' ledger-projected' : '';
@@ -1445,6 +1560,7 @@
             // 本身都有登入保護，沒登入時只會回錯誤、頁面也會被 checkAuth 導去登入頁。
             // 原本是「登入檢查 → 重算全部帳戶餘額 → 才開始載入資料」依序等待，使用者要多等好幾趟來回；
             // 資金流水帳的餘額是由結算與交易即時算出來的，不依賴重算結果，所以重算改在背景執行
+            document.getElementById('ledgerVerifyToggle').checked = showLedgerVerify;
             const authPromise = checkAuth();
             loadLedger();
             initLoanBalance();
