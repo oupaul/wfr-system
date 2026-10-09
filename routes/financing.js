@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
 const { todayInTaipei } = require('../utils/dateUtil');
+const { balancesAfterEachRepayment } = require('../utils/financingBalance');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
@@ -254,22 +255,34 @@ router.delete('/:id', requireEditor, (req, res) => {
 // 取得某筆借款的還款歷史
 router.get('/:id/repayments', (req, res) => {
     const { id } = req.params;
-    db.all(
-        'SELECT * FROM financing_repayments WHERE financing_id = ? ORDER BY payment_date DESC, id DESC',
-        [id],
-        (err, rows) => {
-            if (err) {
-                logger.error('查詢還款記錄錯誤:', err);
-                return res.status(500).json({ error: '查詢失敗', details: err.message });
-            }
-            res.json({ data: rows, count: rows.length });
+    db.get('SELECT principal_amount, manual_principal_balance, manual_balance_date FROM financing WHERE id = ?', [id], (finErr, fin) => {
+        if (finErr) {
+            logger.error('查詢借款錯誤:', finErr);
+            return res.status(500).json({ error: '查詢失敗', details: finErr.message });
         }
-    );
+        if (!fin) return res.status(404).json({ error: '找不到借款記錄' });
+        db.all(
+            'SELECT * FROM financing_repayments WHERE financing_id = ? ORDER BY payment_date DESC, id DESC',
+            [id],
+            (err, rows) => {
+                if (err) {
+                    logger.error('查詢還款記錄錯誤:', err);
+                    return res.status(500).json({ error: '查詢失敗', details: err.message });
+                }
+                // 每一期「還款後的本金餘額」，供使用者逐期對照銀行對帳單
+                const balances = balancesAfterEachRepayment(fin, rows);
+                const data = rows.map((r) => ({ ...r, balance_after: balances.get(r.id) }));
+                const interestTotal = rows.reduce((sum, r) => sum + (parseFloat(r.interest_paid) || 0), 0);
+                res.json({ data, count: data.length, interest_total: interestTotal });
+            }
+        );
+    });
 });
 
-// 新增一筆還款記錄
-// 借款有設定「撥款/還款帳戶」時，手動補登的還款要跟「週期範本產生下一筆」一樣
-// 同步寫一筆收支記錄＋更新帳戶餘額，不然即時餘額會因為少算這筆還款而虛高
+// 新增一筆還款記錄。
+// 可選填 bank_principal_balance（銀行對帳單顯示的「這次還款後的本金餘額」）：填了就以銀行的數字為準，
+// 把它登記成目前本金餘額（基準日＝這筆還款的日期），之後的還款再從這個數字往下扣，
+// 同時回報「系統原本推算的餘額」與差額，讓使用者知道是不是前面某期本金／利息拆錯了。
 router.post('/:id/repayments', requireEditor, async (req, res) => {
     const { id } = req.params;
     const { payment_date, principal_paid, interest_paid, remarks } = req.body;
@@ -277,6 +290,11 @@ router.post('/:id/repayments', requireEditor, async (req, res) => {
     if (!payment_date) {
         return res.status(400).json({ error: 'payment_date 為必填欄位' });
     }
+    const bankBalanceParsed = parseManualBalance(req.body.bank_principal_balance);
+    if (bankBalanceParsed.error) {
+        return res.status(400).json({ error: '銀行顯示的本金餘額必須是大於或等於 0 的數字' });
+    }
+    const bankBalance = bankBalanceParsed.value; // null = 沒填
 
     let transactionId = null;
     let financingAccount = null;
@@ -327,12 +345,38 @@ router.post('/:id/repayments', requireEditor, async (req, res) => {
         }
         const afterData = { id: repaymentId, financing_id: parseInt(id, 10), payment_date, principal_paid: principal_paid || 0, interest_paid: interest_paid || 0, remarks: remarks || null };
         writeOperationLog(req, 'create', 'financing_repayment', repaymentId, null, afterData, '還款記錄 #' + repaymentId + '（' + (facilityName || '') + '）');
-        res.json({
-            success: true,
-            id: repaymentId,
-            transactionId,
-            message: '還款記錄已新增' + (transactionId ? '，已同步建立收支記錄並更新帳戶餘額' : '（此借款未設定還款帳戶，未建立對應收支記錄）')
+
+        // 以銀行顯示的還款後本金餘額校正（見上方說明）
+        let calibration = null;
+        let warning = null;
+        const before = await new Promise((resolve, reject) => {
+            db.get(`SELECT ${REMAINING_PRINCIPAL_SQL} AS remaining, f.manual_principal_balance, f.manual_balance_date FROM financing f WHERE f.id = ?`, [id],
+                (err, row) => (err ? reject(err) : resolve(row)));
         });
+        if (bankBalance !== null) {
+            const systemBalance = parseFloat(before.remaining) || 0;
+            await new Promise((resolve, reject) => {
+                db.run('UPDATE financing SET manual_principal_balance = ?, manual_balance_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                    [bankBalance, payment_date, id], (err) => (err ? reject(err) : resolve()));
+            });
+            calibration = { system_balance: systemBalance, bank_balance: bankBalance, diff: bankBalance - systemBalance, base_date: payment_date };
+            writeOperationLog(req, 'update', 'financing', id,
+                { manual_principal_balance: before.manual_principal_balance, manual_balance_date: before.manual_balance_date },
+                { manual_principal_balance: bankBalance, manual_balance_date: payment_date },
+                `借款 #${id} 依銀行還款後本金餘額校正：系統推算 ${systemBalance}，銀行 ${bankBalance}`);
+        } else if (before.manual_principal_balance != null && before.manual_balance_date && payment_date <= before.manual_balance_date
+            && (parseFloat(principal_paid) || 0) > 0) {
+            warning = `這筆還款日期（${payment_date}）不晚於手動輸入的本金餘額基準日（${before.manual_balance_date}），視為已包含在該餘額中，沒有再扣減；如要以這筆為準，請填「銀行顯示的還款後本金餘額」`;
+        }
+
+        let message = '還款記錄已新增' + (transactionId ? '，已同步建立收支記錄並更新帳戶餘額' : '（此借款未設定還款帳戶，未建立對應收支記錄）');
+        if (calibration) {
+            const f = (n) => Math.round(n).toLocaleString('en-US');
+            message += Math.abs(calibration.diff) < 0.5
+                ? `；已用銀行餘額 ${f(calibration.bank_balance)} 校正（與系統推算一致）`
+                : `；已用銀行餘額 ${f(calibration.bank_balance)} 校正，系統原本推算 ${f(calibration.system_balance)}，差 ${calibration.diff > 0 ? '+' : ''}${f(calibration.diff)}（前面某期的本金／利息可能填錯，可在還款記錄逐期核對）`;
+        }
+        res.json({ success: true, id: repaymentId, transactionId, message, calibration, warning });
     } catch (error) {
         // 還款記錄沒寫成功，但交易已經建立的話要撤銷，避免留下一筆沒有對應還款記錄的交易
         if (transactionId) {

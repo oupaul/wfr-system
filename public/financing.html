@@ -167,6 +167,15 @@
             margin-bottom: 20px;
         }
 
+        .warning {
+            background: #FFF7ED;
+            color: #9A3412;
+            border-left: 4px solid #F06000;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
         .success {
             background: #d4edda;
             color: #155724;
@@ -400,7 +409,7 @@
 
         .repayment-form {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr 1fr auto;
+            grid-template-columns: 1fr 1fr 1fr 1.3fr 1fr auto;
             gap: 10px;
             align-items: end;
             margin-bottom: 20px;
@@ -653,7 +662,12 @@
                         <div class="label" id="repaySummaryRemainingLabel">目前本金餘額</div>
                         <div class="value" id="repaySummaryRemaining">-</div>
                     </div>
+                    <div class="item">
+                        <div class="label">已付利息（累計）</div>
+                        <div class="value" id="repaySummaryInterest">-</div>
+                    </div>
                 </div>
+                <p style="font-size:12px; color:#64748B; margin:-8px 0 16px;">目前本金餘額只會被「本金」減少，利息是使用資金的費用，不會減少本金餘額。</p>
 
                 <div id="repaymentFormWrap">
                     <form class="repayment-form" onsubmit="addRepayment(event)">
@@ -670,6 +684,10 @@
                             <input type="number" id="repayInterest" step="0.01" placeholder="0">
                         </div>
                         <div class="form-group">
+                            <label for="repayBankBalance" title="填了之後，系統以銀行的數字為準校正目前本金餘額，並告訴你系統原本推算差多少">銀行還款後本金餘額</label>
+                            <input type="number" id="repayBankBalance" step="0.01" min="0" placeholder="選填，對帳單上的貸款餘額">
+                        </div>
+                        <div class="form-group">
                             <label for="repayRemarks">備註</label>
                             <input type="text" id="repayRemarks" placeholder="選填">
                         </div>
@@ -684,12 +702,13 @@
                                 <th>還款日期</th>
                                 <th>本金</th>
                                 <th>利息</th>
+                                <th title="這一期還款後剩下的本金，可逐期對照銀行對帳單的貸款餘額">還款後本金餘額</th>
                                 <th>備註</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="repaymentsTable">
-                            <tr><td colspan="5" class="loading">載入中...</td></tr>
+                            <tr><td colspan="6" class="loading">載入中...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -936,19 +955,22 @@
                 .then(res => res.json())
                 .then(data => {
                     if (data.error) {
-                        tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;padding:20px;color:#dc3545;">${escapeHtml(data.error)}</td></tr>`;
+                        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:#dc3545;">${escapeHtml(data.error)}</td></tr>`;
                         return;
                     }
                     const rows = data.data || [];
                     if (rows.length === 0) {
-                        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#666;">尚無還款記錄</td></tr>';
+                        document.getElementById('repaySummaryInterest').textContent = formatCurrency(0);
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#666;">尚無還款記錄</td></tr>';
                         return;
                     }
+                    document.getElementById('repaySummaryInterest').textContent = formatCurrency(data.interest_total || 0);
                     tbody.innerHTML = rows.map(r => `
                         <tr>
                             <td>${escapeHtml(r.payment_date)}</td>
                             <td>${formatCurrency(r.principal_paid)}</td>
                             <td>${formatCurrency(r.interest_paid)}</td>
+                            <td style="font-weight:bold;">${r.balance_after != null ? formatCurrency(r.balance_after) : '-'}</td>
                             <td>${escapeHtml(r.remarks) || '-'}</td>
                             <td>
                                 ${canEdit ? `<button class="btn btn-danger btn-sm" onclick="deleteRepayment(${r.id})">刪除</button>` : '<span style="color:#999;">-</span>'}
@@ -958,7 +980,7 @@
                 })
                 .catch(err => {
                     console.error('載入還款記錄錯誤:', err);
-                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#dc3545;">載入失敗</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#dc3545;">載入失敗</td></tr>';
                 });
         }
 
@@ -970,8 +992,10 @@
                 payment_date: document.getElementById('repayDate').value,
                 principal_paid: document.getElementById('repayPrincipal').value ? parseFloat(document.getElementById('repayPrincipal').value) : 0,
                 interest_paid: document.getElementById('repayInterest').value ? parseFloat(document.getElementById('repayInterest').value) : 0,
-                remarks: document.getElementById('repayRemarks').value
+                remarks: document.getElementById('repayRemarks').value,
+                bank_principal_balance: document.getElementById('repayBankBalance').value
             };
+            if (data.bank_principal_balance !== '' && !confirm('填了「銀行還款後本金餘額」，系統會以這個數字為準校正目前本金餘額（基準日＝這筆還款日期），確定嗎？')) return;
 
             fetch(`${API_BASE}/financing/${currentFinancingId}/repayments`, {
                 method: 'POST',
@@ -984,7 +1008,9 @@
                         showMessage(result.error, 'error');
                         return;
                     }
-                    showMessage(result.message || '還款記錄已新增', 'success');
+                    showMessage((result.message || '還款記錄已新增') + (result.warning ? '。注意：' + result.warning : ''),
+                        result.warning || (result.calibration && Math.abs(result.calibration.diff) >= 0.5) ? 'warning' : 'success');
+                    document.getElementById('repayBankBalance').value = '';
                     document.getElementById('repayPrincipal').value = '';
                     document.getElementById('repayInterest').value = '';
                     document.getElementById('repayRemarks').value = '';
