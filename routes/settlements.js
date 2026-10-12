@@ -5,6 +5,7 @@ const logger = require('../utils/logger');
 const { requireAuth, requireAdmin, requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
+const { calculateSettlement } = require('../utils/settlementCalc');
 
 // 取得所有結算記錄
 // bank_name / account_type 透過比對 bank_accounts 查出來（balance_settlements
@@ -102,106 +103,20 @@ router.get('/last', (req, res) => {
 });
 
 // 計算結算（必須在 /:id 之前）
-router.post('/calculate', (req, res) => {
+router.post('/calculate', async (req, res) => {
     const { settlement_date, company_name, account_name, account_number } = req.body;
 
     if (!settlement_date || !company_name) {
         return res.status(400).json({ error: 'settlement_date 和 company_name 為必填欄位' });
     }
-
-    let lastSettlementQuery = `
-        SELECT * FROM balance_settlements 
-        WHERE company_name = ?
-    `;
-    const lastParams = [company_name];
-
-    if (account_name) {
-        lastSettlementQuery += ' AND account_name = ?';
-        lastParams.push(account_name);
+    try {
+        // 計算規則見 utils/settlementCalc.js：實際餘額＝結算日當天開始前的餘額，跟資金流水帳一致
+        const data = await calculateSettlement({ settlement_date, company_name, account_name, account_number });
+        res.json({ data });
+    } catch (err) {
+        logger.error('計算結算錯誤:', err);
+        res.status(500).json({ error: '計算失敗', details: err.message });
     }
-    if (account_number) {
-        lastSettlementQuery += ' AND account_number = ?';
-        lastParams.push(account_number);
-    }
-
-    lastSettlementQuery += ' ORDER BY settlement_date DESC LIMIT 1';
-
-    db.get(lastSettlementQuery, lastParams, (err, lastSettlement) => {
-        if (err) {
-            logger.error('查詢上一次結算錯誤:', err);
-            return res.status(500).json({ error: '查詢失敗', details: err.message });
-        }
-
-        const previousDate = lastSettlement ? lastSettlement.settlement_date : null;
-        const openingBalance = lastSettlement ? parseFloat(lastSettlement.actual_balance) : 0;
-
-        let transactionQuery = `
-            SELECT 
-                type,
-                SUM(amount) as total
-            FROM transactions
-            WHERE company_name = ?
-            AND transaction_date > ?
-            AND transaction_date <= ?
-        `;
-        const transactionParams = [company_name, previousDate || '1900-01-01', settlement_date];
-
-        if (account_name) {
-            transactionQuery += ' AND account_name = ?';
-            transactionParams.push(account_name);
-        } else if (account_number) {
-            transactionQuery += ' AND account_number = ?';
-            transactionParams.push(account_number);
-        }
-
-        transactionQuery += ' GROUP BY type';
-
-        db.all(transactionQuery, transactionParams, (err, transactionRows) => {
-            if (err) {
-                logger.error('計算收支錯誤:', err);
-                return res.status(500).json({ error: '計算失敗', details: err.message });
-            }
-
-            let totalIncome = 0;
-            let totalExpense = 0;
-
-            if (transactionRows && transactionRows.length > 0) {
-                transactionRows.forEach(row => {
-                    const total = parseFloat(row.total) || 0;
-                    if (row.type === 'income') {
-                        totalIncome = total;
-                    } else if (row.type === 'expense') {
-                        totalExpense = total;
-                    }
-                });
-            }
-
-            logger.info('結算計算結果:', {
-                company_name,
-                account_name,
-                account_number,
-                previousDate,
-                settlement_date,
-                transactionRows: transactionRows || [],
-                totalIncome,
-                totalExpense
-            });
-
-            const calculatedBalance = openingBalance + totalIncome - totalExpense;
-
-            res.json({
-                data: {
-                    previous_settlement_date: previousDate,
-                    opening_balance: openingBalance,
-                    total_income: totalIncome,
-                    total_expense: totalExpense,
-                    calculated_balance: calculatedBalance,
-                    period_start: previousDate || '無',
-                    period_end: settlement_date
-                }
-            });
-        });
-    });
 });
 
 // 新增結算記錄
@@ -219,101 +134,15 @@ router.post('/', requireEditor, (req, res) => {
         return res.status(400).json({ error: 'settlement_date、company_name 和 actual_balance 為必填欄位' });
     }
 
-    const calculatePromise = new Promise((resolve, reject) => {
-        let lastSettlementQuery = `
-            SELECT * FROM balance_settlements 
-            WHERE company_name = ?
-        `;
-        const lastParams = [company_name];
-
-        if (account_name) {
-            lastSettlementQuery += ' AND account_name = ?';
-            lastParams.push(account_name);
-        }
-        if (account_number) {
-            lastSettlementQuery += ' AND account_number = ?';
-            lastParams.push(account_number);
-        }
-
-        lastSettlementQuery += ' ORDER BY settlement_date DESC LIMIT 1';
-
-        db.get(lastSettlementQuery, lastParams, (err, lastSettlement) => {
-            if (err) {
-                return reject(err);
-            }
-
-            const previousDate = lastSettlement ? lastSettlement.settlement_date : null;
-            const openingBalance = lastSettlement ? parseFloat(lastSettlement.actual_balance) : 0;
-
-            let transactionQuery = `
-                SELECT 
-                    type,
-                    SUM(amount) as total
-                FROM transactions
-                WHERE company_name = ?
-                AND transaction_date > ?
-                AND transaction_date <= ?
-            `;
-            const transactionParams = [company_name, previousDate || '1900-01-01', settlement_date];
-
-            if (account_name && account_number) {
-                transactionQuery += ' AND account_name = ? AND account_number = ?';
-                transactionParams.push(account_name, account_number);
-            } else if (account_name) {
-                transactionQuery += ' AND account_name = ?';
-                transactionParams.push(account_name);
-            } else if (account_number) {
-                transactionQuery += ' AND account_number = ?';
-                transactionParams.push(account_number);
-            }
-
-            transactionQuery += ' GROUP BY type';
-
-            db.all(transactionQuery, transactionParams, (err, transactionRows) => {
-                if (err) {
-                    return reject(err);
-                }
-
-                let totalIncome = 0;
-                let totalExpense = 0;
-
-                if (transactionRows && transactionRows.length > 0) {
-                    transactionRows.forEach(row => {
-                        const total = parseFloat(row.total) || 0;
-                        if (row.type === 'income') {
-                            totalIncome = total;
-                        } else if (row.type === 'expense') {
-                            totalExpense = total;
-                        }
-                    });
-                }
-
-                logger.info('結算計算結果（儲存時）:', {
-                    company_name,
-                    account_name,
-                    account_number,
-                    previousDate,
-                    settlement_date,
-                    transactionRows: transactionRows || [],
-                    totalIncome,
-                    totalExpense
-                });
-
-                const calculatedBalance = openingBalance + totalIncome - totalExpense;
-                const actualBal = parseFloat(actual_balance);
-                const difference = actualBal - calculatedBalance;
-
-                resolve({
-                    previous_settlement_date: previousDate,
-                    opening_balance: openingBalance,
-                    total_income: totalIncome,
-                    total_expense: totalExpense,
-                    calculated_balance: calculatedBalance,
-                    difference: difference
-                });
-            });
-        });
-    });
+    const calculatePromise = calculateSettlement({ settlement_date, company_name, account_name, account_number })
+        .then((c) => ({
+            previous_settlement_date: c.previous_settlement_date,
+            opening_balance: c.opening_balance,
+            total_income: c.total_income,
+            total_expense: c.total_expense,
+            calculated_balance: c.calculated_balance,
+            difference: parseFloat(actual_balance) - c.calculated_balance
+        }));
 
     calculatePromise.then(calcData => {
         db.run(
@@ -401,91 +230,15 @@ router.put('/:id', requireAuth, requireEditor, (req, res) => {
         const oldAccountName = oldSettlement.account_name;
         const oldAccountNumber = oldSettlement.account_number;
 
-        const calculatePromise = new Promise((resolve, reject) => {
-            let lastSettlementQuery = `
-                SELECT * FROM balance_settlements 
-                WHERE company_name = ?
-                AND id != ?
-            `;
-            const lastParams = [company_name, id];
-
-            if (account_name) {
-                lastSettlementQuery += ' AND account_name = ?';
-                lastParams.push(account_name);
-            }
-            if (account_number) {
-                lastSettlementQuery += ' AND account_number = ?';
-                lastParams.push(account_number);
-            }
-
-            lastSettlementQuery += ' ORDER BY settlement_date DESC LIMIT 1';
-
-            db.get(lastSettlementQuery, lastParams, (err, lastSettlement) => {
-                if (err) {
-                    return reject(err);
-                }
-
-                const previousDate = lastSettlement ? lastSettlement.settlement_date : null;
-                const openingBalance = lastSettlement ? parseFloat(lastSettlement.actual_balance) : 0;
-
-                let transactionQuery = `
-                    SELECT 
-                        type,
-                        SUM(amount) as total
-                    FROM transactions
-                    WHERE company_name = ?
-                    AND transaction_date > ?
-                    AND transaction_date <= ?
-                `;
-                const transactionParams = [company_name, previousDate || '1900-01-01', settlement_date];
-
-                if (account_name && account_number) {
-                    transactionQuery += ' AND account_name = ? AND account_number = ?';
-                    transactionParams.push(account_name, account_number);
-                } else if (account_name) {
-                    transactionQuery += ' AND account_name = ?';
-                    transactionParams.push(account_name);
-                } else if (account_number) {
-                    transactionQuery += ' AND account_number = ?';
-                    transactionParams.push(account_number);
-                }
-
-                transactionQuery += ' GROUP BY type';
-
-                db.all(transactionQuery, transactionParams, (err, transactionRows) => {
-                    if (err) {
-                        return reject(err);
-                    }
-
-                    let totalIncome = 0;
-                    let totalExpense = 0;
-
-                    if (transactionRows && transactionRows.length > 0) {
-                        transactionRows.forEach(row => {
-                            const total = parseFloat(row.total) || 0;
-                            if (row.type === 'income') {
-                                totalIncome = total;
-                            } else if (row.type === 'expense') {
-                                totalExpense = total;
-                            }
-                        });
-                    }
-
-                    const calculatedBalance = openingBalance + totalIncome - totalExpense;
-                    const actualBal = parseFloat(actual_balance);
-                    const difference = actualBal - calculatedBalance;
-
-                    resolve({
-                        previous_settlement_date: previousDate,
-                        opening_balance: openingBalance,
-                        total_income: totalIncome,
-                        total_expense: totalExpense,
-                        calculated_balance: calculatedBalance,
-                        difference: difference
-                    });
-                });
-            });
-        });
+        const calculatePromise = calculateSettlement({ settlement_date, company_name, account_name, account_number }, id)
+            .then((c) => ({
+                previous_settlement_date: c.previous_settlement_date,
+                opening_balance: c.opening_balance,
+                total_income: c.total_income,
+                total_expense: c.total_expense,
+                calculated_balance: c.calculated_balance,
+                difference: parseFloat(actual_balance) - c.calculated_balance
+            }));
 
         calculatePromise.then(calcData => {
             db.run(

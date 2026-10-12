@@ -609,7 +609,7 @@
                                 <label for="actualBalance">實際餘額 <span class="required">*</span></label>
                                 <input type="number" id="actualBalance" step="0.01" placeholder="輸入實際餘額">
                                 <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
-                                    期初餘額請輸入實際的帳戶餘額
+                                    期初餘額請輸入實際的帳戶餘額。請填「結算日當天開始前」的餘額（前一天收盤）；結算日當天的收支會另外計入結算之後的餘額
                                 </small>
                             </div>
                         </div>
@@ -1070,6 +1070,13 @@
                 <div class="calc-row">
                     <span class="calc-label">結算期間：</span>
                     <span class="calc-value">${escapeHtml(calcData.period_start)} 至 ${escapeHtml(calcData.period_end)}</span>
+                </div>
+                <div style="margin-top:12px; padding:10px 14px; background:#F8FAFC; border-left:3px solid #F06000; border-radius:6px; font-size:13px; color:#475569; line-height:1.7;">
+                    <strong>計算規則：</strong>實際餘額請填「<strong>結算日當天開始前</strong>」的銀行餘額（＝前一天收盤餘額）。期間是「上一次結算日」到「結算日前一天」；
+                    <strong>結算日當天的收支不含在計算餘額內</strong>，系統會把它們計入結算之後的餘額（資金流水帳、帳戶即時餘額都是這樣算）。
+                    ${calcData.same_day && calcData.same_day.count > 0
+                        ? `<br><span style="color:#F06000; font-weight:bold;">結算日當天另有 ${calcData.same_day.count} 筆收支（收入 ${formatCurrency(calcData.same_day.income)}、支出 ${formatCurrency(calcData.same_day.expense)}），不含在上面的計算餘額內；
+                        如果你填的銀行餘額已經扣掉這些款項，請改填它們發生「之前」的餘額，否則流水帳會再扣一次。</span>` : ''}
                 </div>
             `;
             

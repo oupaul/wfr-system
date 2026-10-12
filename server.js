@@ -113,6 +113,7 @@ const adminRoutes = require('./routes/admin');
 const { trackActivity } = require('./utils/onlineUsers');
 const noticeRoutes = require('./routes/notice');
 const reportRoutes = require('./routes/reports');
+const { recalculateAllSettlementsOnce } = require('./utils/settlementRecalc');
 const financingRoutes = require('./routes/financing');
 const recurringTransactionsRoutes = require('./routes/recurringTransactions');
 
@@ -219,8 +220,10 @@ function ensureOperationLogsAndWriteStartupLog() {
 }
 initDatabase().then(() => {
     ensureOperationLogsAndWriteStartupLog();
-    return entraAuth.init();
-}).then(() => backupScheduler.init())
+    // 結算計算規則統一（實際餘額＝結算日當天開始前）後，一次性重算既有結算的衍生欄位；失敗不影響服務啟動
+    return recalculateAllSettlementsOnce().catch((err) => logger.error('重算結算失敗（可稍後重啟再試）:', err));
+}).then(() => entraAuth.init())
+  .then(() => backupScheduler.init())
   .catch(console.error);
 
 // ==================== 全域錯誤處理中間件 ====================
