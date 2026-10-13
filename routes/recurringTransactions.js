@@ -7,6 +7,7 @@ const { requireEditor } = require('../middleware/auth');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 const { addMonthsClamped } = require('../utils/financingProjection');
+const { getLoanProjectionStatuses } = require('../utils/projectionStatus');
 
 const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 
@@ -15,7 +16,16 @@ const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 router.get('/', requireEditor, (req, res) => {
     const { active } = req.query;
     let query = `
-        SELECT rt.*, f.facility_name as financing_facility_name
+        SELECT rt.*, f.facility_name as financing_facility_name,
+        (SELECT ba.bank_name FROM bank_accounts ba LEFT JOIN companies c ON c.id = ba.company_id
+          WHERE ba.is_active = 1 AND ba.account_name = rt.account_name AND IFNULL(c.name, '') = IFNULL(rt.company_name, '')
+            AND IFNULL(ba.account_number, '') = IFNULL(rt.account_number, '') LIMIT 1) AS account_bank_name,
+        (SELECT ba.account_type FROM bank_accounts ba LEFT JOIN companies c ON c.id = ba.company_id
+          WHERE ba.is_active = 1 AND ba.account_name = rt.account_name AND IFNULL(c.name, '') = IFNULL(rt.company_name, '')
+            AND IFNULL(ba.account_number, '') = IFNULL(rt.account_number, '') LIMIT 1) AS account_type,
+        (SELECT COUNT(*) FROM bank_accounts ba LEFT JOIN companies c ON c.id = ba.company_id
+          WHERE ba.is_active = 1 AND ba.account_name = rt.account_name AND IFNULL(c.name, '') = IFNULL(rt.company_name, '')
+            AND IFNULL(ba.account_number, '') = IFNULL(rt.account_number, '')) AS account_match_count
         FROM recurring_transactions rt
         LEFT JOIN financing f ON rt.financing_id = f.id
         WHERE 1=1
@@ -27,12 +37,23 @@ router.get('/', requireEditor, (req, res) => {
     }
     query += ' ORDER BY rt.is_active DESC, rt.next_run_date IS NULL, rt.next_run_date ASC';
 
-    db.all(query, params, (err, rows) => {
+    db.all(query, params, async (err, rows) => {
         if (err) {
             logger.error('查詢錯誤:', err);
             return res.status(500).json({ error: '查詢失敗', details: err.message });
         }
-        res.json({ data: rows, count: rows.length });
+        // 連結借款的範本附上該借款的預測狀態；範本的帳戶是否對得上銀行帳戶（對不上不會出現在預測，也不計入任何帳戶餘額）
+        let data = rows.map((r) => ({ ...r, account_matched: !r.account_name || r.account_match_count > 0 }));
+        try {
+            const loanIds = [...new Set(rows.map((r) => r.financing_id).filter(Boolean))];
+            if (loanIds.length) {
+                const statuses = await getLoanProjectionStatuses(loanIds);
+                data = data.map((r) => (r.financing_id ? { ...r, projection_status: statuses.get(r.financing_id) || null } : r));
+            }
+        } catch (statusErr) {
+            logger.error('計算預測狀態失敗:', statusErr);
+        }
+        res.json({ data, count: data.length });
     });
 });
 

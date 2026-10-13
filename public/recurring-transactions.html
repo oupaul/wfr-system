@@ -535,9 +535,10 @@
                         </div>
                         <div class="form-group">
                             <label for="modalAccountId">帳戶</label>
-                            <select id="modalAccountId">
+                            <select id="modalAccountId" onchange="document.getElementById('modalAccountWarning').style.display='none'">
                                 <option value="">請選擇帳戶</option>
                             </select>
+                            <small id="modalAccountWarning" style="display:none; color:#F06000; font-weight:bold; margin-top:6px;"></small>
                         </div>
                     </div>
                     <input type="hidden" id="modalAccountNumber">
@@ -645,6 +646,25 @@
 
         const frequencyLabels = { monthly: '每月', quarterly: '每季', yearly: '每年' };
 
+        // 帳戶欄：帳戶名稱 + 銀行・類型・帳號末四碼；範本記的帳戶對不上任何啟用中的銀行帳戶時標示警示
+        // （對不上的範本不會出現在資金預測，「產生下一筆」記出的收支也不會計入任何帳戶餘額）
+        function accountCellHtml(t) {
+            if (!t.account_name) return '-';
+            const tail = t.account_number ? '帳號 …' + String(t.account_number).slice(-4) : '';
+            const meta = [t.account_bank_name, t.account_type, tail].filter(Boolean).map(escapeHtml).join('・');
+            return escapeHtml(t.account_name)
+                + (meta ? `<br><span style="font-size:12px;color:#64748B;">${meta}</span>` : '')
+                + (t.account_matched === false ? '<br><span style="font-size:12px;color:#F06000;font-weight:bold;">⚠ 找不到對應的銀行帳戶，請編輯重新選擇</span>' : '');
+        }
+
+        // 連結借款的預測狀態（資金預估週報有沒有帶入這筆借款的預計還款）
+        function projectionStatusHtml(st) {
+            if (!st) return '';
+            if (st.level === 'warn') return `<br><span style="font-size:12px;color:#F06000;font-weight:bold;">⚠ 未預測：${escapeHtml(st.message)}</span>`;
+            if (st.level === 'info') return `<br><span style="font-size:12px;color:#64748B;">${escapeHtml(st.message)}</span>`;
+            return `<br><span style="font-size:12px;color:#475569;">✓ ${escapeHtml(st.message)}</span>`;
+        }
+
         function loadCompanies(callback) {
             AccountSelect.loadCompanies(document.getElementById('modalCompanyId')).then((list) => {
                 if (list) companiesList = list;
@@ -699,6 +719,7 @@
             document.getElementById('modalType').value = 'expense';
             document.getElementById('modalFrequency').value = 'monthly';
             document.getElementById('modalIsActive').checked = true;
+            document.getElementById('modalAccountWarning').style.display = 'none';
             document.getElementById('financingSplitWrap').style.display = 'none';
             document.getElementById('amountWrap').style.display = 'block';
             document.getElementById('modalAmount').required = true;
@@ -730,9 +751,16 @@
                                 document.getElementById('modalInterestAmount').value = record.interest_amount != null ? record.interest_amount : '';
                                 document.getElementById('modalCategory').value = record.category || '';
                                 document.getElementById('modalDescription').value = record.description || '';
-                                const account = bankAccountsList.find(a => a.account_name === record.account_name);
-                                if (account) document.getElementById('modalAccountId').value = String(account.id);
-                                document.getElementById('modalAccountNumber').value = record.account_number || '';
+                                // 用「帳戶名稱＋帳號」選回原本存檔的帳戶（帳戶名稱可能重複，例如都叫公司名稱，只比名稱會選到第一筆）
+                                const warnEl = document.getElementById('modalAccountWarning');
+                                warnEl.style.display = 'none';
+                                const sameNumber = (a) => (a.account_number || '') === (record.account_number || '');
+                                const account = bankAccountsList.find(a => a.account_name === record.account_name && sameNumber(a));
+                                document.getElementById('modalAccountId').value = account ? String(account.id) : '';
+                                if (record.account_name && !account) {
+                                    warnEl.textContent = `原本記錄的帳戶「${record.account_name}${record.account_number ? '（' + record.account_number + '）' : ''}」找不到對應的啟用中銀行帳戶，請重新選擇後再儲存`;
+                                    warnEl.style.display = 'block';
+                                }
                                 document.getElementById('modalNextRunDate').value = record.next_run_date || '';
                                 document.getElementById('modalEndDate').value = record.end_date || '';
                                 document.getElementById('modalRemarks').value = record.remarks || '';
@@ -756,7 +784,7 @@
             const id = document.getElementById('recordId').value;
             const companyId = document.getElementById('modalCompanyId').value;
             const accountSelect = document.getElementById('modalAccountId');
-            const selectedAccountOption = accountSelect.options[accountSelect.selectedIndex];
+            const selectedAccount = bankAccountsList.find(a => String(a.id) === accountSelect.value) || null;
             const selectedCompany = companiesList.find(c => String(c.id) === companyId);
             const financingId = document.getElementById('modalFinancingId').value;
 
@@ -770,8 +798,9 @@
                 category: document.getElementById('modalCategory').value,
                 description: document.getElementById('modalDescription').value,
                 company_name: selectedCompany ? selectedCompany.name : '',
-                account_name: selectedAccountOption ? selectedAccountOption.textContent.split(' (')[0] : '',
-                account_number: document.getElementById('modalAccountNumber').value || (selectedAccountOption ? selectedAccountOption.dataset.accountNumber : ''),
+                // 帳戶名稱與帳號一律取自選到的銀行帳戶本身（不解析顯示文字、也不用隱藏欄位），才不會存成「新名稱＋舊帳號」
+                account_name: selectedAccount ? selectedAccount.account_name : '',
+                account_number: selectedAccount ? (selectedAccount.account_number || '') : '',
                 next_run_date: document.getElementById('modalNextRunDate').value,
                 end_date: document.getElementById('modalEndDate').value || null,
                 remarks: document.getElementById('modalRemarks').value,
@@ -905,10 +934,10 @@
                     <td style="text-align:right;">${formatCurrency(t.amount)}</td>
                     <td>${escapeHtml(t.category) || '-'}${t.description ? '<br><span style="font-size:12px;color:#64748B;">' + escapeHtml(t.description) + '</span>' : ''}</td>
                     <td>${escapeHtml(t.company_name) || '-'}</td>
-                    <td>${escapeHtml(t.account_name) || '-'}</td>
+                    <td>${accountCellHtml(t)}</td>
                     <td><span class="type-badge">${escapeHtml(frequencyLabels[t.frequency] || t.frequency)}</span></td>
                     <td>${nextRun}</td>
-                    <td>${t.financing_facility_name ? escapeHtml(t.financing_facility_name) : '-'}</td>
+                    <td style="white-space:normal; min-width:160px;">${t.financing_facility_name ? escapeHtml(t.financing_facility_name) + projectionStatusHtml(t.projection_status) : '-'}</td>
                     <td><span class="${t.is_active ? 'status-active' : 'status-inactive'}">${t.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
                         ${canEdit ? `

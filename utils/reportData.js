@@ -5,7 +5,8 @@
 const { dbAll, loadActiveAccounts, loadAccountInputs, loadProjectedFutureRows } = require('./cashGapData');
 const { transactionBelongsToAccount } = require('./accountMatch');
 const { todayInTaipei, addDaysStr } = require('./dateUtil');
-const { REMAINING_PRINCIPAL_SQL, projectRepaymentOccurrences } = require('./financingProjection');
+const { REMAINING_PRINCIPAL_SQL } = require('./financingProjection');
+const { projectLoanSchedule } = require('./loanSchedule');
 const { estimateInterest, daysBetween } = require('./deposit');
 
 const AVAILABLE_TYPES = ['活存', '定存']; // 跟週報「可用資金」同一個範圍
@@ -217,9 +218,12 @@ async function getDebtDepositReport({ companyId }) {
     // 未來 12 個月預計還款（跟資金流水帳投影同一個函式）與預估利息（參考）
     const monthly = horizon.map((h) => ({ month: h.month, repayment: 0, interest_estimate: 0 }));
     const idxOf = new Map(monthly.map((m, i) => [m.month, i]));
+    // 有啟用中連結範本的借款以範本的排程為準，其餘用借款自己的排程（跟資金流水帳同一個規則）
+    const linkedTemplates = await dbAll(
+        `SELECT * FROM recurring_transactions WHERE is_active = 1 AND next_run_date IS NOT NULL AND financing_id IS NOT NULL`);
     loans.forEach((l) => {
         const source = loanRows.find((r) => r.id === l.id);
-        const occ = projectRepaymentOccurrences(source, today, maxDate, l.remaining_principal);
+        const occ = projectLoanSchedule(source, linkedTemplates.filter((t) => t.financing_id === l.id), today, maxDate, l.remaining_principal).occurrences;
         const perMonth = new Map();
         occ.forEach((o) => {
             const key = o.transaction_date.slice(0, 7);

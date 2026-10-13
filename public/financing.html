@@ -490,13 +490,14 @@
                             <th>利率</th>
                             <th>到期日</th>
                             <th>下次還款</th>
+                            <th title="這筆借款有沒有被資金預估週報帶入預計還款，沒有的話顯示原因">資金預測</th>
                             <th>狀態</th>
                             <th>操作</th>
                         </tr>
                     </thead>
                     <tbody id="financingTable">
                         <tr>
-                            <td colspan="11" class="loading">載入中...</td>
+                            <td colspan="12" class="loading">載入中...</td>
                         </tr>
                     </tbody>
                 </table>
@@ -1070,11 +1071,20 @@
         }
 
         // 顯示借款/融資額度列表
+        // 資金預測狀態：ok 灰字（正常）、info 灰字（說明）、warn 橘字並標示原因；一般人員看不到（後端不回傳）
+        function projectionStatusHtml(st) {
+            if (!st) return '<span style="color:#94A3B8;">-</span>';
+            const src = st.source === 'template' ? '（依連結範本）' : (st.source === 'loan' ? '（依借款排程）' : '');
+            if (st.level === 'warn') return `<span style="color:#F06000; font-weight:bold;">⚠ 未預測</span><br><span style="font-size:12px; color:#9A3412;">${escapeHtml(st.message)}</span>`;
+            if (st.level === 'info') return `<span style="font-size:12px; color:#64748B;">${escapeHtml(st.message)}</span>`;
+            return `<span style="color:#475569;">✓ ${escapeHtml(st.message)}</span><br><span style="font-size:11px; color:#94A3B8;">${src}</span>`;
+        }
+
         function displayFinancing(rows) {
             const tbody = document.getElementById('financingTable');
 
             if (rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="11" style="text-align: center; padding: 40px; color: #666;">尚無借款/融資額度記錄</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 40px; color: #666;">尚無借款/融資額度記錄</td></tr>';
                 return;
             }
 
@@ -1098,6 +1108,7 @@
                     <td>${f.interest_rate != null ? f.interest_rate + '%' : '-'}</td>
                     <td>${escapeHtml(f.maturity_date) || '-'}</td>
                     <td>${nextPayment}</td>
+                    <td style="min-width:180px; white-space:normal;">${projectionStatusHtml(f.projection_status)}</td>
                     <td><span class="${f.is_active ? 'status-active' : 'status-inactive'}">${f.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
                         <button class="btn btn-secondary btn-sm" onclick="openRepaymentModal(${f.id})">還款記錄</button>

@@ -5,19 +5,31 @@
 // 那一筆就變成真實交易，不會重複計算。
 //
 // - 已逾期（下次產生日 < 今天）還沒產生的期數全部落在「今天」，避免資金缺口被低估
-// - 連結借款的範本不投影：借款本身已經由 utils/financingProjection.js 投影過同一筆還款
+// - 連結借款的範本：以「範本」為準投影（金額、頻率、下次產生日、到期日、帳戶都取自範本，
+//   因為使用者平常維護、按「產生下一筆」的是範本）；這時借款自己的下次還款日／金額排程不再投影，
+//   避免同一筆還款算兩次（見 utils/financingProjection.js 的 NOT EXISTS 條件）。
+//   連結借款的範本另外受借款限制：借款停用、本金餘額為 0 就不投影，累計投影的本金不超過目前本金餘額，
+//   也不超過借款到期日。
 // - 超過 end_date 的期數不投影
 
-const { addMonthsClamped } = require('./financingProjection');
+const { addMonthsClamped, REMAINING_PRINCIPAL_SQL } = require('./financingProjection');
 const { transactionBelongsToAccount } = require('./accountMatch');
 
 const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 const MAX_OCCURRENCES = 60;
 
-function projectTemplateOccurrences(template, todayStr, maxDateStr) {
-    if (!template || !template.next_run_date || !template.is_active || template.financing_id) return [];
+// loanInfo：連結借款的範本才需要，{ remaining（目前本金餘額）, maturityDate, isActive }
+function projectTemplateOccurrences(template, todayStr, maxDateStr, loanInfo = null) {
+    if (!template || !template.next_run_date || !template.is_active) return [];
+    if (template.financing_id && !loanInfo) return []; // 連結借款卻沒有借款資訊，無法判斷上限，不投影
     const amount = parseFloat(template.amount) || 0;
     if (amount <= 0) return [];
+    if (loanInfo && (loanInfo.isActive === 0 || loanInfo.isActive === false || !(loanInfo.remaining > 0))) return [];
+    // 連結借款：每期「本金」部分累計不超過目前本金餘額（沒拆本金／利息就把整期金額當本金，保守）
+    const principalPerRun = loanInfo
+        ? (parseFloat(template.principal_amount) > 0 ? parseFloat(template.principal_amount) : amount)
+        : 0;
+    let cumulativePrincipal = 0;
 
     const stepMonths = STEP_MONTHS[template.frequency] || 1;
     const baseLabel = template.description || template.category || '週期範本';
@@ -27,6 +39,11 @@ function projectTemplateOccurrences(template, todayStr, maxDateStr) {
 
     while (iterations < MAX_OCCURRENCES) {
         if (template.end_date && cursor > template.end_date) break;
+        if (loanInfo) {
+            if (loanInfo.maturityDate && cursor > loanInfo.maturityDate) break;
+            if (cumulativePrincipal + principalPerRun > loanInfo.remaining + 0.005) break;
+            cumulativePrincipal += principalPerRun;
+        }
         const isOverdue = cursor < todayStr;
         const eventDate = isOverdue ? todayStr : cursor;
         if (eventDate > maxDateStr) break;
@@ -51,8 +68,11 @@ function getProjectedTemplateRowsByAccount(db, accounts, todayStr, maxDateStr) {
         const result = new Map();
         (accounts || []).forEach((a) => result.set(a.id, []));
         db.all(
-            `SELECT * FROM recurring_transactions
-             WHERE is_active = 1 AND next_run_date IS NOT NULL AND financing_id IS NULL`,
+            `SELECT rt.*, f.is_active AS loan_is_active, f.maturity_date AS loan_maturity_date,
+                    ${REMAINING_PRINCIPAL_SQL} AS loan_remaining
+             FROM recurring_transactions rt
+             LEFT JOIN financing f ON f.id = rt.financing_id
+             WHERE rt.is_active = 1 AND rt.next_run_date IS NOT NULL`,
             [],
             (err, templates) => {
                 if (err) {
@@ -62,7 +82,10 @@ function getProjectedTemplateRowsByAccount(db, accounts, todayStr, maxDateStr) {
                 (accounts || []).forEach((account) => {
                     (templates || []).forEach((t) => {
                         if (transactionBelongsToAccount(t, account)) {
-                            result.get(account.id).push(...projectTemplateOccurrences(t, todayStr, maxDateStr));
+                            const loanInfo = t.financing_id
+                                ? { remaining: parseFloat(t.loan_remaining) || 0, maturityDate: t.loan_maturity_date, isActive: t.loan_is_active }
+                                : null;
+                            result.get(account.id).push(...projectTemplateOccurrences(t, todayStr, maxDateStr, loanInfo));
                         }
                     });
                 });

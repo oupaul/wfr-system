@@ -6,6 +6,7 @@ const { writeOperationLog } = require('../utils/operationLog');
 const { requireEditor } = require('../middleware/auth');
 const { todayInTaipei } = require('../utils/dateUtil');
 const { balancesAfterEachRepayment } = require('../utils/financingBalance');
+const { getLoanProjectionStatuses } = require('../utils/projectionStatus');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
@@ -66,12 +67,23 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY f.is_active DESC, f.maturity_date IS NULL, f.maturity_date ASC';
 
-    db.all(query, params, (err, rows) => {
+    db.all(query, params, async (err, rows) => {
         if (err) {
             logger.error('查詢錯誤:', err);
             return res.status(500).json({ error: '查詢失敗', details: err.message });
         }
-        res.json({ data: stripManualFieldsForViewer(req, rows), count: rows.length });
+        let data = stripManualFieldsForViewer(req, rows);
+        // 預測狀態診斷（這筆借款有沒有被資金預測帶入、沒有的話原因）：只給管理員／財務人員
+        const isEditor = req.session && (req.session.role === 'admin' || req.session.role === 'finance');
+        if (isEditor && rows.length) {
+            try {
+                const statuses = await getLoanProjectionStatuses(rows.map((r) => r.id));
+                data = data.map((r) => ({ ...r, projection_status: statuses.get(r.id) || null }));
+            } catch (statusErr) {
+                logger.error('計算預測狀態失敗:', statusErr);
+            }
+        }
+        res.json({ data, count: rows.length });
     });
 });
 

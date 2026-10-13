@@ -26,6 +26,11 @@ const REMAINING_PRINCIPAL_SQL = `
     END)
 `;
 
+// 借款有啟用中、且有下次產生日的連結範本時，預計還款改由範本投影（見 utils/templateProjection.js），
+// 借款自己的下次還款日／金額排程就不再投影，避免同一筆還款算兩次
+const NO_ACTIVE_LINKED_TEMPLATE_SQL = `NOT EXISTS (
+    SELECT 1 FROM recurring_transactions rt
+    WHERE rt.financing_id = f.id AND rt.is_active = 1 AND rt.next_run_date IS NOT NULL)`;
 const MAX_OCCURRENCES = 60; // 安全上限（例如每月投影最多 5 年），避免資料異常造成無限迴圈
 
 function toLocalDateStr(d) {
@@ -123,7 +128,8 @@ function getProjectedRepaymentRowsByAccount(db, bankAccountIds, todayStr, maxDat
             `SELECT f.bank_account_id, f.facility_name, f.next_payment_date, f.next_payment_amount, f.repayment_frequency, f.maturity_date,
                     ${REMAINING_PRINCIPAL_SQL} as remaining_principal
              FROM financing f
-             WHERE f.bank_account_id IN (${ids.map(() => '?').join(',')}) AND f.is_active = 1`,
+             WHERE f.bank_account_id IN (${ids.map(() => '?').join(',')}) AND f.is_active = 1
+               AND ${NO_ACTIVE_LINKED_TEMPLATE_SQL}`,
             ids,
             (err, loans) => {
                 if (err) {
@@ -147,4 +153,4 @@ function getProjectedRepaymentRows(db, bankAccountId, todayStr, maxDateStr) {
         .then((map) => map.get(bankAccountId) || []);
 }
 
-module.exports = { REMAINING_PRINCIPAL_SQL, getProjectedRepaymentRows, getProjectedRepaymentRowsByAccount, projectRepaymentOccurrences, addMonthsClamped };
+module.exports = { REMAINING_PRINCIPAL_SQL, NO_ACTIVE_LINKED_TEMPLATE_SQL, getProjectedRepaymentRows, getProjectedRepaymentRowsByAccount, projectRepaymentOccurrences, addMonthsClamped };
