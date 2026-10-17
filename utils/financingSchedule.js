@@ -98,4 +98,64 @@ function suggestForDate(view, dateStr) {
     };
 }
 
-module.exports = { buildScheduleView, suggestForDate, matchRepaymentsToPeriods, MATCH_DAYS };
+// ---- 讓資金預測使用計畫表每期金額 ----
+
+const num = (v) => parseFloat(v) || 0;
+const round2 = (n) => Math.round(n * 100) / 100;
+
+// 一次載入多筆借款的計畫表，並依還款記錄找出「還沒還的期數」（open）。
+// all(sql, params) 回傳 Promise<rows>。沒有計畫表的借款不會出現在結果裡。
+async function loadLoanSchedules(all, financingIds) {
+    const result = new Map();
+    const ids = [...new Set((financingIds || []).filter((x) => x != null))];
+    if (!ids.length) return result;
+    const ph = ids.map(() => '?').join(',');
+    const periodRows = await all(`SELECT * FROM financing_schedule WHERE financing_id IN (${ph}) ORDER BY financing_id, period_no`, ids);
+    if (!periodRows.length) return result;
+    const repRows = await all(`SELECT id, financing_id, payment_date, principal_paid, interest_paid FROM financing_repayments WHERE financing_id IN (${ph})`, ids);
+    const reps = new Map();
+    repRows.forEach((r) => { if (!reps.has(r.financing_id)) reps.set(r.financing_id, []); reps.get(r.financing_id).push(r); });
+    const grouped = new Map();
+    periodRows.forEach((p) => { if (!grouped.has(p.financing_id)) grouped.set(p.financing_id, []); grouped.get(p.financing_id).push(p); });
+    grouped.forEach((periods, id) => {
+        const repayments = reps.get(id) || [];
+        const matched = matchRepaymentsToPeriods(periods, repayments);
+        const openPeriods = periods.filter((p) => !matched.has(p.period_no)).map((p) => ({
+            period_no: p.period_no, due_date: p.due_date,
+            principal: num(p.principal), interest: num(p.interest), fee: num(p.fee),
+            amount: round2(num(p.principal) + num(p.interest) + num(p.fee))
+        }));
+        result.set(id, { periods, repayments, openPeriods });
+    });
+    return result;
+}
+
+// 計畫表是否可能過期（銀行重新試算／調整利率後沒有更新）。回傳提醒文字陣列，空陣列＝沒發現問題。
+// 只做「值得人看一眼」的三項檢查，不會影響預測本身：
+//   ①最近幾期實際還款金額與計畫表不同　②計畫表已跑完但本金餘額還有剩　③系統本金餘額與計畫表差距過大
+const STALE_BALANCE_TOLERANCE = 1000;
+const fmtN = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+function detectScheduleIssues(periods, repayments, remainingPrincipal, today) {
+    const issues = [];
+    if (!periods || !periods.length) return issues;
+    const view = buildScheduleView({ remaining_principal: remainingPrincipal }, periods, repayments || [], today);
+    const recentPaid = view.periods.filter((p) => p.status === 'paid' && p.repayment).slice(-3);
+    recentPaid.forEach((p) => {
+        const planned = p.principal + p.interest + p.fee;
+        const actual = num(p.repayment.principal_paid) + num(p.repayment.interest_paid);
+        if (Math.abs(actual - planned) > Math.max(5, planned * 0.01)) {
+            issues.push(`第 ${p.period_no} 期實際還款 ${fmtN(actual)} 與計畫表 ${fmtN(planned)} 不同，銀行可能已重新試算（調整利率）`);
+        }
+    });
+    const last = view.periods[view.periods.length - 1];
+    if (last.due_date <= today && remainingPrincipal > 100) {
+        issues.push(`計畫表最後一期（${last.due_date}）已過，但本金餘額仍有 ${fmtN(remainingPrincipal)}`);
+    }
+    const { diff } = view.summary;
+    if (diff != null && Math.abs(diff) > STALE_BALANCE_TOLERANCE) {
+        issues.push(`系統本金餘額與計畫表相差 ${fmtN(Math.abs(diff))}（系統${diff > 0 ? '較高' : '較低'}），可在還款計畫表分頁按「以計畫表餘額校正」`);
+    }
+    return issues;
+}
+
+module.exports = { buildScheduleView, suggestForDate, matchRepaymentsToPeriods, loadLoanSchedules, detectScheduleIssues, daysBetween, MATCH_DAYS };

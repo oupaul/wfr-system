@@ -5,6 +5,7 @@ const { dbAll, loadActiveAccounts } = require('./cashGapData');
 const { REMAINING_PRINCIPAL_SQL } = require('./financingProjection');
 const { transactionBelongsToAccount } = require('./accountMatch');
 const { projectLoanSchedule } = require('./loanSchedule');
+const { loadLoanSchedules, detectScheduleIssues } = require('./financingSchedule');
 const { todayInTaipei, addDaysStr } = require('./dateUtil');
 
 const LEDGER_MONTHS = 12; // 資金流水帳往後顯示的月數
@@ -17,9 +18,12 @@ function monthsBetween(todayStr, dateStr) {
     return (dy - ty) * 12 + (dm - tm);
 }
 
-function describeFirst(source, first, today) {
+function describeFirst(source, first, today, occurrences) {
     const m = monthsBetween(today, first.transaction_date);
-    const base = { ok: true, source, next_date: first.transaction_date, next_amount: first.amount };
+    // amount_source：這筆預計金額的來源。schedule＝依還款計畫表每期金額；fixed＝範本固定金額；loan＝借款自己的下次還款金額
+    const amountSource = source === 'template' ? (first.amount_source === 'schedule' ? 'schedule' : 'fixed') : 'loan';
+    const scheduleCount = (occurrences || []).filter((o) => o.amount_source === 'schedule').length;
+    const base = { ok: true, source, amount_source: amountSource, schedule_periods_projected: scheduleCount, next_date: first.transaction_date, next_amount: first.amount };
     if (m >= LEDGER_MONTHS) {
         return { ...base, level: 'info', message: `首期在 ${first.transaction_date}（約 ${m} 個月後），超過資金流水帳 ${LEDGER_MONTHS} 個月的範圍，目前還看不到` };
     }
@@ -78,6 +82,7 @@ async function getLoanProjectionStatuses(loanIds = null) {
     const byLoan = new Map();
     templates.forEach((t) => { if (!byLoan.has(t.financing_id)) byLoan.set(t.financing_id, []); byLoan.get(t.financing_id).push(t); });
 
+    const schedules = await loadLoanSchedules(dbAll, loans.map((l) => l.id)).catch(() => new Map());
     const result = new Map();
     loans.forEach((loan) => {
         const remaining = Math.max(0, parseFloat(loan.remaining_principal) || 0);
@@ -85,7 +90,8 @@ async function getLoanProjectionStatuses(loanIds = null) {
         if (!loan.is_active) return result.set(loan.id, { ok: false, level: 'info', source: null, message: '借款已停用，不預測' });
         if (remaining <= 0) return result.set(loan.id, { ok: false, level: 'warn', source: linked.length ? 'template' : 'loan', message: '目前本金餘額為 0（已還清，或原始本金／手動餘額填成 0），不預測' });
 
-        const { source, occurrences } = projectLoanSchedule(loan, linked, today, horizon, remaining);
+        const sched = schedules.get(loan.id);
+        const { source, occurrences } = projectLoanSchedule(loan, linked, today, horizon, remaining, sched ? sched.openPeriods : null);
         if (occurrences.length) {
             const first = occurrences.slice().sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))[0];
             // 範本驅動時還要確認範本的帳戶真的對得上銀行帳戶，否則流水帳其實不會顯示
@@ -95,7 +101,7 @@ async function getLoanProjectionStatuses(loanIds = null) {
             } else if (!accountsById.has(loan.bank_account_id)) {
                 return result.set(loan.id, { ok: false, level: 'warn', source, message: loanReason(loan, accountsById, remaining, today) });
             }
-            return result.set(loan.id, describeFirst(source, first, today));
+            return result.set(loan.id, describeFirst(source, first, today, occurrences));
         }
 
         // 沒有任何預計還款：找原因
@@ -105,6 +111,15 @@ async function getLoanProjectionStatuses(loanIds = null) {
         }
         const message = source === 'template' ? templateReason(loan, linked, accounts, remaining) : loanReason(loan, accountsById, remaining, today);
         result.set(loan.id, { ok: false, level: 'warn', source, message });
+    });
+    // 有計畫表的借款：不論有沒有預測成功，都附上計畫表是否可能過期的提醒（實際還款金額不同、已跑完仍有本金、餘額差距）
+    loans.forEach((loan) => {
+        const sched = schedules.get(loan.id);
+        const st = result.get(loan.id);
+        if (!sched || !st || !loan.is_active) return;
+        st.has_schedule = true;
+        st.schedule_issues = detectScheduleIssues(sched.periods, sched.repayments, Math.max(0, parseFloat(loan.remaining_principal) || 0), today);
+        if ((byLoan.get(loan.id) || []).length > 1) st.schedule_note = '這筆借款連結了多個週期範本，預測金額不套用計畫表（避免同一期算兩次）';
     });
     return result;
 }
