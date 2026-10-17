@@ -214,6 +214,24 @@ CREATE TABLE IF NOT EXISTS financing_repayments (
 );
 CREATE INDEX IF NOT EXISTS idx_financing_repayments_financing ON financing_repayments(financing_id);
 
+-- 還款計畫表（本息攤還／融資租賃等「每期本金、利息都不同」的借款）：由使用者貼上或匯入每期的日期、本金、利息，
+-- 用來：①帶入「產生下一筆」與新增還款的本金／利息、②核對目前本金餘額是否跟計畫表一致。
+-- fee 是每期另外的費用（例如租金的 5% 營業稅），不減少本金，登記還款時併入「利息」欄；balance_after 為該期還款後的本金餘額（可空）。
+CREATE TABLE IF NOT EXISTS financing_schedule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    financing_id INTEGER NOT NULL,
+    period_no INTEGER NOT NULL,
+    due_date DATE NOT NULL,
+    principal DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    interest DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    fee DECIMAL(15, 2) NOT NULL DEFAULT 0,
+    balance_after DECIMAL(15, 2),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(financing_id, period_no),
+    FOREIGN KEY (financing_id) REFERENCES financing(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_financing_schedule_financing ON financing_schedule(financing_id, due_date);
+
 -- 週期性收支範本：按「產生下一筆」才會實際寫入 transactions（不做全自動排程，
 -- 保留人工確認）。選填連結到某筆借款時，產生的同時也會記一筆對應的還款記錄，
 -- 並讓借款的「下次還款日」照既有邏輯自動往後推一期（見 utils/financingRepayment.js）

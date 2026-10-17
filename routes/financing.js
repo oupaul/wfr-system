@@ -7,6 +7,7 @@ const { requireEditor } = require('../middleware/auth');
 const { todayInTaipei } = require('../utils/dateUtil');
 const { balancesAfterEachRepayment } = require('../utils/financingBalance');
 const { getLoanProjectionStatuses } = require('../utils/projectionStatus');
+const { buildScheduleView, suggestForDate } = require('../utils/financingSchedule');
 const { recordRepaymentAndSync } = require('../utils/financingRepayment');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
@@ -248,6 +249,9 @@ router.delete('/:id', requireEditor, (req, res) => {
                     logger.error('刪除還款記錄錯誤:', repayDelErr);
                     return res.status(500).json({ error: '刪除失敗', details: repayDelErr.message });
                 }
+                // 還款計畫表跟著借款一起刪（這個專案沒開外鍵，不會自動連動）
+                db.run('DELETE FROM financing_schedule WHERE financing_id = ?', [id], (schedDelErr) => {
+                    if (schedDelErr) logger.error('刪除還款計畫表錯誤:', schedDelErr);
                 db.run('DELETE FROM financing WHERE id = ?', [id], function (delErr) {
                     if (delErr) {
                         logger.error('刪除錯誤:', delErr);
@@ -256,6 +260,7 @@ router.delete('/:id', requireEditor, (req, res) => {
                     if (this.changes === 0) return res.status(404).json({ error: '找不到記錄' });
                     writeOperationLog(req, 'delete', 'financing', id, row, null, '借款/額度 #' + id + ' ' + (row.facility_name || ''));
                     res.json({ success: true, message: '借款/額度已刪除' });
+                });
                 });
             });
         });
@@ -283,12 +288,140 @@ router.get('/:id/repayments', (req, res) => {
                 }
                 // 每一期「還款後的本金餘額」，供使用者逐期對照銀行對帳單
                 const balances = balancesAfterEachRepayment(fin, rows);
-                const data = rows.map((r) => ({ ...r, balance_after: balances.get(r.id) }));
+                const today = todayInTaipei();
+                // is_future：還款日期在未來（已排定、尚未發生），不計入目前本金餘額
+                const data = rows.map((r) => ({ ...r, balance_after: balances.get(r.id), is_future: r.payment_date > today }));
                 const interestTotal = rows.reduce((sum, r) => sum + (parseFloat(r.interest_paid) || 0), 0);
                 res.json({ data, count: data.length, interest_total: interestTotal });
             }
         );
     });
+});
+
+
+// ==================== 還款計畫表 ====================
+// 本息攤還／融資租賃等每期本金、利息都不同的借款，可貼上或匯入每期計畫；用途：核對目前本金餘額、帶入「產生下一筆」與新增還款的本金／利息。
+// 計畫表只是參考資料，不會自動寫入任何收支或還款記錄。
+
+const dbAllP = (sql, params = []) => new Promise((resolve, reject) => db.all(sql, params, (e, r) => (e ? reject(e) : resolve(r || []))));
+const dbGetP = (sql, params = []) => new Promise((resolve, reject) => db.get(sql, params, (e, r) => (e ? reject(e) : resolve(r))));
+const dbRunP = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, function (e) { return e ? reject(e) : resolve(this); }));
+
+async function loadScheduleView(financingId) {
+    const loan = await dbGetP(`SELECT f.id, f.facility_name, ${REMAINING_PRINCIPAL_SQL} AS remaining_principal FROM financing f WHERE f.id = ?`, [financingId]);
+    if (!loan) return null;
+    const periods = await dbAllP('SELECT * FROM financing_schedule WHERE financing_id = ? ORDER BY period_no', [financingId]);
+    const repayments = await dbAllP('SELECT * FROM financing_repayments WHERE financing_id = ?', [financingId]);
+    return { loan, view: buildScheduleView(loan, periods, repayments, todayInTaipei()) };
+}
+
+router.get('/:id/schedule', async (req, res) => {
+    try {
+        const r = await loadScheduleView(req.params.id);
+        if (!r) return res.status(404).json({ error: '找不到借款記錄' });
+        res.set('Cache-Control', 'no-store');
+        res.json({ periods: r.view.periods, summary: r.view.summary });
+    } catch (err) {
+        logger.error('查詢還款計畫表錯誤:', err);
+        res.status(500).json({ error: '查詢失敗', details: err.message });
+    }
+});
+
+// 帶入建議：指定日期（預設今天）附近還沒有還款記錄的那一期
+router.get('/:id/schedule/suggest', async (req, res) => {
+    try {
+        const r = await loadScheduleView(req.params.id);
+        if (!r) return res.status(404).json({ error: '找不到借款記錄' });
+        const date = /^\d{4}-\d{2}-\d{2}$/.test(req.query.date || '') ? req.query.date : todayInTaipei();
+        res.set('Cache-Control', 'no-store');
+        res.json({ suggestion: suggestForDate(r.view, date) });
+    } catch (err) {
+        logger.error('查詢還款計畫建議錯誤:', err);
+        res.status(500).json({ error: '查詢失敗', details: err.message });
+    }
+});
+
+// 匯入（覆蓋）整份計畫表：同期數更新、不在新資料裡的舊期數刪除
+router.post('/:id/schedule', requireEditor, async (req, res) => {
+    const { id } = req.params;
+    const rows = req.body && req.body.periods;
+    if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: '沒有可匯入的計畫資料' });
+    if (rows.length > 600) return res.status(400).json({ error: '計畫表最多 600 期' });
+
+    const isDate = (v) => /^\d{4}-\d{2}-\d{2}$/.test(v || '') && !isNaN(Date.parse(`${v}T00:00:00Z`));
+    const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+    const clean = [];
+    const seen = new Set();
+    for (let i = 0; i < rows.length; i++) {
+        const r = rows[i] || {};
+        const period = parseInt(r.period_no, 10);
+        const principal = num(r.principal), interest = num(r.interest), fee = num(r.fee) ?? 0, balance = num(r.balance_after);
+        const bad = (msg) => res.status(400).json({ error: `第 ${i + 1} 列：${msg}` });
+        if (!Number.isInteger(period) || period < 1) return bad('期數必須是 1 以上的整數');
+        if (seen.has(period)) return bad(`期數 ${period} 重複`);
+        seen.add(period);
+        if (!isDate(r.due_date)) return bad('日期格式不正確');
+        if (!Number.isFinite(principal) || principal < 0) return bad('本金必須是大於或等於 0 的數字');
+        if (!Number.isFinite(interest) || interest < 0) return bad('利息必須是大於或等於 0 的數字');
+        if (!Number.isFinite(fee) || fee < 0) return bad('費用（營業稅等）必須是大於或等於 0 的數字');
+        if (balance !== null && (!Number.isFinite(balance) || balance < 0)) return bad('本金餘額必須是大於或等於 0 的數字');
+        clean.push({ period_no: period, due_date: r.due_date, principal, interest, fee, balance_after: balance });
+    }
+    try {
+        const loan = await dbGetP('SELECT id, facility_name FROM financing WHERE id = ?', [id]);
+        if (!loan) return res.status(404).json({ error: '找不到借款記錄' });
+        const before = await dbGetP('SELECT COUNT(*) AS n FROM financing_schedule WHERE financing_id = ?', [id]);
+        // 單一敘述寫入整批（同期數覆蓋），再刪掉不在新資料裡的舊期數
+        await dbRunP(
+            `INSERT INTO financing_schedule (financing_id, period_no, due_date, principal, interest, fee, balance_after)
+             SELECT ?, json_extract(value, '$.period_no'), json_extract(value, '$.due_date'), json_extract(value, '$.principal'),
+                    json_extract(value, '$.interest'), json_extract(value, '$.fee'), json_extract(value, '$.balance_after')
+             FROM json_each(?) WHERE true
+             ON CONFLICT(financing_id, period_no) DO UPDATE SET due_date = excluded.due_date, principal = excluded.principal,
+                interest = excluded.interest, fee = excluded.fee, balance_after = excluded.balance_after`,
+            [id, JSON.stringify(clean)]);
+        await dbRunP(`DELETE FROM financing_schedule WHERE financing_id = ? AND period_no NOT IN (${clean.map(() => '?').join(',')})`,
+            [id, ...clean.map((c) => c.period_no)]);
+        writeOperationLog(req, 'update', 'financing_schedule', id, { periods: before.n }, { periods: clean.length },
+            `借款 #${id}「${loan.facility_name}」匯入還款計畫表 ${clean.length} 期`);
+        res.json({ success: true, count: clean.length, message: `已匯入 ${clean.length} 期還款計畫` });
+    } catch (err) {
+        logger.error('匯入還款計畫表錯誤:', err);
+        res.status(500).json({ error: '匯入失敗', details: err.message });
+    }
+});
+
+// 以指定日期的本金餘額校正目前本金餘額（還款計畫表核對用）：設成手動本金餘額，基準日＝指定日期（不能晚於今天）
+router.post('/:id/calibrate-balance', requireEditor, async (req, res) => {
+    const { id } = req.params;
+    const balance = parseManualBalance(req.body.balance);
+    const date = req.body.date;
+    if (balance.error || balance.value === null) return res.status(400).json({ error: '本金餘額必須是大於或等於 0 的數字' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '') || date > todayInTaipei()) return res.status(400).json({ error: '基準日期格式不正確，且不可晚於今天' });
+    try {
+        const before = await dbGetP(`SELECT f.facility_name, f.manual_principal_balance, f.manual_balance_date, ${REMAINING_PRINCIPAL_SQL} AS remaining FROM financing f WHERE f.id = ?`, [id]);
+        if (!before) return res.status(404).json({ error: '找不到借款記錄' });
+        await dbRunP('UPDATE financing SET manual_principal_balance = ?, manual_balance_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [balance.value, date, id]);
+        writeOperationLog(req, 'update', 'financing', id,
+            { manual_principal_balance: before.manual_principal_balance, manual_balance_date: before.manual_balance_date, remaining: before.remaining },
+            { manual_principal_balance: balance.value, manual_balance_date: date },
+            `借款 #${id}「${before.facility_name}」依還款計畫表校正本金餘額：系統 ${Math.round(before.remaining)} → ${Math.round(balance.value)}（基準日 ${date}）`);
+        res.json({ success: true, message: `已校正目前本金餘額為 ${Math.round(balance.value).toLocaleString('en-US')}（基準日 ${date}）` });
+    } catch (err) {
+        logger.error('校正本金餘額錯誤:', err);
+        res.status(500).json({ error: '校正失敗', details: err.message });
+    }
+});
+
+router.delete('/:id/schedule', requireEditor, async (req, res) => {
+    try {
+        const r = await dbRunP('DELETE FROM financing_schedule WHERE financing_id = ?', [req.params.id]);
+        writeOperationLog(req, 'delete', 'financing_schedule', req.params.id, { periods: r.changes }, null, `借款 #${req.params.id} 清除還款計畫表（${r.changes} 期）`);
+        res.json({ success: true, message: '還款計畫表已清除' });
+    } catch (err) {
+        logger.error('清除還款計畫表錯誤:', err);
+        res.status(500).json({ error: '清除失敗', details: err.message });
+    }
 });
 
 // 新增一筆還款記錄。

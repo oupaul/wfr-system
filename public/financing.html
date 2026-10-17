@@ -407,6 +407,26 @@
             color: #1E293B;
         }
 
+        .rp-tabs { display: flex; gap: 4px; border-bottom: 1px solid #E2E8F0; margin-bottom: 16px; }
+        .rp-tab { padding: 9px 18px; border: none; background: none; cursor: pointer; font-size: 14px; font-weight: bold; color: #64748B; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit; }
+        .rp-tab.active { color: #F06000; border-bottom-color: #F06000; }
+        .sched-banner { border: 1px solid #E2E8F0; border-left: 3px solid #1E293B; border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; line-height: 1.8; background: #F8FAFC; }
+        .sched-banner.warn { border-left-color: #F06000; }
+        .sched-banner strong.bad { color: #F06000; }
+        table.sched { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.sched th { background: #F8FAFC; text-align: left; padding: 7px 8px; border-bottom: 1px solid #E2E8F0; white-space: nowrap; position: sticky; top: 0; }
+        table.sched td { padding: 6px 8px; border-bottom: 1px solid #F1F5F9; white-space: nowrap; }
+        table.sched .num { text-align: right; }
+        table.sched tr.paid td { color: #94A3B8; }
+        table.sched tr.next td { background: #FFF7ED; }
+        .sched-wrap { max-height: 360px; overflow: auto; border: 1px solid #E2E8F0; border-radius: 8px; }
+        .sched-import { border: 1px solid #E2E8F0; border-radius: 8px; padding: 10px 14px; margin-top: 14px; }
+        .sched-import summary { cursor: pointer; font-weight: bold; font-size: 14px; }
+        .sched-import textarea { width: 100%; font-family: Consolas, Menlo, monospace; font-size: 12px; padding: 8px; border: 1px solid #CBD5E1; border-radius: 6px; white-space: pre; }
+        .sched-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; font-size: 13px; }
+        .sched-opts label { display: block; margin-bottom: 3px; color: #475569; }
+        .sched-opts input, .sched-opts select { width: 100%; padding: 6px 8px; border: 1px solid #CBD5E1; border-radius: 6px; font-family: inherit; }
+
         .repayment-form {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr 1.3fr 1fr auto;
@@ -644,7 +664,7 @@
 
     <!-- 還款記錄模態框 -->
     <div id="repaymentModal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content" style="max-width: 980px;">
             <div class="modal-header">
                 <h2 id="repaymentModalTitle">還款記錄</h2>
                 <button class="close" onclick="closeRepaymentModal()">&times;</button>
@@ -668,8 +688,14 @@
                         <div class="value" id="repaySummaryInterest">-</div>
                     </div>
                 </div>
-                <p style="font-size:12px; color:#64748B; margin:-8px 0 16px;">目前本金餘額只會被「本金」減少，利息是使用資金的費用，不會減少本金餘額。</p>
+                <p style="font-size:12px; color:#64748B; margin:-8px 0 16px;">目前本金餘額只會被「本金」減少，利息是使用資金的費用，不會減少本金餘額；還款日期在未來（已排定、尚未發生）的記錄不計入。</p>
 
+                <div class="rp-tabs">
+                    <button type="button" class="rp-tab active" data-rptab="records" onclick="switchRepaymentTab('records')">還款記錄</button>
+                    <button type="button" class="rp-tab" data-rptab="schedule" onclick="switchRepaymentTab('schedule')">還款計畫表</button>
+                </div>
+                <div id="rpTabRecords">
+                <div id="scheduleHint" class="sched-banner" style="display:none;"></div>
                 <div id="repaymentFormWrap">
                     <form class="repayment-form" onsubmit="addRepayment(event)">
                         <div class="form-group">
@@ -712,6 +738,34 @@
                             <tr><td colspan="6" class="loading">載入中...</td></tr>
                         </tbody>
                     </table>
+                </div>
+                </div>
+
+                <div id="rpTabSchedule" style="display:none;">
+                    <div id="scheduleBanner" class="sched-banner">載入中...</div>
+                    <div class="sched-wrap"><table class="sched">
+                        <thead><tr><th>期數</th><th>到期日</th><th class="num">本金</th><th class="num">利息</th><th class="num" title="每期另外的費用，例如租金的 5% 營業稅；登記還款時併入利息欄">費用</th><th class="num">還款後本金餘額</th><th>狀態</th><th></th></tr></thead>
+                        <tbody id="scheduleTable"><tr><td colspan="8" class="loading">載入中...</td></tr></tbody>
+                    </table></div>
+                    <details class="sched-import" id="scheduleImport">
+                        <summary>匯入／更新還款計畫表（從 Excel 或試算表貼上）</summary>
+                        <p style="font-size:12px; color:#64748B; margin:8px 0;">
+                            貼上含表頭的資料，系統依欄名辨識：<strong>期數、日期、租金（每期總額）、利息、本金（本金攤還）、本金餘額</strong>；沒有日期欄時，用下方「第一期日期」依頻率往後推。
+                            期數 0 的列（只有起始餘額）會當作起始本金。匯入會覆蓋這筆借款原本的計畫表；<strong>計畫表只是參考，不會自動產生任何還款或收支記錄</strong>。
+                        </p>
+                        <textarea id="schedPaste" rows="5" placeholder="期數&#9;租金&#9;利息&#9;本金攤還&#9;本金餘額&#10;0&#9;0&#9;0&#9;0&#9;20,761,905&#10;1&#9;340,000&#9;96,572&#9;243,428&#9;20,518,477" oninput="parseSchedulePaste()"></textarea>
+                        <div class="sched-opts">
+                            <div><label for="schedFirstDate">第一期日期（無日期欄時）</label><input type="date" id="schedFirstDate" onchange="parseSchedulePaste()"></div>
+                            <div><label for="schedFreq">頻率</label><select id="schedFreq" onchange="parseSchedulePaste()"><option value="1">每月</option><option value="3">每季</option><option value="12">每年</option></select></div>
+                            <div><label for="schedFeeMode">每期另加費用</label><select id="schedFeeMode" onchange="parseSchedulePaste()"><option value="none">無</option><option value="pct">租金的 % （營業稅）</option><option value="fixed">固定金額</option></select></div>
+                            <div><label for="schedFeeValue">費用數值（% 或金額）</label><input type="number" id="schedFeeValue" step="0.01" min="0" placeholder="例如 5" oninput="parseSchedulePaste()"></div>
+                        </div>
+                        <div id="schedPreview" style="font-size:12px;"></div>
+                        <div style="text-align:right; margin-top:10px;">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="clearSchedule()" id="schedClearBtn" style="display:none;">清除計畫表</button>
+                            <button type="button" class="btn btn-primary btn-sm" id="schedSaveBtn" onclick="saveSchedule()" disabled>確認匯入</button>
+                        </div>
+                    </details>
                 </div>
             </div>
         </div>
@@ -906,6 +960,238 @@
         };
 
         // 開啟還款記錄模態框
+
+        // ==================== 還款計畫表 ====================
+        let scheduleCache = null; // { periods, summary }
+        let schedulePreviewRows = [];
+
+        window.switchRepaymentTab = function(tab) {
+            document.querySelectorAll('.rp-tab').forEach(b => b.classList.toggle('active', b.dataset.rptab === tab));
+            document.getElementById('rpTabRecords').style.display = tab === 'records' ? '' : 'none';
+            document.getElementById('rpTabSchedule').style.display = tab === 'schedule' ? '' : 'none';
+            if (tab === 'schedule') loadSchedule();
+        };
+
+        const num0 = (v) => (Number(v) || 0);
+        const fmtN = (n) => Math.round(num0(n)).toLocaleString('en-US');
+
+        function loadSchedule() {
+            if (!currentFinancingId) return Promise.resolve();
+            return fetch(`${API_BASE}/financing/${currentFinancingId}/schedule`, { cache: 'no-store' })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.error) throw new Error(data.error);
+                    scheduleCache = data;
+                    renderSchedule();
+                    renderScheduleHint();
+                })
+                .catch(err => { document.getElementById('scheduleBanner').textContent = '載入失敗：' + err.message; });
+        }
+
+        const SCHED_STATUS = {
+            paid: (p) => `<span style="color:#94A3B8;">✓ 已還（${escapeHtml(p.repayment.payment_date)}）</span>`,
+            scheduled: (p) => `<span style="color:#F06000;">已登記，還款日在未來（${escapeHtml(p.repayment.payment_date)}）</span>`,
+            overdue: () => '<span style="color:#F06000;font-weight:bold;">⚠ 已到期未還</span>',
+            upcoming: () => '<span style="color:#475569;">即將到期</span>',
+            future: () => '<span style="color:#94A3B8;">未到期</span>'
+        };
+
+        function renderSchedule() {
+            const banner = document.getElementById('scheduleBanner');
+            const tbody = document.getElementById('scheduleTable');
+            document.getElementById('schedClearBtn').style.display = canEdit && scheduleCache && scheduleCache.periods.length ? 'inline-block' : 'none';
+            if (!scheduleCache || scheduleCache.periods.length === 0) {
+                banner.className = 'sched-banner';
+                banner.innerHTML = '這筆借款還沒有還款計畫表。本息攤還、融資租賃等每期本金與利息都不同的借款，建議從下方匯入銀行或租賃公司給的還款試算表：之後可以逐期核對目前本金餘額，並在「產生下一筆」與新增還款時自動帶入該期的本金與利息。';
+                tbody.innerHTML = '<tr><td colspan="8" class="loading" style="color:#94A3B8;">尚無計畫表</td></tr>';
+                document.getElementById('scheduleImport').open = true;
+                return;
+            }
+            const sm = scheduleCache.summary;
+            let html = `計畫表共 <strong>${sm.total_periods}</strong> 期；截至今天到期 <strong>${sm.due_periods}</strong> 期，已有還款記錄 <strong>${sm.paid_periods}</strong> 期`
+                + (sm.scheduled_periods ? `；另有 ${sm.scheduled_periods} 期已登記但還款日在未來（不計入目前本金餘額）` : '')
+                + (sm.overdue_periods ? `，<strong class="bad">${sm.overdue_periods} 期已到期但沒有對應的還款記錄</strong>` : '') + '。';
+            let warn = sm.overdue_periods > 0;
+            if (sm.expected_balance != null) {
+                const diff = sm.diff;
+                html += `<br>計畫表顯示：到第 ${sm.last_due_period} 期（${escapeHtml(sm.last_due_date)}）後，本金餘額應為 <strong>${formatCurrency(sm.expected_balance)}</strong>；系統目前 <strong>${formatCurrency(sm.system_balance)}</strong>，`;
+                if (Math.abs(diff) < 0.5) html += '<strong>兩者一致 ✓</strong>';
+                else {
+                    warn = true;
+                    html += `<strong class="bad">差 ${diff > 0 ? '+' : ''}${fmtN(diff)}</strong>（系統比計畫表${diff > 0 ? '多' : '少'}）。`;
+                    if (canEdit) html += ` <button type="button" class="btn btn-secondary btn-sm" onclick="calibrateToSchedule()">以計畫表餘額校正</button>`;
+                }
+            }
+            banner.className = 'sched-banner' + (warn ? ' warn' : '');
+            banner.innerHTML = html;
+            tbody.innerHTML = scheduleCache.periods.map(p => {
+                const isNext = sm.next_unpaid && sm.next_unpaid.period_no === p.period_no;
+                return `<tr class="${p.status === 'paid' || p.status === 'scheduled' ? 'paid' : ''}${isNext ? ' next' : ''}">
+                    <td>${p.period_no}</td><td>${escapeHtml(p.due_date)}</td>
+                    <td class="num">${fmtN(p.principal)}</td><td class="num">${fmtN(p.interest)}</td><td class="num">${p.fee ? fmtN(p.fee) : '-'}</td>
+                    <td class="num">${p.balance_after != null ? fmtN(p.balance_after) : '-'}</td>
+                    <td>${SCHED_STATUS[p.status](p)}</td>
+                    <td>${canEdit && p.status !== 'paid' && p.status !== 'scheduled' ? `<button type="button" class="btn btn-secondary btn-sm" onclick="useSchedulePeriod(${p.period_no})">帶入登記</button>` : ''}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // 還款記錄分頁上方的提示：下一期該還多少（可一鍵帶入表單）
+        function renderScheduleHint() {
+            const el = document.getElementById('scheduleHint');
+            if (!canEdit || !scheduleCache || !scheduleCache.summary.next_unpaid) { el.style.display = 'none'; return; }
+            const n = scheduleCache.summary.next_unpaid;
+            el.style.display = 'block';
+            el.innerHTML = `還款計畫表：下一期是第 <strong>${n.period_no}</strong> 期（${escapeHtml(n.due_date)}），本金 <strong>${fmtN(n.principal)}</strong>、利息${n.fee ? '＋費用' : ''} <strong>${fmtN(n.interest + n.fee)}</strong>`
+                + ` <button type="button" class="btn btn-secondary btn-sm" onclick="useSchedulePeriod(${n.period_no})">帶入下面的表單</button>`;
+        }
+
+        // 把某一期帶入「新增還款」表單：利息欄＝利息＋費用（營業稅等；不減少本金，總支出才跟銀行扣款一致）
+        window.useSchedulePeriod = function(periodNo) {
+            const p = scheduleCache && scheduleCache.periods.find(x => x.period_no === periodNo);
+            if (!p) return;
+            switchRepaymentTab('records');
+            document.getElementById('repayDate').value = p.due_date;
+            document.getElementById('repayPrincipal').value = p.principal;
+            document.getElementById('repayInterest').value = Math.round((p.interest + p.fee) * 100) / 100;
+            document.getElementById('repayBankBalance').value = '';
+            document.getElementById('repayRemarks').value = `依還款計畫表第 ${p.period_no} 期`;
+            showMessage(`已帶入第 ${p.period_no} 期（${p.due_date}）：本金 ${fmtN(p.principal)}、利息${p.fee ? '＋費用' : ''} ${fmtN(p.interest + p.fee)}，確認後按「新增還款」`, 'success');
+        };
+
+        window.calibrateToSchedule = function() {
+            const sm = scheduleCache && scheduleCache.summary;
+            if (!sm || sm.expected_balance == null) return;
+            if (!confirm(`要把目前本金餘額校正為計畫表的 ${fmtN(sm.expected_balance)} 嗎？\\n（基準日 ${sm.calibration_date}：這一天以前的還款視為已包含在計畫表餘額內，之後日期的還款才會從這個數字往下扣）`)) return;
+            fetch(`${API_BASE}/financing/${currentFinancingId}/calibrate-balance`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ balance: sm.expected_balance, date: sm.calibration_date })
+            }).then(res => res.json()).then(r => {
+                if (r.error) return showMessage(r.error, 'error');
+                showMessage(r.message, 'success');
+                loadRepaymentSummary(); loadRepayments(); loadSchedule(); loadFinancing();
+            }).catch(() => showMessage('校正失敗', 'error'));
+        };
+
+        // ---- 貼上解析 ----
+        function parseSchedNumber(raw) {
+            let t = String(raw === undefined || raw === null ? '' : raw).trim();
+            if (!t) return null;
+            let neg = false;
+            if (/^\(.*\)$/.test(t)) { neg = true; t = t.slice(1, -1); }
+            t = t.replace(/[,\s$＄]|NT|元/gi, '');
+            if (!/^-?\d+(\.\d+)?$/.test(t)) return NaN;
+            const n = parseFloat(t);
+            return neg ? -n : n;
+        }
+        function parseSchedDate(raw) {
+            const t = String(raw || '').trim().replace(/\s+.*$/, '');
+            let m;
+            if ((m = t.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/))) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+            if ((m = t.match(/^(\d{2,3})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/))) return `${+m[1] + 1911}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`; // 民國年
+            return null;
+        }
+        function addMonthsStr(dateStr, months) {
+            const [y, mo, d] = dateStr.split('-').map(Number);
+            const idx = (mo - 1) + months;
+            const yy = y + Math.floor(idx / 12), mm = ((idx % 12) + 12) % 12;
+            const last = new Date(yy, mm + 1, 0).getDate();
+            return `${yy}-${String(mm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`;
+        }
+
+        window.parseSchedulePaste = function() {
+            const preview = document.getElementById('schedPreview');
+            const saveBtn = document.getElementById('schedSaveBtn');
+            schedulePreviewRows = [];
+            saveBtn.disabled = true;
+            const text = document.getElementById('schedPaste').value.trim();
+            if (!text) { preview.innerHTML = ''; return; }
+            const lines = text.split(/\r?\n/).map(l => l.split('\t')).filter(r => r.some(c => c.trim() !== ''));
+            const head = lines[0].map(c => c.trim());
+            const find = (re, excl) => head.findIndex(h => re.test(h) && !(excl && excl.test(h)));
+            let col = { period: find(/期數|期别|期別|^期$|period/i), date: find(/日期|到期|date/i), total: find(/租金|每期|付款|應還|總額|total/i),
+                interest: find(/利息|interest/i), balance: find(/餘額|balance/i), principal: find(/本金|principal/i, /餘額/) };
+            let dataLines = lines.slice(1);
+            const hasHeader = [col.interest, col.principal].every(i => i >= 0);
+            if (!hasHeader) { // 沒有表頭：照常見順序猜 期數、租金、利息、本金、餘額
+                dataLines = lines;
+                col = { period: 0, total: 1, interest: 2, principal: 3, balance: 4, date: -1 };
+                if (lines[0].length === 4) col = { period: 0, total: -1, interest: 1, principal: 2, balance: 3, date: -1 };
+            }
+            const firstDate = document.getElementById('schedFirstDate').value;
+            const step = parseInt(document.getElementById('schedFreq').value, 10);
+            const feeMode = document.getElementById('schedFeeMode').value;
+            const feeVal = parseFloat(document.getElementById('schedFeeValue').value) || 0;
+            const errors = [], warnings = [];
+            let opening = null;
+            const rows = [];
+            dataLines.forEach((cells, idx) => {
+                const get = (i) => (i >= 0 && i < cells.length ? cells[i] : '');
+                const period = parseInt(String(get(col.period)).replace(/\D/g, ''), 10);
+                const principal = parseSchedNumber(get(col.principal)), interest = parseSchedNumber(get(col.interest));
+                const total = col.total >= 0 ? parseSchedNumber(get(col.total)) : null;
+                const balance = col.balance >= 0 ? parseSchedNumber(get(col.balance)) : null;
+                if (period === 0) { if (balance && !isNaN(balance)) opening = balance; return; } // 期數 0：起始本金
+                if (!Number.isInteger(period) || period < 1) { errors.push(`第 ${idx + 1} 列：期數無法辨識`); return; }
+                if (principal === null || isNaN(principal) || interest === null || isNaN(interest)) { errors.push(`期數 ${period}：本金或利息不是有效數字`); return; }
+                let due = col.date >= 0 ? parseSchedDate(get(col.date)) : null;
+                if (!due) {
+                    if (!firstDate) { errors.push('沒有日期欄，請在上方填「第一期日期」'); return; }
+                    due = addMonthsStr(firstDate, (period - 1) * step);
+                }
+                if (total !== null && !isNaN(total) && Math.abs(total - principal - interest) > 1) warnings.push(`期數 ${period}：租金 ${fmtN(total)} ≠ 本金＋利息 ${fmtN(principal + interest)}`);
+                const base = total !== null && !isNaN(total) && total > 0 ? total : principal + interest;
+                const fee = feeMode === 'pct' ? Math.round(base * feeVal / 100) : (feeMode === 'fixed' ? feeVal : 0);
+                rows.push({ period_no: period, due_date: due, principal, interest, fee, balance_after: balance !== null && !isNaN(balance) ? balance : null });
+            });
+            // 沒貼餘額欄時，用起始本金往後推算
+            if (opening !== null && rows.some(r => r.balance_after === null)) {
+                let running = opening;
+                rows.slice().sort((a, b) => a.period_no - b.period_no).forEach(r => { running -= r.principal; if (r.balance_after === null) r.balance_after = Math.round(running); });
+            }
+            // 餘額欄跟本金逐期遞減不一致時提醒
+            const sortedRows = rows.slice().sort((a, b) => a.period_no - b.period_no);
+            for (let i = 1; i < sortedRows.length && warnings.length < 5; i++) {
+                const prev = sortedRows[i - 1], cur = sortedRows[i];
+                if (prev.balance_after != null && cur.balance_after != null && Math.abs(prev.balance_after - cur.principal - cur.balance_after) > 2) {
+                    warnings.push(`期數 ${cur.period_no}：上一期餘額 ${fmtN(prev.balance_after)} − 本金 ${fmtN(cur.principal)} ≠ 餘額 ${fmtN(cur.balance_after)}（請確認貼的欄位對不對）`);
+                }
+            }
+            if (errors.length === 0 && rows.length === 0) errors.push('沒有解析到任何期數，請確認有貼上表頭（期數、利息、本金…）');
+            const totP = rows.reduce((t, r) => t + r.principal, 0), totI = rows.reduce((t, r) => t + r.interest, 0), totF = rows.reduce((t, r) => t + r.fee, 0);
+            preview.innerHTML = `<div>解析到 <strong>${rows.length}</strong> 期${rows.length ? `（第 ${sortedRows[0].period_no} 期 ${sortedRows[0].due_date} ～ 第 ${sortedRows[sortedRows.length - 1].period_no} 期 ${sortedRows[sortedRows.length - 1].due_date}）` : ''}`
+                + (opening !== null ? `，起始本金 ${fmtN(opening)}` : '') + `；本金合計 ${fmtN(totP)}、利息合計 ${fmtN(totI)}${totF ? '、費用合計 ' + fmtN(totF) : ''}</div>`
+                + (rows.length ? `<div style="margin-top:4px;color:#64748B;">前兩期：${sortedRows.slice(0, 2).map(r => `第 ${r.period_no} 期 ${r.due_date} 本金 ${fmtN(r.principal)} 利息 ${fmtN(r.interest)}${r.fee ? ' 費用 ' + fmtN(r.fee) : ''} 餘額 ${r.balance_after != null ? fmtN(r.balance_after) : '-'}`).join('｜')}</div>` : '')
+                + errors.map(e => `<div style="color:#dc3545;">✗ ${escapeHtml(e)}</div>`).join('')
+                + warnings.map(w => `<div style="color:#F06000;">⚠ ${escapeHtml(w)}</div>`).join('');
+            if (errors.length === 0 && rows.length > 0) { schedulePreviewRows = sortedRows; saveBtn.disabled = !canEdit; }
+        };
+
+        window.saveSchedule = function() {
+            if (!schedulePreviewRows.length || !currentFinancingId) return;
+            const replacing = scheduleCache && scheduleCache.periods.length;
+            if (!confirm(`確定匯入 ${schedulePreviewRows.length} 期還款計畫表嗎？` + (replacing ? `\\n這會覆蓋目前的 ${scheduleCache.periods.length} 期計畫表（不影響已登記的還款記錄）。` : ''))) return;
+            fetch(`${API_BASE}/financing/${currentFinancingId}/schedule`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ periods: schedulePreviewRows })
+            }).then(res => res.json()).then(r => {
+                if (r.error) return showMessage(r.error, 'error');
+                showMessage(r.message, 'success');
+                document.getElementById('schedPaste').value = '';
+                parseSchedulePaste();
+                document.getElementById('scheduleImport').open = false;
+                loadSchedule();
+            }).catch(() => showMessage('匯入失敗', 'error'));
+        };
+
+        window.clearSchedule = function() {
+            if (!confirm('確定要清除這筆借款的還款計畫表嗎？（不影響已登記的還款記錄）')) return;
+            fetch(`${API_BASE}/financing/${currentFinancingId}/schedule`, { method: 'DELETE' }).then(res => res.json()).then(r => {
+                if (r.error) return showMessage(r.error, 'error');
+                showMessage(r.message, 'success');
+                loadSchedule();
+            });
+        };
+
         window.openRepaymentModal = function(id) {
             currentFinancingId = id;
             const record = financingListCache.find(f => f.id === id);
@@ -913,8 +1199,12 @@
             document.getElementById('repaymentFormWrap').style.display = canEdit ? 'block' : 'none';
             document.getElementById('repayDate').value = todayInTaipei();
             document.getElementById('repaymentModal').style.display = 'block';
+            scheduleCache = null;
+            switchRepaymentTab('records');
+            document.getElementById('scheduleHint').style.display = 'none';
             loadRepaymentSummary();
             loadRepayments();
+            loadSchedule();
         };
 
         window.closeRepaymentModal = function() {
@@ -968,7 +1258,7 @@
                     document.getElementById('repaySummaryInterest').textContent = formatCurrency(data.interest_total || 0);
                     tbody.innerHTML = rows.map(r => `
                         <tr>
-                            <td>${escapeHtml(r.payment_date)}</td>
+                            <td>${escapeHtml(r.payment_date)}${r.is_future ? '<br><span style="font-size:11px;color:#F06000;">未發生（不計入目前餘額）</span>' : ''}</td>
                             <td>${formatCurrency(r.principal_paid)}</td>
                             <td>${formatCurrency(r.interest_paid)}</td>
                             <td style="font-weight:bold;">${r.balance_after != null ? formatCurrency(r.balance_after) : '-'}</td>
@@ -1018,6 +1308,7 @@
                     loadRepaymentSummary();
                     loadRepayments();
                     loadFinancing();
+                    loadSchedule();
                 })
                 .catch(err => {
                     console.error('錯誤:', err);

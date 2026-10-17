@@ -849,6 +849,22 @@
             document.getElementById('generateInterest').value = t.interest_amount || 0;
             document.getElementById('generateUpdateTemplate').checked = true;
             document.getElementById('generateModal').style.display = 'block';
+
+            // 連結借款且有還款計畫表時，帶入該期的本金與利息（利息欄＝利息＋營業稅等費用，才跟銀行扣款總額一致）
+            if (isFinancing) {
+                fetch(`${API_BASE}/financing/${t.financing_id}/schedule/suggest?date=${encodeURIComponent(t.next_run_date)}`, { cache: 'no-store' })
+                    .then(res => res.json())
+                    .then(r => {
+                        const sg = r && r.suggestion;
+                        if (!sg || document.getElementById('generateTemplateId').value !== String(id)) return;
+                        document.getElementById('generatePrincipal').value = sg.principal;
+                        document.getElementById('generateInterest').value = sg.interest_with_fee;
+                        document.getElementById('generateAmount').value = Math.round((sg.principal + sg.interest_with_fee) * 100) / 100;
+                        document.getElementById('generateEstimateHint').textContent =
+                            `範本預估金額：${formatCurrency(t.amount)}；已依「還款計畫表」第 ${sg.period_no} 期（${sg.due_date}）帶入本金 ${formatCurrency(sg.principal)}、利息${sg.fee ? '＋費用' : ''} ${formatCurrency(sg.interest_with_fee)}，可自行修改`;
+                    })
+                    .catch(() => { /* 沒有計畫表或查詢失敗就維持範本的預設值 */ });
+            }
         };
 
         window.closeGenerateModal = function() {

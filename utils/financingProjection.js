@@ -10,18 +10,23 @@
 // 通常還含利息，真正能投影的期數可能更少），但已足以避免長期分期貸款被嚴重高估。
 
 // 目前本金餘額（SQL 片段，別名固定用 f）：
-// - 使用者手動輸入過餘額（manual_principal_balance 不是 NULL）：手動餘額 − 基準日「之後」才記錄的還款本金
+// - **只計算還款日期 ≤ 今天（台北時間）的還款**：日期在未來的還款是「已排定、尚未發生」（例如週期範本提前產生的），
+//   不該讓今天的本金餘額變少；到了那一天自然就會計入。
+// - 使用者手動輸入過餘額（manual_principal_balance 不是 NULL）：手動餘額 − 基準日「之後」才記錄、且已發生的還款本金
 //   （基準日當天以前的還款視為已反映在手動輸入的餘額裡，不再重複扣）
-// - 沒手動輸入：原始本金 − 全部還款本金
+// - 沒手動輸入：原始本金 − 已發生的還款本金
 // 借款管理頁面的「目前本金餘額」跟資金預估的還款投影上限都用這同一個定義。
+// 台灣沒有日光節約時間，date('now', '+8 hours') 就是台北今天。
 const REMAINING_PRINCIPAL_SQL = `
     (CASE WHEN f.manual_principal_balance IS NOT NULL
         THEN f.manual_principal_balance - COALESCE((
             SELECT SUM(fr.principal_paid) FROM financing_repayments fr
             WHERE fr.financing_id = f.id AND fr.payment_date > COALESCE(f.manual_balance_date, '')
+              AND fr.payment_date <= date('now', '+8 hours')
         ), 0)
         ELSE f.principal_amount - COALESCE((
-            SELECT SUM(fr.principal_paid) FROM financing_repayments fr WHERE fr.financing_id = f.id
+            SELECT SUM(fr.principal_paid) FROM financing_repayments fr
+            WHERE fr.financing_id = f.id AND fr.payment_date <= date('now', '+8 hours')
         ), 0)
     END)
 `;
