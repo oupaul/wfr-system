@@ -8,7 +8,7 @@ const { todayInTaipei } = require('../utils/dateUtil');
 const { balancesAfterEachRepayment } = require('../utils/financingBalance');
 const { getLoanProjectionStatuses } = require('../utils/projectionStatus');
 const { buildScheduleView, suggestForDate } = require('../utils/financingSchedule');
-const { recordRepaymentAndSync } = require('../utils/financingRepayment');
+const { recordRepaymentAndSync, advanceLinkedTemplates } = require('../utils/financingRepayment');
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 
@@ -483,6 +483,18 @@ router.post('/:id/repayments', requireEditor, async (req, res) => {
 
         const { repaymentId, facilityName } = await recordRepaymentAndSync(db, id, { payment_date, principal_paid, interest_paid, remarks });
 
+        // 連結的週期範本也往後推，否則資金流水帳會把這一期已經繳掉的款再預測一次
+        let templateSync = { advanced: [], skippedMultiple: false };
+        try {
+            templateSync = await advanceLinkedTemplates(db, id, payment_date);
+            templateSync.advanced.forEach((a) => {
+                writeOperationLog(req, 'update', 'recurring_transaction', a.id, { next_run_date: a.from }, { next_run_date: a.to, is_active: a.deactivated ? 0 : 1 },
+                    `週期範本 #${a.id}「${a.name}」隨借款還款 #${repaymentId} 順延：下次產生日 ${a.from} → ${a.to || '（已到期停用）'}`);
+            });
+        } catch (syncErr) {
+            logger.error('同步連結範本的下次產生日失敗（還款記錄已建立）:', syncErr);
+        }
+
         if (transactionId) {
             writeOperationLog(req, 'create', 'transaction', transactionId, null,
                 { id: transactionId, transaction_date: payment_date, type: 'expense', amount },
@@ -521,7 +533,11 @@ router.post('/:id/repayments', requireEditor, async (req, res) => {
                 ? `；已用銀行餘額 ${f(calibration.bank_balance)} 校正（與系統推算一致）`
                 : `；已用銀行餘額 ${f(calibration.bank_balance)} 校正，系統原本推算 ${f(calibration.system_balance)}，差 ${calibration.diff > 0 ? '+' : ''}${f(calibration.diff)}（前面某期的本金／利息可能填錯，可在還款記錄逐期核對）`;
         }
-        res.json({ success: true, id: repaymentId, transactionId, message, calibration, warning });
+        templateSync.advanced.forEach((a) => {
+            message += a.deactivated ? `；連結範本「${a.name}」已到期並停用` : `；連結範本「${a.name}」的下次產生日已順延到 ${a.to}`;
+        });
+        if (templateSync.skippedMultiple) message += '；這筆借款連結了多個週期範本，無法判斷要順延哪一個，請到週期範本確認各自的下次產生日';
+        res.json({ success: true, id: repaymentId, transactionId, message, calibration, warning, template_sync: templateSync.advanced });
     } catch (error) {
         // 還款記錄沒寫成功，但交易已經建立的話要撤銷，避免留下一筆沒有對應還款記錄的交易
         if (transactionId) {

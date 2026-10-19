@@ -4,6 +4,10 @@
 // 不用維護兩份。
 
 const { addMonthsClamped } = require('./financingProjection');
+const { addDaysStr } = require('./dateUtil');
+const { MATCH_DAYS } = require('./financingSchedule');
+
+const STEP_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 };
 
 /**
  * @param {object} db sqlite3 database instance
@@ -62,4 +66,42 @@ function recordRepaymentAndSync(db, financingId, { payment_date, principal_paid,
     });
 }
 
-module.exports = { recordRepaymentAndSync };
+/**
+ * 在「借款管理」直接登記還款時，把連結這筆借款的週期範本也往後推（跟借款自己的「下次還款日」同步），
+ * 否則範本還停在這一期，資金流水帳會把已經繳掉的這一期再預測一次（週期範本「產生下一筆」本身已經會推範本，不要呼叫這個）。
+ *
+ * 規則：
+ * - 只有這筆借款「剛好一個」啟用中、有下次產生日的連結範本才處理；兩個以上無法判斷是哪一個，不動，回報讓使用者自己確認。
+ * - 還款日距離範本下次產生日 20 天內（含更早／更晚），或已超過產生日，才視為繳了那一期；補登很久以前的歷史還款不動。
+ * - 還款日已經超過後面幾期的產生日就連續往後推；推到超過範本到期日則清空並停用（跟「產生下一筆」一致）。
+ * @returns {Promise<{ advanced: [{id, name, from, to, deactivated}] , skippedMultiple: boolean }>}
+ */
+function advanceLinkedTemplates(db, financingId, paymentDate) {
+    return new Promise((resolve, reject) => {
+        db.all(
+            'SELECT id, description, category, frequency, next_run_date, end_date FROM recurring_transactions WHERE financing_id = ? AND is_active = 1 AND next_run_date IS NOT NULL',
+            [financingId],
+            (err, templates) => {
+                if (err) return reject(err);
+                if (!templates.length) return resolve({ advanced: [], skippedMultiple: false });
+                if (templates.length > 1) return resolve({ advanced: [], skippedMultiple: true });
+                const t = templates[0];
+                if (paymentDate < addDaysStr(t.next_run_date, -MATCH_DAYS)) return resolve({ advanced: [], skippedMultiple: false });
+                const step = STEP_MONTHS[t.frequency] || 1;
+                let cursor = addMonthsClamped(t.next_run_date, step);
+                let guard = 0;
+                while (cursor <= paymentDate && guard < 60) { cursor = addMonthsClamped(cursor, step); guard++; }
+                const deactivated = !!(t.end_date && cursor > t.end_date);
+                const sql = deactivated
+                    ? 'UPDATE recurring_transactions SET next_run_date = NULL, is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+                    : 'UPDATE recurring_transactions SET next_run_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+                db.run(sql, deactivated ? [t.id] : [cursor, t.id], (updErr) => {
+                    if (updErr) return reject(updErr);
+                    resolve({ advanced: [{ id: t.id, name: t.description || t.category || '週期範本', from: t.next_run_date, to: deactivated ? null : cursor, deactivated }], skippedMultiple: false });
+                });
+            }
+        );
+    });
+}
+
+module.exports = { recordRepaymentAndSync, advanceLinkedTemplates };
