@@ -83,19 +83,24 @@ router.get('/', requireEditor, async (req, res) => {
                 if (days > STALE_SETTLEMENT_DAYS) stale.push({ a, days, date: s.settlement_date });
             }
         });
-        // 帳戶很多時一項一項列會淹沒其他待辦，所以合併成「沒有期初結算」與「太久沒結算」各一項
-        const label = (a) => `${a.company_name ? a.company_name + '・' : ''}${a.account_name}`;
-        const never = stale.filter((x) => x.days === null).map((x) => label(x.a));
-        const old = stale.filter((x) => x.days !== null);
-        const list = (names) => names.slice(0, 4).join('、') + (names.length > 4 ? ` 等 ${names.length} 個` : '');
+        // 帳戶很多時一項一項列會淹沒其他待辦，所以合併成「沒有期初結算」與「太久沒結算」各一項；
+        // 每個帳戶附上完整辨識資訊（公司・銀行・帳戶名稱（類型）・帳號末四碼），前端展開後逐一列出，
+        // 各自一個按鈕帶到結算頁並預選那個帳戶
+        const tail = (n) => (n ? `帳號末四碼 ${String(n).replace(/[^0-9A-Za-z]/g, '').slice(-4)}` : '無帳號');
+        const label = (a) => `${a.company_name ? a.company_name + '・' : ''}${a.bank_name ? a.bank_name + '・' : ''}${a.account_name}（${a.account_type || '帳戶'}）・${tail(a.account_number)}`;
+        const detailOf = (x) => (x.days === null ? '從未結算' : `上次結算 ${x.date}（${x.days} 天前）`);
+        const toAccount = (x) => ({ id: x.a.id, label: label(x.a), detail: detailOf(x), href: `/settlement.html?account=${x.a.id}` });
+        const never = stale.filter((x) => x.days === null);
+        const old = stale.filter((x) => x.days !== null).sort((p, q) => q.days - p.days);
         if (never.length) {
             items.push({ kind: 'settlement', level: 'overdue', title: `${never.length} 個帳戶還沒有期初結算`,
-                detail: `${list(never)}。沒有結算系統就無法計算餘額，請先建立期初餘額`, href: '/settlement.html', action: '前往餘額結算' });
+                detail: '沒有結算系統就無法計算餘額，請先建立期初餘額。點開看是哪些帳戶',
+                href: '/settlement.html', action: '前往餘額結算', accounts: never.map(toAccount) });
         }
         if (old.length) {
-            const oldest = Math.max(...old.map((x) => x.days));
             items.push({ kind: 'settlement', level: 'info', title: `${old.length} 個帳戶超過 ${STALE_SETTLEMENT_DAYS} 天沒結算`,
-                detail: `${list(old.map((x) => label(x.a)))}（最久 ${oldest} 天）。月底請輸入銀行實際餘額對帳`, href: '/settlement.html', action: '前往餘額結算' });
+                detail: `最久 ${old[0].days} 天。月底請輸入銀行實際餘額對帳。點開看是哪些帳戶`,
+                href: '/settlement.html', action: '前往餘額結算', accounts: old.map(toAccount) });
         }
 
         const rank = { overdue: 0, soon: 1, info: 2 };

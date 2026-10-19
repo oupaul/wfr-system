@@ -1412,8 +1412,31 @@
             // 載入公司列表（初始不載入帳戶，等選擇公司後再載入）
             loadCompaniesSettlement().then(() => {
                 loadSettlements();
+                // 從首頁待辦點進來：?account=帳戶ID 直接預選公司與帳戶
+                const accountParam = new URLSearchParams(location.search).get('account');
+                if (accountParam) applyAccountDeepLink(accountParam);
             });
         });
+
+        async function applyAccountDeepLink(accountId) {
+            try {
+                const r = await fetch(`${API_BASE}/bank-accounts/${encodeURIComponent(accountId)}`).then(res => res.json());
+                const acc = r && r.data;
+                if (!acc || !acc.company_id) return;
+                const companySelect = document.getElementById('companyId');
+                companySelect.value = String(acc.company_id);
+                const company = companiesListSettlement.find(c => String(c.id) === String(acc.company_id));
+                document.getElementById('companyName').value = company ? company.name : (acc.company_name || '');
+                const quickAddBtn = document.getElementById('quickAddAccountBtn');
+                if (quickAddBtn) quickAddBtn.disabled = false;
+                await loadBankAccountsSettlement(parseInt(acc.company_id, 10));
+                document.getElementById('accountId').value = String(acc.id);
+                onAccountChangeSettlement();
+                showMessage(`已帶入「${acc.company_name || ''}・${acc.account_name}」，請確認結算日期後按「計算結算」`, 'success');
+            } catch (e) {
+                console.error('帶入帳戶失敗:', e);
+            }
+        }
 
         // 點擊模態框外部關閉
         // 在輸入框裡按住滑鼠拖曳選取文字、結果在視窗外面放開時，瀏覽器會把 click 算在

@@ -173,6 +173,16 @@
         .todo-item .t-detail { font-size: 0.9em; color: #64748B; margin-top: 2px; }
         .todo-item a.t-btn { flex: none; background: #1E293B; color: #fff; text-decoration: none; border-radius: 6px; padding: 8px 14px; font-size: 0.9em; white-space: nowrap; }
         .todo-item a.t-btn:hover { background: #334155; }
+        .todo-item.has-accounts { display: block; }
+        .todo-item .t-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .todo-item details { margin-top: 8px; }
+        .todo-item details summary { cursor: pointer; color: #F06000; font-size: 0.9em; font-weight: bold; }
+        .t-acc { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid #E2E8F0; font-size: 0.92em; }
+        .t-acc:first-of-type { margin-top: 8px; }
+        .t-acc .a-label { font-weight: bold; color: #1E293B; }
+        .t-acc .a-detail { color: #64748B; font-size: 0.9em; }
+        .t-acc a.t-btn-sm { flex: none; background: #fff; color: #1E293B; border: 1px solid #1E293B; text-decoration: none; border-radius: 6px; padding: 5px 10px; font-size: 0.85em; white-space: nowrap; }
+        .t-acc a.t-btn-sm:hover { background: #1E293B; color: #fff; }
         .todo-empty { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; color: #475569; }
         .start-card { background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #1E293B; border-radius: 8px; padding: 16px 20px; line-height: 1.8; color: #334155; }
         .start-card a { color: #F06000; font-weight: bold; text-decoration: none; }
@@ -307,7 +317,13 @@
                     if (r.counts.soon) parts.push(`${r.counts.soon} 項 7 天內到期`);
                     if (r.counts.info) parts.push(`${r.counts.info} 項提醒`);
                     html += `<div class="todo-summary">${parts.join('、')}。按右邊的按鈕直接前往處理。</div>`;
-                    html += r.items.map((i) => `<div class="todo-item ${i.level === 'overdue' ? 'overdue' : ''}"><div><div class="t-title">${esc(i.title)}</div><div class="t-detail">${esc(i.detail)}</div></div><a class="t-btn" href="${esc(i.href)}">${esc(i.action)}</a></div>`).join('');
+                    html += r.items.map((i) => {
+                        if (i.accounts && i.accounts.length) {
+                            const rows = i.accounts.map((a) => `<div class="t-acc"><div><div class="a-label">${esc(a.label)}</div><div class="a-detail">${esc(a.detail)}</div></div><a class="t-btn-sm" href="${esc(a.href)}">去結算</a></div>`).join('');
+                            return `<div class="todo-item has-accounts ${i.level === 'overdue' ? 'overdue' : ''}"><div class="t-head"><div><div class="t-title">${esc(i.title)}</div><div class="t-detail">${esc(i.detail)}</div></div><a class="t-btn" href="${esc(i.href)}">${esc(i.action)}</a></div><details${i.accounts.length <= 3 ? ' open' : ''}><summary>看是哪 ${i.accounts.length} 個帳戶</summary>${rows}</details></div>`;
+                        }
+                        return `<div class="todo-item ${i.level === 'overdue' ? 'overdue' : ''}"><div><div class="t-title">${esc(i.title)}</div><div class="t-detail">${esc(i.detail)}</div></div><a class="t-btn" href="${esc(i.href)}">${esc(i.action)}</a></div>`;
+                    }).join('');
                 }
                 box.innerHTML = html;
             } catch (e) {
