@@ -27,6 +27,9 @@ const IMAGES = {
     '/recurring-transactions.html': [
         { f: 'recurring.jpg', cap: '① 每期到期時按「確認本期入帳」' },
         { f: 'recurring-confirm.jpg', cap: '① 改成實際入帳日期　② 連結借款時本金／利息可調整　③ 按「確認入帳」' }],
+    '/settlement.html': [
+        { f: 'settlement-form.jpg', cap: '① 結算日期　② 公司　③ 帳戶（選填）　④ 按「📊 計算結算」，下方會出現系統算出的計算餘額' },
+        { f: 'settlement-actual.jpg', cap: '① 勾選「我要輸入銀行實際餘額」　② 輸入銀行對帳單的餘額（結算日當天開始前）　③ 按「💾 儲存結算記錄」；儲存後到結算歷史看「差異」' }],
     '/financing.html': [{ f: 'financing-repay.jpg', cap: '① 有連結週期範本的借款，會提示到範本確認本期入帳　② 在這裡新增還款也可以　③ 有計畫表時可切到「還款計畫表」' }],
     '/bank-accounts.html': [{ f: 'deposit.jpg', cap: '① 活存帳戶按「轉定存」　② 定存帳戶到期或解約按「解約／到期」' }]
 };
