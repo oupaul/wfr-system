@@ -79,7 +79,19 @@ router.get('/', (req, res) => {
         if (isEditor && rows.length) {
             try {
                 const statuses = await getLoanProjectionStatuses(rows.map((r) => r.id));
-                data = data.map((r) => ({ ...r, projection_status: statuses.get(r.id) || null }));
+                // 連結的週期範本（還款建議從範本「確認本期入帳」操作，前端在還款記錄視窗提示）
+                const linked = await new Promise((resolve, reject) => db.all(
+                    `SELECT id, financing_id, description, category FROM recurring_transactions
+                     WHERE is_active = 1 AND next_run_date IS NOT NULL AND financing_id IN (${rows.map(() => '?').join(',')}) ORDER BY id`,
+                    rows.map((r) => r.id), (e, r) => (e ? reject(e) : resolve(r || []))));
+                const byLoan = new Map();
+                linked.forEach((t) => { if (!byLoan.has(t.financing_id)) byLoan.set(t.financing_id, []); byLoan.get(t.financing_id).push(t); });
+                data = data.map((r) => {
+                    const ts = byLoan.get(r.id) || [];
+                    return { ...r, projection_status: statuses.get(r.id) || null,
+                        linked_template_count: ts.length, linked_template_id: ts.length ? ts[0].id : null,
+                        linked_template_name: ts.length ? (ts[0].description || ts[0].category || '週期範本') : null };
+                });
             } catch (statusErr) {
                 logger.error('計算預測狀態失敗:', statusErr);
             }

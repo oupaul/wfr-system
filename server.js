@@ -112,6 +112,7 @@ const cashGapRoutes = require('./routes/cashGap');
 const adminRoutes = require('./routes/admin');
 const { trackActivity } = require('./utils/onlineUsers');
 const noticeRoutes = require('./routes/notice');
+const todoRoutes = require('./routes/todos');
 const reportRoutes = require('./routes/reports');
 const { recalculateAllSettlementsOnce } = require('./utils/settlementRecalc');
 const financingRoutes = require('./routes/financing');
@@ -151,6 +152,7 @@ app.use('/api/settlements', settlementRoutes);
 app.use('/api', cashGapRoutes);         // /api/cash-gap-*, /api/import-logs
 app.use('/api/admin', adminRoutes);
 app.use('/api/notice', noticeRoutes);
+app.use('/api/todos', todoRoutes);
 app.use('/api/reports', reportRoutes);
 
 // ==================== 靜態 HTML 路由 ====================

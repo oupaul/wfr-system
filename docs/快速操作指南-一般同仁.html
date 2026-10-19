@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>資金週報系統　快速操作指南（一般同仁）</title><style>
+  :root { --ink:#1E293B; --muted:#475569; --line:#E2E8F0; --accent:#F06000; --bg:#F8FAFC; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; color:var(--ink); background:#fff; line-height:1.75; font-size:15px; }
+  main { max-width:860px; margin:0 auto; padding:24px 16px 60px; }
+  h1 { font-size:28px; margin:8px 0 4px; } .sub { color:var(--muted); margin:0 0 20px; }
+  h2 { font-size:21px; margin:0 0 10px; border-bottom:3px solid var(--ink); padding-bottom:6px; }
+  h3 { font-size:16px; margin:16px 0 6px; } h4 { font-size:15px; margin:0 0 6px; }
+  .card, .page { margin:0 0 28px; }
+  .two { display:grid; grid-template-columns:1fr 1fr; gap:18px; } @media (max-width:640px){ .two { grid-template-columns:1fr; } }
+  .box { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:4px 16px 8px; }
+  ol { margin:6px 0; padding-left:24px; } li { margin:4px 0; }
+  .warn, .note { border-left:4px solid var(--accent); background:#FFF7ED; color:#7C2D12; padding:8px 12px; border-radius:4px; font-size:14px; margin:8px 0; }
+  .intro { background:var(--bg); border-left:4px solid var(--ink); padding:10px 14px; border-radius:4px; }
+  dl { margin:0; } dt { font-weight:bold; margin-top:8px; } dd { margin:0; color:var(--muted); }
+  .task { border:1px solid var(--line); border-radius:8px; padding:10px 14px; margin:10px 0; break-inside:avoid; }
+  .badge { font-size:12px; font-weight:normal; background:var(--ink); color:#fff; border-radius:10px; padding:1px 8px; margin-left:8px; }
+  figure { margin:12px 0; } figure img { width:100%; border:1px solid var(--line); border-radius:6px; } figcaption { font-size:13px; color:var(--muted); margin-top:4px; }
+  table { border-collapse:collapse; width:100%; font-size:14px; } th, td { border:1px solid var(--line); padding:6px 10px; text-align:left; vertical-align:top; } th { background:var(--bg); }
+  @media print { .page { break-before:page; } body { font-size:13px; } main { padding:0; } }
+</style></head><body><main>
+<h1>資金週報系統　快速操作指南（一般同仁）</h1>
+<p class="sub">只要會看就好：找到「我想要…」，照步驟做。每個頁面右下角的「？ 操作說明」是同一份內容。</p>
+
+<section class="card"><h2>三分鐘上手</h2>
+  <div class="box"><ol>
+    <li>登入後直接進入「⚠️ 資金預估週報」的資金流水帳。第一次進來會有 5 步驟導覽，框出重點給你看。</li>
+    <li>先看最上方三個數字：<b>可用資金</b>、<b>目前貸款餘額</b>、兩者相減（藍底＝夠，紅底＝不夠）。</li>
+    <li>往下看<b>黃底列</b>（結餘檢查點）：各帳戶預計餘額是否低於安全水位；<b>斜體「（預計）」</b>是推算的預估，不是真實交易。</li>
+    <li>想查某筆收支，到「💰 收支記錄」用日期、帳戶、關鍵字查詢。</li>
+    <li>看不懂的名詞，點旁邊的「?」；每頁右下角「？ 操作說明」有該頁的使用步驟。</li>
+  </ol></div>
+  <p class="warn">你的帳號只能查詢，不能新增或修改。發現數字不對，請告訴財務人員：他們會到「收支記錄」或「餘額結算」檢查。</p>
+</section>
+
+<section class="page">
+  <h2>⚠️ 資金預估週報　資金預估週報</h2>
+  <p class="intro">這一頁回答一個問題：「各銀行帳戶接下來的餘額夠不夠？」系統從最近一次結算的餘額往後推，加上已登記與預計的收支，在每個「檢查日」算出預計餘額，低於安全水位就標示資金缺口。</p>
+  <figure><figcaption>① 三個數字　② 每一欄是一個銀行帳戶　③ 黃底列＝結餘檢查點　④ 斜體「（預計）」＝推算的預估</figcaption></figure>
+  <h3>看懂畫面</h3><dl><dt>帳戶為欄、日期為列</dt><dd>每一欄是一個銀行帳戶，每一列是一天的收支。</dd><dt>黃底列（結餘檢查點）</dt><dd>預設每月 15 號與 30 號，看這天各帳戶的預計餘額。</dd><dt>斜體「（預計）」列</dt><dd>依借款還款、週期範本、定存到期「推算」的預估，不是真實交易，不影響真實餘額；實際登記後會被真實交易取代。</dd><dt>上方三個數字</dt><dd>可用資金（活存＋定存）、目前貸款餘額、兩者相減；藍底＝可用資金夠還貸款，紅底＝不夠並標示短少多少。</dd><dt>資金缺口</dt><dd>安全水位 − 預計餘額。預計餘額沒低於安全水位，缺口就是 0。</dd></dl>
+  <h3>我想要…</h3>
+  
+  <div class="task"><h4>我只想看某幾個帳戶</h4>
+    <ol><li>按工具列的「🏦 顯示帳戶」。</li><li>勾選要看的帳戶（可「全選」「取消全選」）。</li></ol></div>
+  <div class="task"><h4>我想確認某一段時間的收支有沒有對</h4>
+    <ol><li>勾選工具列的「顯示區間驗算」。</li><li>每個黃底檢查點下方會多一列：上期餘額 ＋ 收入 − 支出 ＝ 本期餘額。</li><li>顯示 ✓ 代表對得上；橘色 ⚠ 會顯示差額。</li><li>點營業收支的金額，可直接開啟該區間、該帳戶的收支記錄。</li></ol></div>
+  <div class="task"><h4>我想知道「目前貸款餘額」包含哪些借款</h4>
+    <ol><li>點該數字旁邊的「明細」。</li><li>要修正數字，請到「💳 借款管理」改那一筆借款。</li></ol></div>
+  <div class="task"><h4>我想用手機看</h4>
+    <ol><li>流水帳是寬表格，請左右滑動。</li><li>也可以切到「📇 帳戶卡片」，一個帳戶一張卡片，比較好讀。</li></ol></div>
+  <div class="task"><h4>我想知道某個月的收支</h4>
+    <ol><li>點月份標題展開或收合；預設只展開當月起的六個月。</li><li>也可以按「全部展開」「全部收合」。</li></ol></div>
+  <h3>常見疑問</h3><dl><dt>為什麼餘額跟銀行不一樣？</dt><dd>餘額是從最近一次「結算」往後算的。請財務人員到「✅ 餘額結算」輸入銀行實際餘額，系統會顯示差異，再檢查是否漏登或重複。</dd><dt>為什麼某筆預計沒出現？</dt><dd>預計只顯示往後一年；若是借款，到「💳 借款管理」看該筆的「資金預測」欄，會寫明原因。</dd></dl>
+</section>
+<section class="page">
+  <h2>💰 收支記錄　收支記錄</h2>
+  <p class="intro">所有真實的收入與支出都記在這裡，餘額就是由這些記錄加上最近一次結算算出來的。上方三個數字是目前篩選結果的總收入、總支出、淨收支（帳戶間轉帳不計入）。</p>
+  
+  <h3>看懂畫面</h3><dl><dt>公司 → 帳戶 要用下拉選單選</dt><dd>系統用「公司＋帳戶名稱＋帳號」對應銀行帳戶，手打錯一個字，這筆就不會算進任何帳戶。</dd><dt>轉帳徽章</dt><dd>帳戶間轉帳會標示徽章，不計入收入／支出，只能整組刪除。</dd></dl>
+  <h3>我想要…</h3>
+  
+  <div class="task"><h4>我想查某個帳戶或某段期間的收支</h4>
+    <ol><li>在篩選區選開始／結束日期、公司、帳戶，或輸入關鍵字。</li><li>按「🔍 查詢」；要還原按「清除篩選」。</li><li>點欄位標題可排序。</li></ol></div>
+  <h3>常見疑問</h3><dl><dt>登記了但餘額沒變？</dt><dd>先看日期是否早於該帳戶最近結算日，或公司／帳戶／帳號沒有選到正確的銀行帳戶。</dd></dl>
+</section>
+<section class="page">
+  <h2>💳 借款管理　借款管理</h2>
+  <p class="intro">記錄每一筆借款或融資額度、目前還剩多少本金、下一次要還多少。設好之後，未來還款會自動出現在資金預估週報的「（預計）」列。</p>
+  
+  <h3>看懂畫面</h3><dl><dt>目前本金餘額</dt><dd>原始本金 − 已還的「本金」。只計算還款日 ≤ 今天的記錄，未來日期的還款不會讓今天的餘額變少；利息不會減少本金。</dd><dt>資金預測 欄</dt><dd>告訴你這筆借款有沒有進入資金預估週報、金額怎麼來（依還款計畫表、範本固定金額或借款排程），沒預測會寫原因。</dd></dl>
+  <h3>我想要…</h3>
+  
+  <div class="task"><h4>我想看某筆借款還剩多少、下次什麼時候還</h4>
+    <ol><li>在列表找到那筆借款，看「目前本金餘額」與「下次還款」。</li><li>要看每次還款的明細，按該列的「還款記錄」，表格會列出每次的本金、利息與還款後本金餘額。</li></ol></div>
+  
+</section>
+<section class="page">
+  <h2>🏦 銀行帳戶　銀行帳戶管理</h2>
+  <p class="intro">每家公司的銀行帳戶都在這裡維護。「安全水位」是該帳戶最低要保留的金額，預計餘額低於它就會出現資金缺口。活存可以轉定存，定存到期或解約再轉回活存。</p>
+  
+  <h3>看懂畫面</h3><dl><dt>即時餘額</dt><dd>最近一次結算 ＋ 之後的收支。</dd><dt>安全水位</dt><dd>這個帳戶最低保留金額，資金缺口依它計算。</dd></dl>
+  <h3>我想要…</h3>
+  
+  <div class="task"><h4>查某個帳戶的明細</h4>
+    <ol><li>按該帳戶的「交易明細」，會跳到收支記錄並自動套用該帳戶的篩選。</li></ol></div>
+  
+</section>
+<section class="page">
+  <h2>✅ 餘額結算　餘額結算</h2>
+  <p class="intro">「結算」是把銀行實際餘額登錄進系統，當作之後計算餘額的起點，同時比對系統算的和銀行實際差多少。每個帳戶第一次使用前，一定要先做一筆期初結算。</p>
+  
+  <h3>看懂畫面</h3><dl><dt>差異</dt><dd>實際餘額 − 系統計算餘額。差異不是 0，代表漏登、重複登，或帳戶選錯。</dd><dt>結算日當天的收支</dt><dd>實際餘額請填「結算日當天開始前」的銀行餘額（前一天收盤餘額），當天的收支算在結算之後。</dd></dl>
+  <h3>我想要…</h3>
+  
+  <div class="task"><h4>查看歷史結算</h4>
+    <ol><li>下方「結算歷史記錄」列出每次結算的期初、收入、支出、計算餘額、實際餘額與差異。</li></ol></div>
+  <h3>常見疑問</h3><dl><dt>可以不結算嗎？</dt><dd>沒有結算，系統就沒有起點，無法計算餘額。至少要有一筆期初結算。</dd></dl>
+</section>
+
+<section class="card"><h2>名詞對照（看不懂的字在這裡）</h2>
+<table><tr><th>名詞</th><th>白話意思</th></tr>
+<tr><td>可用資金</td><td>活存加定存的合計（依你目前勾選的帳戶）。</td></tr>
+<tr><td>目前貸款餘額</td><td>借款管理裡所有啟用中借款的「目前本金餘額」加總。數字不對請到借款管理修正那一筆借款。</td></tr>
+<tr><td>結餘檢查點</td><td>每月固定幾號（預設 15、30 號，各公司可自訂）系統幫你檢查各帳戶預計餘額的日子；黃底列就是檢查點。</td></tr>
+<tr><td>預計餘額</td><td>最近一次結算的餘額，加上到那天為止的收入、減去支出，並已算進借款預計還款與週期範本。</td></tr>
+<tr><td>安全水位</td><td>這個帳戶最低要保留的金額。預計餘額低於它，就會出現資金缺口。</td></tr>
+<tr><td>資金缺口</td><td>安全水位 − 預計餘額。預計餘額沒有低於安全水位，缺口就是 0。</td></tr>
+<tr><td>即時餘額</td><td>最近一次結算的餘額，加上結算之後的收入、減去支出。</td></tr>
+<tr><td>目前本金餘額</td><td>原始本金減掉已還的「本金」（只算還款日不晚於今天的）。利息不會讓本金變少。</td></tr>
+<tr><td>實際餘額</td><td>你從銀行對帳單看到的餘額。</td></tr>
+<tr><td>差異</td><td>銀行實際餘額減系統計算餘額。不是 0 代表可能漏登、重複登或帳戶選錯，請回收支記錄檢查。</td></tr>
+</table><p class="sub">系統畫面上這些名詞旁邊有「?」，點一下也會顯示同樣的說明。</p></section>
+</main></body></html>

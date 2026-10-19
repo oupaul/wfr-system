@@ -13,6 +13,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
     <script src="/js/pwa.js" defer></script>
     <script src="/js/page-help.js" defer></script>
+    <script src="/js/term-help.js" defer></script>
     <title>週期範本 - 資金週報系統</title>
     <style>
         body { visibility: hidden; }
@@ -427,7 +428,7 @@
                 <div>
                     <h2>週期性收支範本</h2>
                     <div style="font-size: 13px; color: #666; margin-top: 5px;">
-                        像房租、保費、借款還款這類每期都一樣的收支，建一個範本後按「產生下一筆」就能直接記一筆收支記錄，不用每次重填表單
+                        像房租、保費、借款還款這類每期都一樣的收支，建一個範本後按「確認本期入帳」就能直接記一筆收支記錄，不用每次重填表單
                     </div>
                 </div>
                 <button class="btn btn-primary" id="addTemplateBtn" onclick="openAddModal()">➕ 新增範本</button>
@@ -496,7 +497,7 @@
                             <option value="">（不連結，一般收支範本）</option>
                         </select>
                         <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
-                            連結後，「產生下一筆」會同時在收支記錄記一筆支出、在借款管理記一筆對應還款記錄，並自動同步該借款的下次還款日
+                            連結後，「確認本期入帳」會同時在收支記錄記一筆支出、在借款管理記一筆對應還款記錄，並自動同步該借款的下次還款日
                         </small>
                         <small id="financingScheduleHint" style="display:none; color:#475569; font-size:12px; margin-top:5px;">
                             這筆借款若已匯入「還款計畫表」（且只有這一個範本連結它），資金預測的每期金額會依計畫表自動帶入，下方金額只在計畫表對不到那一期時當後備；沒有計畫表則一律用下方金額。
@@ -580,11 +581,11 @@
         </div>
     </div>
 
-    <!-- 產生下一筆確認視窗：預設帶入預估金額，可改成實際金額 -->
+    <!-- 確認本期入帳視窗：預設帶入預估金額，可改成實際金額 -->
     <div id="generateModal" class="modal">
         <div class="modal-content" style="max-width: 520px;">
             <div class="modal-header">
-                <h2>確認產生收支記錄</h2>
+                <h2>確認本期入帳</h2>
                 <button class="close" onclick="closeGenerateModal()">&times;</button>
             </div>
             <div class="modal-body">
@@ -624,7 +625,7 @@
 
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeGenerateModal()">取消</button>
-                        <button type="submit" class="btn btn-primary">確認產生</button>
+                        <button type="submit" class="btn btn-primary">確認入帳</button>
                     </div>
                 </form>
             </div>
@@ -651,7 +652,7 @@
         const frequencyLabels = { monthly: '每月', quarterly: '每季', yearly: '每年' };
 
         // 帳戶欄：帳戶名稱 + 銀行・類型・帳號末四碼；範本記的帳戶對不上任何啟用中的銀行帳戶時標示警示
-        // （對不上的範本不會出現在資金預測，「產生下一筆」記出的收支也不會計入任何帳戶餘額）
+        // （對不上的範本不會出現在資金預測，「確認本期入帳」記出的收支也不會計入任何帳戶餘額）
         function accountCellHtml(t) {
             if (!t.account_name) return '-';
             const tail = t.account_number ? '帳號 …' + String(t.account_number).slice(-4) : '';
@@ -932,6 +933,12 @@
                     templatesCache = data.data || [];
                     displayTemplates(templatesCache);
                     loading.style.display = 'none';
+                    // 從首頁待辦點進來：?confirm=範本ID 直接開「確認本期入帳」視窗（只處理一次）
+                    const confirmId = new URLSearchParams(location.search).get('confirm');
+                    if (confirmId && !window.__deepLinkDone) {
+                        window.__deepLinkDone = true;
+                        if (templatesCache.some(t => String(t.id) === confirmId)) generateNow(parseInt(confirmId, 10));
+                    }
                 })
                 .catch(err => {
                     console.error('載入錯誤:', err);
@@ -965,7 +972,7 @@
                     <td><span class="${t.is_active ? 'status-active' : 'status-inactive'}">${t.is_active ? '啟用' : '停用'}</span></td>
                     <td class="actions">
                         ${canEdit ? `
-                        <button class="btn btn-primary btn-sm" onclick="generateNow(${t.id})" ${(!t.is_active || !t.next_run_date) ? 'disabled' : ''}>產生下一筆</button>
+                        <button class="btn btn-primary btn-sm" onclick="generateNow(${t.id})" ${(!t.is_active || !t.next_run_date) ? 'disabled' : ''}>確認本期入帳</button>
                         <button class="btn btn-edit btn-sm" onclick="editTemplate(${t.id})">編輯</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteTemplate(${t.id})">刪除</button>
                         ` : '<span style="color:#999;">-</span>'}

@@ -162,6 +162,22 @@
             line-height: 1.6;
         }
 
+
+        /* 首頁待辦／新手指引：單色底，強調色只用在左邊框與按鈕文字 */
+        .todo-section { max-width: 860px; margin: 0 auto 40px; text-align: left; }
+        .todo-section h3 { font-size: 1.25em; margin: 0 0 12px; color: #1E293B; }
+        .todo-summary { color: #64748B; font-size: 0.95em; margin-bottom: 12px; }
+        .todo-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #CBD5E1; border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; }
+        .todo-item.overdue { border-left-color: #F06000; }
+        .todo-item .t-title { font-weight: bold; color: #1E293B; }
+        .todo-item .t-detail { font-size: 0.9em; color: #64748B; margin-top: 2px; }
+        .todo-item a.t-btn { flex: none; background: #1E293B; color: #fff; text-decoration: none; border-radius: 6px; padding: 8px 14px; font-size: 0.9em; white-space: nowrap; }
+        .todo-item a.t-btn:hover { background: #334155; }
+        .todo-empty { background: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 8px; padding: 16px; color: #475569; }
+        .start-card { background: #F8FAFC; border: 1px solid #E2E8F0; border-left: 4px solid #1E293B; border-radius: 8px; padding: 16px 20px; line-height: 1.8; color: #334155; }
+        .start-card a { color: #F06000; font-weight: bold; text-decoration: none; }
+        @media (max-width: 768px) { .todo-item { flex-direction: column; align-items: stretch; } .todo-item a.t-btn { text-align: center; } }
+
         @media (max-width: 768px) {
             .features-grid {
                 grid-template-columns: 1fr;
@@ -208,6 +224,8 @@
         </header>
 
         <div class="content">
+            <div id="todoSection" class="todo-section" style="display:none;"></div>
+
             <div class="welcome-section">
                 <h2>歡迎使用資金週報系統</h2>
                 <p>這是一個完整的財務管理平台，幫助您監控資金狀況、管理收支記錄，並進行餘額結算。</p>
@@ -269,6 +287,47 @@
             return true;
         }
 
+
+        const esc = (s) => { const d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; };
+
+        // 財務人員／管理員：首頁顯示「待辦事項」，每一項一個按鈕直接跳到要操作的頁面
+        async function loadTodos() {
+            const box = document.getElementById('todoSection');
+            box.style.display = 'block';
+            try {
+                const res = await fetch(`${API_BASE}/todos`, { credentials: 'include', cache: 'no-store' });
+                const r = await res.json();
+                if (!res.ok) throw new Error(r.error || '載入失敗');
+                let html = '<h3>📋 現在該做的事</h3>';
+                if (!r.count) {
+                    html += '<div class="todo-empty">✓ 目前沒有待辦事項：沒有到期未確認的範本、定存或借款，帳戶結算也都在期限內。</div>';
+                } else {
+                    const parts = [];
+                    if (r.counts.overdue) parts.push(`${r.counts.overdue} 項已逾期／需要處理`);
+                    if (r.counts.soon) parts.push(`${r.counts.soon} 項 7 天內到期`);
+                    if (r.counts.info) parts.push(`${r.counts.info} 項提醒`);
+                    html += `<div class="todo-summary">${parts.join('、')}。按右邊的按鈕直接前往處理。</div>`;
+                    html += r.items.map((i) => `<div class="todo-item ${i.level === 'overdue' ? 'overdue' : ''}"><div><div class="t-title">${esc(i.title)}</div><div class="t-detail">${esc(i.detail)}</div></div><a class="t-btn" href="${esc(i.href)}">${esc(i.action)}</a></div>`).join('');
+                }
+                box.innerHTML = html;
+            } catch (e) {
+                box.style.display = 'none';
+                console.error('載入待辦失敗:', e);
+            }
+        }
+
+        // 一般人員：新手指引，告訴他從哪裡開始、怎麼看
+        function showStartGuide() {
+            const box = document.getElementById('todoSection');
+            box.style.display = 'block';
+            box.innerHTML = '<h3>👋 從這裡開始</h3><div class="start-card">'
+                + '<b>想知道各帳戶的資金夠不夠？</b>請到 <a href="/cash-gap-dashboard.html">⚠️ 資金預估週報</a>：<br>'
+                + '① 先看最上方三個數字（可用資金、目前貸款餘額、相減；藍底＝夠，紅底＝不夠）<br>'
+                + '② 往下看<b>黃底列</b>：每月檢查日各帳戶的預計餘額<br>'
+                + '③ 斜體「（預計）」是推算的預估，不是真實交易<br>'
+                + '要查某筆收支，到 <a href="/transactions.html">💰 收支記錄</a> 用日期、帳戶、關鍵字查詢。每個頁面右下角的「？ 操作說明」都有該頁的使用步驟。</div>';
+        }
+
         // 載入應用配置（標題等）
         async function loadConfig() {
             try {
@@ -291,6 +350,9 @@
             const authenticated = await verifyPageAuth();
             if (authenticated) {
                 loadConfig();
+                const me = await fetch(`${API_BASE}/auth/check`, { credentials: 'include', cache: 'no-store' }).then(r => r.json()).catch(() => null);
+                const role = me && me.user && me.user.role;
+                if (role === 'admin' || role === 'finance') loadTodos(); else showStartGuide();
             }
         };
     </script>

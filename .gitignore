@@ -15,3 +15,7 @@ build/
 backups/
 uploads/
 logs/
+
+# 操作指南的標註截圖來自測試資料庫，確認沒有敏感資料前不放進版控
+docs/images/
+docs/*-含截圖.html

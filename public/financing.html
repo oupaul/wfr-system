@@ -13,6 +13,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png">
     <script src="/js/pwa.js" defer></script>
     <script src="/js/page-help.js" defer></script>
+    <script src="/js/term-help.js" defer></script>
     <title>借款管理 - 資金週報系統</title>
     <style>
         body { visibility: hidden; }
@@ -696,6 +697,7 @@
                     <button type="button" class="rp-tab" data-rptab="schedule" onclick="switchRepaymentTab('schedule')">還款計畫表</button>
                 </div>
                 <div id="rpTabRecords">
+                <div id="repayLinkedBanner" class="sched-banner" style="display:none;"></div>
                 <div id="scheduleHint" class="sched-banner" style="display:none;"></div>
                 <div id="repaymentFormWrap">
                     <form class="repayment-form" onsubmit="addRepayment(event)">
@@ -1003,7 +1005,7 @@
             document.getElementById('schedClearBtn').style.display = canEdit && scheduleCache && scheduleCache.periods.length ? 'inline-block' : 'none';
             if (!scheduleCache || scheduleCache.periods.length === 0) {
                 banner.className = 'sched-banner';
-                banner.innerHTML = '這筆借款還沒有還款計畫表。本息攤還、融資租賃等每期本金與利息都不同的借款，建議從下方匯入銀行或租賃公司給的還款試算表：之後可以逐期核對目前本金餘額，並在「產生下一筆」與新增還款時自動帶入該期的本金與利息。';
+                banner.innerHTML = '這筆借款還沒有還款計畫表。本息攤還、融資租賃等每期本金與利息都不同的借款，建議從下方匯入銀行或租賃公司給的還款試算表：之後可以逐期核對目前本金餘額，並在「確認本期入帳」與新增還款時自動帶入該期的本金與利息。';
                 tbody.innerHTML = '<tr><td colspan="8" class="loading" style="color:#94A3B8;">尚無計畫表</td></tr>';
                 document.getElementById('scheduleImport').open = true;
                 return;
@@ -1203,10 +1205,25 @@
             scheduleCache = null;
             switchRepaymentTab('records');
             document.getElementById('scheduleHint').style.display = 'none';
+            showLinkedTemplateBanner(record);
             loadRepaymentSummary();
             loadRepayments();
             loadSchedule();
         };
+
+        // 這筆借款由週期範本管理時，提示從範本「確認本期入帳」操作（一次記好收支、還款記錄並同步兩邊的下次日期）
+        function showLinkedTemplateBanner(record) {
+            const el = document.getElementById('repayLinkedBanner');
+            if (!canEdit || !record || !record.linked_template_count) { el.style.display = 'none'; return; }
+            if (record.linked_template_count > 1) {
+                el.innerHTML = '這筆借款連結了多個週期範本，在這裡登記還款後，請到「週期範本」確認各範本的下次產生日。';
+            } else {
+                el.innerHTML = `💡 這筆借款由週期範本「${escapeHtml(record.linked_template_name)}」管理，每期建議直接到週期範本按「確認本期入帳」，系統會一次記好收支、還款記錄並同步下次日期（有還款計畫表時，本金與利息會自動帶入）。`
+                    + ` <a href="/recurring-transactions.html?confirm=${encodeURIComponent(record.linked_template_id)}" style="color:#F06000; font-weight:bold;">前往確認本期入帳 →</a>`
+                    + '<br><span style="font-size:12px; color:#64748B;">在這裡直接新增還款也可以，系統會一併順延範本的下次產生日。</span>';
+            }
+            el.style.display = 'block';
+        }
 
         window.closeRepaymentModal = function() {
             document.getElementById('repaymentModal').style.display = 'none';
@@ -1354,6 +1371,12 @@
                     financingListCache = data.data || [];
                     displayFinancing(financingListCache);
                     loading.style.display = 'none';
+                    // 從首頁待辦點進來：?repay=借款ID 直接開還款記錄視窗（只處理一次）
+                    const repayId = new URLSearchParams(location.search).get('repay');
+                    if (repayId && !window.__deepLinkDone) {
+                        window.__deepLinkDone = true;
+                        if (financingListCache.some(f => String(f.id) === repayId)) openRepaymentModal(parseInt(repayId, 10));
+                    }
                 })
                 .catch(err => {
                     console.error('載入錯誤:', err);
