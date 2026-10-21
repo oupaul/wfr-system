@@ -890,6 +890,7 @@
                                 <option value="">請選擇帳戶</option>
                             </select>
                             <small id="transferToBalance" style="color: #64748B; display: block; margin-top: 6px;"></small>
+                            <small id="transferToBackdatedWarning" style="color: #F06000; display: none; font-weight: bold; margin-top: 6px;"></small>
                         </div>
                     </div>
 
@@ -1046,20 +1047,18 @@
 
         window.onTransferAccountChange = function(side) {
             updateTransferBalanceDisplay(side);
-            if (side === 'from') checkTransferBackdatedWarning();
+            checkTransferBackdatedWarning();
         };
 
-        // 轉帳只檢查「轉出帳戶」這一腿——真正會扣款、影響餘額計算的是這一側
+        // 轉帳兩腿都要檢查：日期早於某個帳戶最近一次結算，那一腿就不會影響該帳戶的目前餘額。
+        // 兩個帳戶的最近結算日通常不同，所以會出現「轉入的帳戶有增加、轉出的帳戶沒減少」，兩邊都提醒才不會漏掉
         window.checkTransferBackdatedWarning = function() {
-            const accountId = document.getElementById('transferFromAccountId').value;
-            const account = transferAccountsCache.from.find(a => String(a.id) === accountId);
-            showBackdatedWarningIfNeeded(
-                'transferBackdatedWarning',
-                document.getElementById('transferDate').value,
-                account ? account.company_name : '',
-                account ? account.account_name : '',
-                account ? account.account_number : ''
-            );
+            [['from', 'transferFromAccountId', 'transferBackdatedWarning', '轉出'], ['to', 'transferToAccountId', 'transferToBackdatedWarning', '轉入']].forEach(([side, selId, warnId, name]) => {
+                const account = transferAccountsCache[side].find(a => String(a.id) === document.getElementById(selId).value);
+                showBackdatedWarningIfNeeded(warnId, document.getElementById('transferDate').value,
+                    account ? account.company_name : '', account ? account.account_name : '', account ? account.account_number : '',
+                    `⚠️ ${name}帳戶「${account ? account.account_name : ''}」`);
+            });
         };
 
         window.onTransferCompanyChange = function(side) {
@@ -1129,7 +1128,13 @@
                         showMessage(result.error, 'error');
                         return;
                     }
-                    showMessage(result.message || '轉帳已完成', 'success');
+                    const skipped = (result.effects || []).filter(e => !e.counted);
+                    if (skipped.length) {
+                        // 轉帳已記錄，但有一腿不會影響目前餘額（常見：日期早於該帳戶最近結算）——明確告訴使用者，避免誤以為系統算錯
+                        showMessage('轉帳已記錄，但請注意：' + skipped.map(e => `${e.side === 'from' ? '轉出' : '轉入'}帳戶「${e.account_name}」${e.reason}`).join('；'), 'error');
+                    } else {
+                        showMessage(result.message || '轉帳已完成', 'success');
+                    }
                     closeTransferModal();
                     loadTransactions();
                     loadStatistics();
@@ -1175,7 +1180,7 @@
         // 交易日期早於該帳戶最近一次結算時顯示提醒（不阻擋送出）：結算之後的交易
         // 才會被算進目前計算的帳戶餘額（見 utils/bankAccountBalance.js），日期早於
         // 結算的交易雖然會正常記錄，但不會讓餘額再往下扣，容易被誤以為系統算錯
-        function showBackdatedWarningIfNeeded(warningElId, date, company, account, accountNumber) {
+        function showBackdatedWarningIfNeeded(warningElId, date, company, account, accountNumber, prefix) {
             const warningEl = document.getElementById(warningElId);
             if (!warningEl || !date || !account) {
                 if (warningEl) warningEl.style.display = 'none';
@@ -1190,7 +1195,9 @@
                 .then(data => {
                     const settlement = data && data.data;
                     if (settlement && settlement.settlement_date && date < settlement.settlement_date) {
-                        warningEl.textContent = `⚠️ 這筆交易日期早於該帳戶最近一次結算（${settlement.settlement_date}），不會影響目前計算的帳戶餘額，請確認結算金額是否已包含此筆`;
+                        warningEl.textContent = prefix
+                            ? `${prefix}：轉帳日期早於該帳戶最近一次結算（${settlement.settlement_date}），這一筆不會影響它目前的餘額（結算金額已視為包含），請確認結算金額是否已包含此筆`
+                            : `⚠️ 這筆交易日期早於該帳戶最近一次結算（${settlement.settlement_date}），不會影響目前計算的帳戶餘額，請確認結算金額是否已包含此筆`;
                         warningEl.style.display = 'block';
                     } else {
                         warningEl.style.display = 'none';

@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const { db } = require('../database/db');
 const logger = require('./logger');
 const { writeOperationLog } = require('./operationLog');
-const { updateBankAccountBalance } = require('./bankAccountBalance');
+const { updateBankAccountBalance, describeBalanceImpact } = require('./bankAccountBalance');
 
 function insertLeg(row) {
     return new Promise((resolve, reject) => {
@@ -27,7 +27,8 @@ function insertLeg(row) {
  * @param req 用來寫操作日誌（取使用者）
  * @param opts { date, amount, from, to, category, remarks, fromDescription, toDescription }
  *   from / to: { company_name, account_name, account_number }
- * @returns { fromId, toId, transferGroupId }；轉入那一腿失敗會撤銷轉出那一腿再丟出錯誤
+ * @returns { fromId, toId, transferGroupId, effects }；轉入那一腿失敗會撤銷轉出那一腿再丟出錯誤
+ *   effects：兩腿各自會不會影響目前餘額 [{ side:'from'|'to', account_name, counted, reason }]，讓畫面能提醒「這一腿不會影響餘額」
  */
 async function createTransfer(req, opts) {
     const { date, amount, from, to, remarks } = opts;
@@ -55,7 +56,14 @@ async function createTransfer(req, opts) {
         } catch (balanceErr) {
             logger.error('更新帳戶餘額失敗:', balanceErr);
         }
-        return { fromId, toId, transferGroupId: groupId };
+        let effects = [];
+        try {
+            const [fe, te] = await Promise.all([describeBalanceImpact(from, date), describeBalanceImpact(to, date)]);
+            effects = [{ side: 'from', account_name: from.account_name, ...fe }, { side: 'to', account_name: to.account_name, ...te }];
+        } catch (effErr) {
+            logger.error('判斷轉帳對餘額的影響失敗:', effErr);
+        }
+        return { fromId, toId, transferGroupId: groupId, effects };
     } catch (err) {
         // 轉出那一腿成功、轉入那一腿失敗的話要撤銷，避免留下只扣款沒入帳的孤兒交易
         if (fromId) {

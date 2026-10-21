@@ -780,10 +780,10 @@ router.post('/transfer', requireEditor, async (req, res) => {
     }
 
     try {
-        const { fromId, toId } = await createTransfer(req, {
+        const { fromId, toId, effects } = await createTransfer(req, {
             date: transfer_date, amount, from, to, category, remarks
         });
-        res.json({ success: true, fromId, toId, message: '轉帳已完成' });
+        res.json({ success: true, fromId, toId, effects, message: '轉帳已完成' });
     } catch (err) {
         logger.error('轉帳錯誤:', err);
         res.status(500).json({ error: '轉帳失敗', details: err.message });

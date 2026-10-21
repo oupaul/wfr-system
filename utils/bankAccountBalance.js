@@ -87,4 +87,34 @@ async function updateBankAccountBalance(accountName, accountNumber = null, compa
     });
 }
 
-module.exports = { updateBankAccountBalance };
+/**
+ * 一筆收支（或轉帳的一腿）發生在 date，會不會影響這個帳戶「目前」的即時餘額？
+ * 轉帳常見的疑惑「A 銀行沒減少、B 銀行有增加」就是兩邊帳戶的最近結算日不同：
+ * 日期早於某帳戶最近結算日的那一腿，不會算進該帳戶（結算金額已視為包含）。
+ * @param ref { company_name, account_name, account_number }
+ * @returns {Promise<{ account_id, counted: boolean, reason: string|null }>}
+ */
+async function describeBalanceImpact(ref, date) {
+    const account = await new Promise((resolve, reject) => {
+        db.get(
+            `SELECT ba.id, c.name as company_name, ba.account_name, ba.account_number
+             FROM bank_accounts ba LEFT JOIN companies c ON ba.company_id = c.id
+             WHERE ba.account_name = ? AND IFNULL(c.name, '') = ? AND IFNULL(ba.account_number, '') = ? AND ba.is_active = 1
+             LIMIT 1`,
+            [ref.account_name, norm(ref.company_name), norm(ref.account_number)],
+            (err, row) => (err ? reject(err) : resolve(row)));
+    });
+    if (!account) return { account_id: null, counted: false, reason: '找不到對應的啟用中銀行帳戶（公司、帳戶名稱、帳號要與銀行帳戶完全一致）' };
+    const settlement = await getLatestSettlement(db, {
+        companyName: account.company_name || null, accountName: account.account_name, accountNumber: account.account_number || null
+    });
+    if (settlement && date < settlement.settlement_date) {
+        return { account_id: account.id, counted: false, reason: `日期 ${date} 早於該帳戶最近一次結算（${settlement.settlement_date}），結算金額已視為包含這筆，不會再影響目前餘額` };
+    }
+    if (date > todayInTaipei()) {
+        return { account_id: account.id, counted: false, reason: `日期 ${date} 在未來，到該日才會影響目前餘額` };
+    }
+    return { account_id: account.id, counted: true, reason: null };
+}
+
+module.exports = { updateBankAccountBalance, describeBalanceImpact };
