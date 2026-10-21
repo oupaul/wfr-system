@@ -419,6 +419,8 @@
 
             <div id="loading" class="loading" style="display: none;">載入中...</div>
 
+            <div id="dupAccountsNotice" style="display:none; background:#F8FAFC; border:1px solid #E2E8F0; border-left:4px solid #F06000; border-radius:6px; padding:12px 16px; margin-bottom:16px; line-height:1.7; color:#1E293B;"></div>
+
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
@@ -1118,6 +1120,18 @@
         function displayBankAccounts(accounts) {
             const tbody = document.getElementById('bankAccountsTable');
             
+            // 公司、帳戶名稱、帳號完全相同的啟用中帳戶，系統無法區分（交易會同時算進兩個帳戶、餘額只更新其中一個）
+            const dups = accounts.filter(a => a.identity_duplicate);
+            const notice = document.getElementById('dupAccountsNotice');
+            if (dups.length) {
+                notice.innerHTML = '<b>⚠ 有銀行帳戶的「公司＋帳戶名稱＋帳號」完全相同：</b>' + dups.map(a => `#${a.id} ${escapeHtml(a.bank_name || '')} ${escapeHtml(a.account_type || '')}`).join('、')
+                    + '<br>系統用這三項區分帳戶，無法分辨它們：交易會同時算進兩個帳戶、可用資金被重複計入、其中一個的即時餘額不會更新。'
+                    + '常見是同一個銀行帳號底下的活存與定存——請把其中一個的帳戶名稱改成不同（例如定存加上「定存」）。改名前請先洽管理員，因為既有的收支與結算記錄需要一併分開（見 scripts/split-duplicate-account.js）。';
+                notice.style.display = 'block';
+            } else {
+                notice.style.display = 'none';
+            }
+
             if (accounts.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="12" style="text-align: center; padding: 40px; color: #666;">尚無銀行帳戶記錄</td></tr>';
                 return;
@@ -1132,7 +1146,7 @@
                 <tr>
                     <td>${a.id}</td>
                     <td>${escapeHtml(a.company_name) || '-'}</td>
-                    <td>${escapeHtml(a.account_name) || '-'}</td>
+                    <td>${escapeHtml(a.account_name) || '-'}${a.identity_duplicate ? '<br><small style="color:#F06000;font-weight:bold;">⚠ 與其他帳戶身分相同</small>' : ''}</td>
                     <td>${escapeHtml(a.account_number) || '-'}</td>
                     <td>${escapeHtml(a.bank_name) || '-'}</td>
                     <td>${escapeHtml(a.branch_name) || '-'}</td>

@@ -10,6 +10,7 @@ const { getLatestSettlementsForAccounts } = require('../utils/settlementLookup')
 const { REMAINING_PRINCIPAL_SQL } = require('../utils/financingProjection');
 const { todayInTaipei, addDaysStr } = require('../utils/dateUtil');
 const { daysBetween } = require('../utils/financingSchedule');
+const { findDuplicateGroups } = require('../utils/accountIdentity');
 
 const SOON_DAYS = 7;          // 幾天內到期算「即將到期」
 const STALE_SETTLEMENT_DAYS = 35; // 超過幾天沒結算要提醒（月底對帳通常每月一次）
@@ -20,6 +21,17 @@ router.get('/', requireEditor, async (req, res) => {
         const today = todayInTaipei();
         const soonDate = addDaysStr(today, SOON_DAYS);
         const items = [];
+
+        // 0. 帳戶身分重複（公司＋名稱＋帳號完全相同）：系統無法區分，餘額與可用資金會算錯，優先處理
+        const dupGroups = await findDuplicateGroups(db);
+        if (dupGroups.length) {
+            items.push({
+                kind: 'duplicate_account', level: 'overdue', title: `${dupGroups.length} 組銀行帳戶的公司、名稱、帳號完全相同`,
+                detail: dupGroups.map((g) => `${g[0].account_name}（${g[0].account_number ? '帳號末四碼 ' + String(g[0].account_number).replace(/[^0-9A-Za-z]/g, '').slice(-4) : '無帳號'}）：${g.map((a) => `#${a.id} ${[a.bank_name, a.account_type].filter(Boolean).join('・')}`).join('、')}`).join('；')
+                    + '。系統無法區分，餘額與可用資金會算錯；常見是同一個帳號底下的活存與定存，請把定存帳戶改名（例如加上「定存」）',
+                href: '/bank-accounts.html', action: '前往銀行帳戶'
+            });
+        }
 
         // 1. 週期範本：已到期未確認／即將到期
         const templates = await dbAll(

@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const { db } = require('../database/db');
 const logger = require('./logger');
 const { writeOperationLog } = require('./operationLog');
+const { sameIdentity, IDENTITY_HINT } = require('./accountIdentity');
 const { updateBankAccountBalance, describeBalanceImpact } = require('./bankAccountBalance');
 
 function insertLeg(row) {
@@ -35,6 +36,10 @@ async function createTransfer(req, opts) {
     const category = opts.category || '轉帳';
     const fromDescription = opts.fromDescription || `轉帳至 ${to.account_name}`;
     const toDescription = opts.toDescription || `轉帳自 ${from.account_name}`;
+    // 最後防線：兩個帳戶身分（公司＋名稱＋帳號）完全相同，系統無法區分，轉帳兩腿會互相抵銷、餘額算錯
+    if (sameIdentity(from, to)) {
+        throw Object.assign(new Error('轉出與轉入帳戶的公司、名稱、帳號完全相同，系統無法區分兩者。' + IDENTITY_HINT), { userError: true });
+    }
     const groupId = crypto.randomUUID();
 
     let fromId = null;

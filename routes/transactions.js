@@ -785,6 +785,7 @@ router.post('/transfer', requireEditor, async (req, res) => {
         });
         res.json({ success: true, fromId, toId, effects, message: '轉帳已完成' });
     } catch (err) {
+        if (err.userError) return res.status(400).json({ error: err.message });
         logger.error('轉帳錯誤:', err);
         res.status(500).json({ error: '轉帳失敗', details: err.message });
     }

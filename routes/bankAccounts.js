@@ -1,4 +1,5 @@
 const express = require('express');
+const { findIdentityConflict, findDuplicateGroups, sameIdentity, conflictMessage, identityKey } = require('../utils/accountIdentity');
 const router = express.Router();
 const { db } = require('../database/db');
 const logger = require('../utils/logger');
@@ -79,12 +80,19 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY ba.account_name ASC';
 
-    db.all(query, params, (err, rows) => {
+    db.all(query, params, async (err, rows) => {
         if (err) {
             logger.error('查詢錯誤:', err);
             return res.status(500).json({ error: '查詢失敗', details: err.message });
         }
-        res.json({ data: rows, count: rows.length });
+        // 身分（公司＋名稱＋帳號）相同的啟用中帳戶標記出來，畫面會提醒（系統無法區分它們，餘額與歸戶會出錯）
+        let dupIds = new Set();
+        try {
+            dupIds = new Set((await findDuplicateGroups(db)).flat().map((a) => a.id));
+        } catch (dupErr) {
+            logger.error('檢查帳戶身分重複失敗:', dupErr);
+        }
+        res.json({ data: rows.map((r) => ({ ...r, identity_duplicate: dupIds.has(r.id) })), count: rows.length });
     });
 });
 
@@ -174,6 +182,14 @@ router.post('/', requireEditor, async (req, res) => {
         return res.status(500).json({ error: '新增失敗', details: e.message });
     }
     if (depositParsed && depositParsed.error) return res.status(400).json({ error: depositParsed.error });
+    try {
+        if ((is_active === undefined ? 1 : is_active) && !(is_active === 0 || is_active === '0' || is_active === false)) {
+            const conflict = await findIdentityConflict(db, { company_id, account_name, account_number });
+            if (conflict) return res.status(400).json({ error: conflictMessage(conflict) });
+        }
+    } catch (e) {
+        return res.status(500).json({ error: '新增失敗', details: e.message });
+    }
 
     db.run(
         `INSERT INTO bank_accounts 
@@ -209,6 +225,14 @@ router.put('/:id', requireEditor, async (req, res) => {
         return res.status(500).json({ error: '更新失敗', details: e.message });
     }
     if (depositParsed && depositParsed.error) return res.status(400).json({ error: depositParsed.error });
+    try {
+        if (!(is_active === 0 || is_active === '0' || is_active === false)) {
+            const conflict = await findIdentityConflict(db, { company_id, account_name, account_number }, id);
+            if (conflict) return res.status(400).json({ error: conflictMessage(conflict) });
+        }
+    } catch (e) {
+        return res.status(500).json({ error: '更新失敗', details: e.message });
+    }
     db.get('SELECT * FROM bank_accounts WHERE id = ?', [id], (err, oldRow) => {
         if (err || !oldRow) {
             if (!oldRow) return res.status(404).json({ error: '找不到記錄' });
@@ -256,6 +280,19 @@ router.put('/:id', requireEditor, async (req, res) => {
 
                         if (!identityChanged || !oldCompanyName) {
                             return finish();
+                        }
+
+                        // 還有另一個啟用中帳戶沿用舊的公司／名稱／帳號（身分重複）：既有收支與結算記錄分不出哪些屬於這個帳戶，
+                        // 整批改名會把另一個帳戶的記錄也搬走，所以不連動修改，請用 scripts/split-duplicate-account.js 指定要搬的記錄
+                        let stillShared = null;
+                        try {
+                            stillShared = await findIdentityConflict(db, { company_id: oldRow.company_id, account_name: oldRow.account_name, account_number: oldRow.account_number }, id);
+                        } catch (e) {
+                            logger.error('檢查舊身分是否仍被其他帳戶使用失敗:', e);
+                        }
+                        if (stillShared) {
+                            writeOperationLog(req, 'update', 'bank_account', id, oldRow, afterData, '銀行帳戶 #' + id + ' ' + (account_name || '') + '（身分與帳戶 #' + stillShared.id + ' 重複，未連動修改既有收支與結算記錄）');
+                            return res.json({ success: true, warning: true, message: `銀行帳戶已更新。注意：帳戶 #${stillShared.id} 仍使用原本相同的公司／名稱／帳號，既有的收支與結算記錄沒有被搬動（分不出哪些屬於這個帳戶）。請管理員用 scripts/split-duplicate-account.js 指定要搬到新名稱的記錄。` });
                         }
 
                         const matchWhere = `company_name = ? AND account_name = ? AND (account_number = ? OR (account_number IS NULL AND ? IS NULL))`;
@@ -384,6 +421,7 @@ router.post('/:id/deposit-open', requireEditor, async (req, res) => {
             if (dest.account_type !== '定存') return res.status(400).json({ error: '轉入的帳戶必須是定存帳戶' });
             if ((dest.company_id || null) !== (source.company_id || null)) return res.status(400).json({ error: '定存帳戶必須與來源帳戶屬於同一家公司' });
             if (dest.id === source.id) return res.status(400).json({ error: '轉入與轉出不能是同一個帳戶' });
+            if (sameIdentity(accountRef(source), accountRef(dest))) return res.status(400).json({ error: '轉出帳戶與定存帳戶的公司、名稱、帳號完全相同，系統無法區分兩者（餘額會算錯）。請先把定存帳戶的名稱改成不同（例如加上「定存」），並請管理員處理既有的重複帳戶。' });
             await updateBankAccountBalance(dest.account_name, dest.account_number, dest.company_name || null);
             const destFresh = await dbGet(ACCOUNT_WITH_COMPANY_SQL, [dest.id]);
             if ((parseFloat(destFresh.current_balance) || 0) > 0.005) {
@@ -422,6 +460,7 @@ router.post('/:id/deposit-open', requireEditor, async (req, res) => {
             // 轉帳失敗就把剛新增的空定存帳戶一併移除
             db.run('DELETE FROM bank_accounts WHERE id = ?', [createdAccountId], () => {});
         }
+        if (err.userError) return res.status(400).json({ error: err.message });
         logger.error('轉定存錯誤:', err);
         res.status(500).json({ error: '轉定存失敗', details: err.message });
     }
@@ -455,6 +494,7 @@ router.post('/:id/deposit-close', requireEditor, async (req, res) => {
         const target = await dbGet(ACCOUNT_WITH_COMPANY_SQL, [targetId]);
         if (!target || !target.is_active) return res.status(400).json({ error: '轉回的帳戶不存在或已停用' });
         if (target.id === fresh.id) return res.status(400).json({ error: '轉回的帳戶不能是定存帳戶本身' });
+        if (sameIdentity(accountRef(fresh), accountRef(target))) return res.status(400).json({ error: '定存帳戶與轉回的活存帳戶公司、名稱、帳號完全相同，系統無法區分兩者（餘額會算錯）。請先把其中一個的名稱改成不同（例如定存加上「定存」）。' });
 
         const atMaturity = fresh.deposit_maturity_date && date >= fresh.deposit_maturity_date;
         const kind = atMaturity ? '定存到期' : '定存解約';
@@ -491,6 +531,7 @@ router.post('/:id/deposit-close', requireEditor, async (req, res) => {
                 + (ended ? '' : `（部分解約，定存帳戶尚有 ${(balance - prin).toLocaleString('en-US')} 元）`)
         });
     } catch (err) {
+        if (err.userError) return res.status(400).json({ error: err.message });
         logger.error('定存解約錯誤:', err);
         res.status(500).json({ error: '解約失敗', details: err.message });
     }
