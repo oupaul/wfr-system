@@ -5,7 +5,11 @@ const logger = require('../utils/logger');
 const { requireAuth, requireAdmin, requireEditor } = require('../middleware/auth');
 const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
-const { calculateSettlement } = require('../utils/settlementCalc');
+const { calculateSettlement, resolveIdentity } = require('../utils/settlementCalc');
+const { recordFee, FEE_CATEGORY } = require('../utils/feeRecord');
+const { addDaysStr } = require('../utils/dateUtil');
+
+const MAX_FEE_ADJUSTMENT = 10000; // 結算差異補登成手續費的上限；差異更大多半是漏登其他收支，不該直接當手續費
 
 // 取得所有結算記錄
 // bank_name / account_type 透過比對 bank_accounts 查出來（balance_settlements
@@ -134,7 +138,28 @@ router.post('/', requireEditor, (req, res) => {
         return res.status(400).json({ error: 'settlement_date、company_name 和 actual_balance 為必填欄位' });
     }
 
-    const calculatePromise = calculateSettlement({ settlement_date, company_name, account_name, account_number })
+    // 「把差異補登為手續費」：系統算的比銀行實際多出一點（銀行扣了手續費但還沒登記）時，先補一筆手續費支出，
+    // 再重算，結算的計算餘額就會等於實際餘額（差異 0）。日期放在結算日前一天——結算是「結算日當天開始前」的餘額，
+    // 前一天落在這次結算的期間內才會被算進去。
+    const bookFee = req.body.book_difference_as_fee === true;
+    let feeTransactionId = null;
+    const feeAdjustment = async () => {
+        if (!bookFee) return;
+        if (!account_name) throw Object.assign(new Error('要補登手續費必須選擇帳戶'), { userError: true });
+        const c0 = await calculateSettlement({ settlement_date, company_name, account_name, account_number });
+        const diff = parseFloat(actual_balance) - c0.calculated_balance;
+        const fee = Math.round(-diff * 100) / 100;
+        if (!(fee > 0.004)) throw Object.assign(new Error('目前沒有「系統比銀行多」的差異，無法補登成手續費'), { userError: true });
+        if (fee > MAX_FEE_ADJUSTMENT) throw Object.assign(new Error(`差異 ${fee.toLocaleString('en-US')} 元超過 ${MAX_FEE_ADJUSTMENT.toLocaleString('en-US')} 元，不像是手續費，請先檢查是否漏登其他收支`), { userError: true });
+        const identity = await resolveIdentity({ company_name, account_name, account_number });
+        feeTransactionId = await recordFee(req, {
+            date: addDaysStr(settlement_date, -1), amount: fee, account: identity,
+            description: '手續費（結算差異補登）', remarks: `結算 ${settlement_date} 銀行實際餘額與系統差異`
+        });
+    };
+
+    const calculatePromise = feeAdjustment()
+        .then(() => calculateSettlement({ settlement_date, company_name, account_name, account_number }))
         .then((c) => ({
             previous_settlement_date: c.previous_settlement_date,
             opening_balance: c.opening_balance,
@@ -158,6 +183,7 @@ router.post('/', requireEditor, (req, res) => {
             async function(err) {
                 if (err) {
                     logger.error('新增結算錯誤:', err);
+                    if (feeTransactionId) db.run('DELETE FROM transactions WHERE id = ?', [feeTransactionId], (delErr) => { if (delErr) logger.error('回滾手續費記錄失敗，交易 #' + feeTransactionId + ' 可能殘留，請手動檢查:', delErr); });
                     return res.status(500).json({ error: '新增失敗', details: err.message });
                 }
 
@@ -175,12 +201,14 @@ router.post('/', requireEditor, (req, res) => {
                 res.json({
                     success: true,
                     id: newId,
-                    message: '結算記錄已新增',
+                    fee_transaction_id: feeTransactionId,
+                    message: feeTransactionId ? `結算記錄已新增，並把差異補登為手續費支出（日期 ${addDaysStr(settlement_date, -1)}）` : '結算記錄已新增',
                     data: { ...calcData, id: newId }
                 });
             }
         );
     }).catch(err => {
+        if (err.userError) return res.status(400).json({ error: err.message });
         logger.error('計算結算數據錯誤:', err);
         res.status(500).json({ error: '計算失敗', details: err.message });
     });

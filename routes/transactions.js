@@ -12,6 +12,7 @@ const { getLatestSettlement } = require('../utils/settlementLookup');
 const { requireEditor } = require('../middleware/auth');
 const bulk = require('../utils/bulkTransactions');
 const { createTransfer } = require('../utils/transfer');
+const { parseFee, recordFee } = require('../utils/feeRecord');
 
 // 確保上傳目錄存在
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -779,11 +780,26 @@ router.post('/transfer', requireEditor, async (req, res) => {
         return res.status(400).json({ error: '轉出帳戶與轉入帳戶不能是同一個帳戶' });
     }
 
+    // 選填的手續費：另記一筆「手續費」支出（扣在轉出帳戶，同一天），不併入轉帳群組、也不併入轉帳金額
+    const fee = parseFee(req.body.fee);
+    if (fee.error) return res.status(400).json({ error: fee.error });
+
     try {
         const { fromId, toId, effects } = await createTransfer(req, {
             date: transfer_date, amount, from, to, category, remarks
         });
-        res.json({ success: true, fromId, toId, effects, message: '轉帳已完成' });
+        let message = '轉帳已完成';
+        let feeId = null;
+        if (fee.amount > 0) {
+            try {
+                feeId = await recordFee(req, { date: transfer_date, amount: fee.amount, account: from, description: `轉帳手續費（${from.account_name} → ${to.account_name}）`, remarks });
+                message += `，另記手續費 ${fee.amount.toLocaleString('en-US')} 元`;
+            } catch (feeErr) {
+                logger.error('記錄轉帳手續費失敗（轉帳已完成）:', feeErr);
+                message += `；但手續費 ${fee.amount.toLocaleString('en-US')} 元記錄失敗，請到收支記錄手動新增一筆類別「手續費」的支出`;
+            }
+        }
+        res.json({ success: true, fromId, toId, feeId, effects, message });
     } catch (err) {
         if (err.userError) return res.status(400).json({ error: err.message });
         logger.error('轉帳錯誤:', err);

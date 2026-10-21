@@ -624,6 +624,11 @@
                         <label for="depositOpenRemarks">備註</label>
                         <input type="text" id="depositOpenRemarks" placeholder="例如：定存單號">
                     </div>
+                    <div class="form-group">
+                        <label for="depositOpenFee">手續費（選填）</label>
+                        <input type="number" id="depositOpenFee" step="0.01" min="0" placeholder="0">
+                        <small style="color:#64748B;">銀行另外收的費用，會另記一筆類別「手續費」的支出（扣在轉出的活存帳戶），不併入轉定存金額</small>
+                    </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeDepositOpenModal()">取消</button>
                         <button type="submit" class="btn btn-primary" id="depositOpenSubmit">確認轉定存</button>
@@ -668,6 +673,11 @@
                     <div class="form-group">
                         <label for="depositCloseRemarks">備註</label>
                         <input type="text" id="depositCloseRemarks">
+                    </div>
+                    <div class="form-group">
+                        <label for="depositCloseFee">手續費（選填）</label>
+                        <input type="number" id="depositCloseFee" step="0.01" min="0" placeholder="0">
+                        <small style="color:#64748B;">提前解約等銀行扣的費用，會另記一筆類別「手續費」的支出（扣在轉回的活存帳戶）；本金與利息請照銀行實際入帳填，不要自己先扣掉手續費</small>
                     </div>
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeDepositCloseModal()">取消</button>
@@ -951,7 +961,8 @@
                 amount: parseFloat(document.getElementById('depositOpenAmount').value),
                 interest_rate: document.getElementById('depositOpenRate').value,
                 maturity_date: document.getElementById('depositOpenMaturity').value,
-                remarks: document.getElementById('depositOpenRemarks').value
+                remarks: document.getElementById('depositOpenRemarks').value,
+                fee: document.getElementById('depositOpenFee').value
             };
             if (target === '__new__') {
                 body.new_account = {
@@ -1040,7 +1051,8 @@
                 principal: parseFloat(document.getElementById('depositClosePrincipal').value),
                 interest: document.getElementById('depositCloseInterest').value || 0,
                 to_account_id: parseInt(document.getElementById('depositCloseTarget').value, 10),
-                remarks: document.getElementById('depositCloseRemarks').value
+                remarks: document.getElementById('depositCloseRemarks').value,
+                fee: document.getElementById('depositCloseFee').value
             };
             const targetName = document.getElementById('depositCloseTarget').selectedOptions[0].textContent;
             if (!confirm(`確定將「${dep.account_name}」的本金 ${fmt(body.principal)} 元轉回「${targetName}」`

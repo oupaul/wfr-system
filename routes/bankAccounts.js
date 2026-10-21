@@ -7,6 +7,7 @@ const { writeOperationLog } = require('../utils/operationLog');
 const { updateBankAccountBalance } = require('../utils/bankAccountBalance');
 const { requireEditor } = require('../middleware/auth');
 const { createTransfer } = require('../utils/transfer');
+const { parseFee, recordFee } = require('../utils/feeRecord');
 const { todayInTaipei } = require('../utils/dateUtil');
 const { estimateInterest } = require('../utils/deposit');
 
@@ -407,6 +408,8 @@ router.post('/:id/deposit-open', requireEditor, async (req, res) => {
         if (!isValidDateStr(date)) return res.status(400).json({ error: '存入日期格式不正確' });
         const amt = Number(amount);
         if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ error: '金額必須大於 0' });
+        const openFee = parseFee(req.body.fee);
+        if (openFee.error) return res.status(400).json({ error: openFee.error });
 
         const deposit = await parseDepositFields({
             deposit_interest_rate: interest_rate, deposit_start_date: date,
@@ -454,7 +457,17 @@ router.post('/:id/deposit-open', requireEditor, async (req, res) => {
         });
         await saveDepositFields(dest.id, deposit.fields);
         writeOperationLog(req, 'update', 'bank_account', dest.id, { deposit: null }, { deposit_interest_rate: deposit.fields.rate, deposit_start_date: deposit.fields.start, deposit_maturity_date: deposit.fields.maturity, deposit_return_account_id: deposit.fields.returnId }, `定存 ${dest.account_name} 存入 ${amt}`);
-        res.json({ success: true, fromId, toId, to_account_id: dest.id, message: `已轉入定存「${dest.account_name}」${amt.toLocaleString('en-US')} 元` });
+        let openMessage = `已轉入定存「${dest.account_name}」${amt.toLocaleString('en-US')} 元`;
+        if (openFee.amount > 0) {
+            try {
+                await recordFee(req, { date, amount: openFee.amount, account: accountRef(source), description: `轉定存手續費（${source.account_name} → ${dest.account_name}）`, remarks });
+                openMessage += `，另記手續費 ${openFee.amount.toLocaleString('en-US')} 元`;
+            } catch (feeErr) {
+                logger.error('記錄轉定存手續費失敗（轉定存已完成）:', feeErr);
+                openMessage += `；但手續費記錄失敗，請到收支記錄手動新增一筆類別「手續費」的支出`;
+            }
+        }
+        res.json({ success: true, fromId, toId, to_account_id: dest.id, message: openMessage });
     } catch (err) {
         if (createdAccountId) {
             // 轉帳失敗就把剛新增的空定存帳戶一併移除
@@ -489,6 +502,9 @@ router.post('/:id/deposit-close', requireEditor, async (req, res) => {
         const intr = interest === undefined || interest === null || interest === '' ? 0 : Number(interest);
         if (!Number.isFinite(intr) || intr < 0) return res.status(400).json({ error: '利息必須是大於或等於 0 的數字' });
 
+        const closeFee = parseFee(req.body.fee);
+        if (closeFee.error) return res.status(400).json({ error: closeFee.error });
+
         const targetId = to_account_id || fresh.deposit_return_account_id;
         if (!targetId) return res.status(400).json({ error: '請選擇要轉回的活存帳戶' });
         const target = await dbGet(ACCOUNT_WITH_COMPANY_SQL, [targetId]);
@@ -516,6 +532,17 @@ router.post('/:id/deposit-close', requireEditor, async (req, res) => {
             await updateBankAccountBalance(target.account_name, target.account_number, target.company_name || null);
         }
 
+        let feeNote = '';
+        if (closeFee.amount > 0) {
+            try {
+                await recordFee(req, { date, amount: closeFee.amount, account: accountRef(target), description: `${kind}手續費（${fresh.account_name}）`, remarks });
+                feeNote = `，另記手續費 ${closeFee.amount.toLocaleString('en-US')} 元`;
+            } catch (feeErr) {
+                logger.error('記錄解約手續費失敗（解約已完成）:', feeErr);
+                feeNote = '；但手續費記錄失敗，請到收支記錄手動新增一筆類別「手續費」的支出';
+            }
+        }
+
         const ended = prin >= balance - 0.005;
         if (ended) {
             await saveDepositFields(fresh.id, { rate: null, start: null, maturity: null, returnId: null });
@@ -528,6 +555,7 @@ router.post('/:id/deposit-close', requireEditor, async (req, res) => {
             success: true, fromId, toId, interestId, ended,
             message: `${kind}完成：本金 ${prin.toLocaleString('en-US')} 元轉回「${target.account_name}」`
                 + (intr > 0 ? `，利息 ${intr.toLocaleString('en-US')} 元已記為收入` : '')
+                + feeNote
                 + (ended ? '' : `（部分解約，定存帳戶尚有 ${(balance - prin).toLocaleString('en-US')} 元）`)
         });
     } catch (err) {

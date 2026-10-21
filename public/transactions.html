@@ -907,6 +907,12 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label for="transferFee">手續費（選填）</label>
+                        <input type="number" id="transferFee" step="0.01" min="0" placeholder="0">
+                        <small style="color:#64748B; display:block; margin-top:4px;">銀行另外收的跨行／匯款手續費。會另記一筆類別「手續費」的支出（扣在轉出帳戶、同一天），不併入轉帳金額，統計報表看得到。事後才知道金額也可以到收支記錄補登。</small>
+                    </div>
+
                     <div class="form-actions">
                         <button type="button" class="btn btn-cancel" onclick="closeTransferModal()">取消</button>
                         <button type="submit" class="btn btn-primary">確認轉帳</button>
@@ -1114,7 +1120,8 @@
                 from: { company_name: fromAccount.company_name, account_name: fromAccount.account_name, account_number: fromAccount.account_number },
                 to: { company_name: toAccount.company_name, account_name: toAccount.account_name, account_number: toAccount.account_number },
                 category: document.getElementById('transferCategory').value,
-                remarks: document.getElementById('transferRemarks').value
+                remarks: document.getElementById('transferRemarks').value,
+                fee: document.getElementById('transferFee').value
             };
 
             fetch(`${API_BASE}/transactions/transfer`, {

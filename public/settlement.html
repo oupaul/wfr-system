@@ -609,7 +609,11 @@
                         <div id="actualBalanceSection" class="actual-balance-section">
                             <div class="form-group">
                                 <label for="actualBalance">實際餘額 <span class="required">*</span></label>
-                                <input type="number" id="actualBalance" step="0.01" placeholder="輸入實際餘額">
+                                <input type="number" id="actualBalance" step="0.01" placeholder="輸入實際餘額" oninput="updateActualDiffHint()">
+                                <div id="actualDiffHint" style="display:none; margin-top:8px; padding:8px 12px; border-left:4px solid #F06000; background:#F8FAFC; border-radius:4px; font-size:13px; line-height:1.7; color:#1E293B;"></div>
+                                <label id="feeAdjustWrap" style="display:none; margin-top:8px; font-size:13px; font-weight:normal; cursor:pointer;">
+                                    <input type="checkbox" id="feeAdjust" style="width:auto; margin-right:6px;"><span id="feeAdjustText"></span>
+                                </label>
                                 <small style="color: #666; font-size: 12px; margin-top: 5px; display: block;">
                                     期初餘額請輸入實際的帳戶餘額。請填「結算日當天開始前」的餘額（前一天收盤）；結算日當天的收支會另外計入結算之後的餘額
                                 </small>
@@ -1087,6 +1091,39 @@
             toggleInitialBalance();
         }
 
+        // 輸入銀行實際餘額時，即時顯示和系統計算餘額的差異。系統比銀行多一點（銀行扣了手續費但還沒登記）時，
+        // 提供一個勾選：把這筆差異補登成「手續費」支出，儲存後計算餘額就會等於實際餘額
+        const FEE_ADJUST_MAX = 10000;
+        window.updateActualDiffHint = function() {
+            const hint = document.getElementById('actualDiffHint');
+            const wrap = document.getElementById('feeAdjustWrap');
+            const box = document.getElementById('feeAdjust');
+            const raw = document.getElementById('actualBalance').value;
+            const calcAttr = document.getElementById('calcContent').getAttribute('data-calculated-balance');
+            wrap.style.display = 'none';
+            if (raw === '' || calcAttr === null) { hint.style.display = 'none'; box.checked = false; return; }
+            const actual = parseFloat(raw);
+            const calc = parseFloat(calcAttr) || 0;
+            const diff = Math.round((actual - calc) * 100) / 100;
+            const fmtN = (n) => Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+            hint.style.display = 'block';
+            if (Math.abs(diff) < 0.005) {
+                hint.textContent = '✓ 與系統計算餘額一致，沒有差異。';
+                box.checked = false;
+            } else if (diff < 0) {
+                hint.innerHTML = `差異 <b>-${fmtN(diff)}</b>：系統算的比銀行多 ${fmtN(diff)} 元。`
+                    + (Math.abs(diff) <= FEE_ADJUST_MAX ? '金額不大，通常是銀行扣了手續費（跨行轉帳、匯款、帳戶管理費…）還沒登記。' : '金額偏大，請先檢查該期間有沒有漏登支出或重複登記收入。');
+                if (Math.abs(diff) <= FEE_ADJUST_MAX) {
+                    const d = new Date(document.getElementById('settlementDate').value + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() - 1);
+                    document.getElementById('feeAdjustText').textContent = `把這 ${fmtN(diff)} 元差異補登為「手續費」支出（日期 ${d.toISOString().slice(0, 10)}，記在這個帳戶）`;
+                    wrap.style.display = 'block';
+                }
+            } else {
+                hint.innerHTML = `差異 <b>+${fmtN(diff)}</b>：銀行比系統多 ${fmtN(diff)} 元，可能漏登收入（例如利息、客戶匯款）。`;
+                box.checked = false;
+            }
+        };
+
         // 切換期初餘額選項
         window.toggleInitialBalance = function() {
             const checkbox = document.getElementById('isInitialBalance');
@@ -1100,6 +1137,7 @@
                 section.classList.remove('show');
                 input.required = false;
                 input.value = '';
+                updateActualDiffHint();
             }
         };
 
@@ -1146,6 +1184,7 @@
                     account_name: accountName || null,
                     account_number: accountNumber || null,
                     actual_balance: actualBalance,
+                    book_difference_as_fee: isInitialBalance && !!(document.getElementById('feeAdjust') && document.getElementById('feeAdjust').checked),
                     remarks: remarks || null
                 })
             })

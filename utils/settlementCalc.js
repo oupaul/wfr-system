@@ -83,4 +83,4 @@ async function calculateSettlement(input, excludeId = null) {
     };
 }
 
-module.exports = { calculateSettlement };
+module.exports = { calculateSettlement, resolveIdentity };
