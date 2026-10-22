@@ -287,8 +287,8 @@ if ! command -v node &> /dev/null; then
     
     case $choice in
         1)
-            echo "正在從 NodeSource 安裝 Node.js 18.x..."
-            curl -fsSL https://deb.nodesource.com/setup_18.x | bash -
+            echo "正在從 NodeSource 安裝 Node.js 22.x..."
+            curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
             apt-get install -y nodejs
             ;;
         2)
@@ -312,11 +312,12 @@ NPM_VERSION=$(npm --version)
 echo -e "${GREEN}✓ Node.js 版本: $NODE_VERSION${NC}"
 echo -e "${GREEN}✓ npm 版本: $NPM_VERSION${NC}"
 
-# 檢查 Node.js 版本是否 >= 18
-NODE_MAJOR_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
-if [ "$NODE_MAJOR_VERSION" -lt 18 ]; then
-    echo -e "${RED}❌ Node.js 版本需要 18.x 或更高版本${NC}"
+# 檢查 Node.js 版本是否 >= 20.17（package.json engines；sqlite3 6 需要）
+if ! node -e "const c=process.versions.node.split('.').map(Number); process.exit((c[0]>20||(c[0]===20&&c[1]>=17))?0:1)"; then
+    echo -e "${RED}❌ Node.js 版本需要 20.17 或更高版本${NC}"
     echo "目前版本: $NODE_VERSION"
+    echo "升級方式（Ubuntu）："
+    echo "  curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
     exit 1
 fi
 
@@ -329,11 +330,17 @@ if [ ! -f "package.json" ]; then
     exit 1
 fi
 
-npm install
+npm install --omit=dev --no-audit --no-fund
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ 依賴安裝失敗${NC}"
     exit 1
+fi
+
+# 原生模組要能載入；新版 npm 的安裝腳本管控可能略過編譯，失敗就重新編譯一次
+if ! node -e "require('sqlite3');require('argon2')" 2>/dev/null; then
+    echo -e "${YELLOW}⚠ 原生模組載入失敗，重新編譯...${NC}"
+    npm rebuild sqlite3 argon2 || { echo -e "${RED}❌ sqlite3／argon2 編譯失敗（需要 build-essential、python3）${NC}"; exit 1; }
 fi
 
 echo -e "${GREEN}✓ 依賴套件安裝完成${NC}"

@@ -148,7 +148,25 @@ fi
 # 6. 安裝/更新相依套件（package.json 有變更才需要，但每次跑一次成本很低）
 echo "6. 檢查相依套件..."
 if [ -f "package.json" ]; then
-    npm install --production 2>&1 | tail -5
+    # Node.js 版本門檻：package.json 的 engines.node（目前 >=20.17.0，sqlite3 6 需要）。
+    # 版本不夠時在安裝套件「之前」停下來：服務仍用舊套件繼續運行，不會被裝壞；升級 Node 後重新執行本腳本即可。
+    REQUIRED_NODE=$(node -p "((require('./package.json').engines||{}).node||'').replace(/[^0-9.]/g,'')" 2>/dev/null || echo "")
+    if [ -n "$REQUIRED_NODE" ]; then
+        if ! node -e "const r='$REQUIRED_NODE'.split('.').map(Number), c=process.versions.node.split('.').map(Number); for (let i=0;i<3;i++){ if((c[i]||0)>(r[i]||0)) process.exit(0); if((c[i]||0)<(r[i]||0)) process.exit(1); } process.exit(0)"; then
+            echo -e "${RED}❌ 這個版本需要 Node.js $REQUIRED_NODE 以上，目前是 $(node --version)${NC}"
+            echo "   服務尚未重啟，仍使用舊版套件正常運行。請先升級 Node.js（Ubuntu 例）："
+            echo "     curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs"
+            echo "   升級後重新執行 ./update.sh 即可。"
+            exit 1
+        fi
+    fi
+    npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5
+    # 原生模組（sqlite3、argon2）要能載入；新版 npm 的安裝腳本管控可能略過編譯，載入失敗就重新編譯一次
+    if ! node -e "require('sqlite3');require('argon2')" 2>/dev/null; then
+        echo -e "${YELLOW}⚠ 原生模組載入失敗，重新編譯（需要 build-essential、python3）...${NC}"
+        npm rebuild sqlite3 argon2 2>&1 | tail -5
+        node -e "require('sqlite3');require('argon2')" 2>/dev/null || { echo -e "${RED}❌ sqlite3／argon2 仍無法載入，請檢查上方錯誤後再重啟服務${NC}"; exit 1; }
+    fi
     echo -e "${GREEN}✓ 相依套件已更新${NC}"
 fi
 echo ""

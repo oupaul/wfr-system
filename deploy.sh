@@ -4,7 +4,7 @@
 # 全新主機上貼一行就好（用有 sudo 權限的一般帳號執行，服務會以這個帳號運行）：
 #   curl -fsSL https://raw.githubusercontent.com/oupaul/wfr-system/main/deploy.sh | sudo bash -s -- --port 6664 --name cashflow-prod
 #
-# 做的事：安裝必要工具與 Node.js（已有 18 以上就沿用）→ git clone 到 /opt/<名稱> → npm 安裝 → 初始化資料庫
+# 做的事：安裝必要工具與 Node.js（已有 20.17 以上就沿用）→ git clone 到 /opt/<名稱> → npm 安裝 → 初始化資料庫
 #         → 建立 admin 隨機密碼（只顯示一次）→ 寫 .env（隨機 SESSION_SECRET）→ 建立並啟動 systemd 服務 → 健康檢查。
 # 全程不需要回答任何問題。已存在的部署目錄或服務不會被覆蓋（會直接停下來，要更新請用該目錄的 ./update.sh）。
 #
@@ -99,18 +99,19 @@ main() {
         command -v git >/dev/null 2>&1 || die "找不到 git"
     fi
 
-    # ---- 2. Node.js（已有 18 以上就沿用，包含 nvm 安裝的）----
+    # ---- 2. Node.js（已有 20.17 以上就沿用，包含 nvm 安裝的）----
     local NODE_BIN
     NODE_BIN="$(run_as bash -lc 'command -v node' 2>/dev/null || true)"
     if [ -z "$NODE_BIN" ] && command -v node >/dev/null 2>&1; then NODE_BIN="$(command -v node)"; fi
-    local NODE_MAJOR=0
-    if [ -n "$NODE_BIN" ]; then NODE_MAJOR="$("$NODE_BIN" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"; fi
-    if [ "$NODE_MAJOR" -lt 18 ]; then
-        [ "$SKIP_PACKAGES" = false ] || die "需要 Node.js 18 以上"
-        say "安裝 Node.js 20（目前：${NODE_MAJOR:-無}）..."
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null
+    # 需要 Node.js 20.17 以上（package.json engines；sqlite3 6 需要）
+    node_ok() { "$1" -e "const c=process.versions.node.split('.').map(Number); process.exit((c[0]>20||(c[0]===20&&c[1]>=17))?0:1)" 2>/dev/null; }
+    if [ -z "$NODE_BIN" ] || ! node_ok "$NODE_BIN"; then
+        [ "$SKIP_PACKAGES" = false ] || die "需要 Node.js 20.17 以上（目前：${NODE_BIN:+$("$NODE_BIN" --version)}${NODE_BIN:-未安裝}）"
+        say "安裝 Node.js 22（目前：${NODE_BIN:+$("$NODE_BIN" --version)}${NODE_BIN:-未安裝}）..."
+        curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null
         apt-get install -y nodejs >/dev/null
         NODE_BIN="$(command -v node)"
+        node_ok "$NODE_BIN" || die "Node.js 安裝後版本仍不符（需要 20.17 以上）"
     fi
     local NODE_DIR; NODE_DIR="$(dirname "$NODE_BIN")"
     ok "Node.js $("$NODE_BIN" --version)（$NODE_BIN）"
@@ -129,6 +130,12 @@ main() {
     say "安裝套件（第一次約需 1～3 分鐘，sqlite3／argon2 有預編譯檔時很快）..."
     ( cd "$DIR" && { nr npm ci --omit=dev --no-audit --no-fund >/dev/null 2>&1 || nr npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1; } ) \
         || die "npm 安裝失敗。請進 $DIR 執行 'npm rebuild sqlite3 argon2' 或手動 'npm install' 看詳細錯誤（需要 build-essential、python3）"
+    # 原生模組（sqlite3、argon2）要能載入；新版 npm 的安裝腳本管控可能略過編譯，載入失敗就重新編譯一次
+    if ! ( cd "$DIR" && nr node -e "require('sqlite3');require('argon2')" >/dev/null 2>&1 ); then
+        warn "原生模組載入失敗，重新編譯..."
+        ( cd "$DIR" && nr npm rebuild sqlite3 argon2 >/dev/null 2>&1 && nr node -e "require('sqlite3');require('argon2')" >/dev/null 2>&1 ) \
+            || die "sqlite3／argon2 無法載入。請確認已安裝 build-essential python3，進 $DIR 執行 'npm rebuild sqlite3 argon2' 看詳細錯誤"
+    fi
     ok "套件安裝完成"
     say "初始化資料庫..."
     ( cd "$DIR" && nr npm run init-db >/dev/null 2>&1 ) || die "資料庫初始化失敗（進 $DIR 執行 'npm run init-db' 看詳細錯誤）"

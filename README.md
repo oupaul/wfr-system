@@ -52,7 +52,7 @@
 ## 系統需求
 
 - Ubuntu 24.04
-- Node.js 18.x 或更高版本（已在 Node 24 以上的主機使用）
+- Node.js 20.17 或更高版本（`package.json` 的 `engines`；sqlite3 6 需要，已在 Node 24、26 測試）
 - npm 或 yarn
 
 ## 安裝步驟
@@ -67,7 +67,7 @@
 curl -fsSL https://raw.githubusercontent.com/oupaul/wfr-system/main/deploy.sh | sudo bash -s -- --port 6664 --name cashflow-prod
 ```
 
-`deploy.sh` 會依序：安裝 git／build-essential／python3、確認 Node.js（已有 18 以上就沿用，包含 24）→ `git clone` 到 `/opt/cashflow-prod` → 安裝套件 → 初始化資料庫 → 建立 `admin` 帳號（**隨機密碼，只顯示一次**）→ 產生 `.env`（隨機 SESSION_SECRET）→ 建立並啟動 systemd 服務 → 健康檢查。
+`deploy.sh` 會依序：安裝 git／build-essential／python3、確認 Node.js（已有 20.17 以上就沿用，包含 24）→ `git clone` 到 `/opt/cashflow-prod` → 安裝套件 → 初始化資料庫 → 建立 `admin` 帳號（**隨機密碼，只顯示一次**）→ 產生 `.env`（隨機 SESSION_SECRET）→ 建立並啟動 systemd 服務 → 健康檢查。
 
 | 選項 | 說明 |
 |---|---|
@@ -83,7 +83,7 @@ curl -fsSL https://raw.githubusercontent.com/oupaul/wfr-system/main/deploy.sh | 
 
 #### 或：互動式安裝（可逐項自訂）
 
-在全新的 Ubuntu 主機上，用具 sudo 權限的帳號（例如 `itadmin`）依序貼上下面的指令。Node.js 已安裝（18 以上，含 24）就不會重裝。
+在全新的 Ubuntu 主機上，用具 sudo 權限的帳號（例如 `itadmin`）依序貼上下面的指令。Node.js 已安裝（20.17 以上，含 24）就不會重裝。
 
 ```bash
 # 1. 準備工具（git 取得程式碼；build-essential、python3 是備用：套件沒有現成的預編譯檔時才用來編譯）
@@ -140,8 +140,8 @@ sudo systemctl start 服務名稱
 #### 1. 安裝 Node.js（如果尚未安裝）
 
 ```bash
-# 使用 NodeSource 安裝 Node.js 18.x
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+# 使用 NodeSource 安裝 Node.js 22.x
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # 驗證安裝
@@ -514,7 +514,7 @@ for file in *.sh; do sed -i 's/\r$//' "$file" && chmod +x "$file"; done
 - 查看伺服器日誌錯誤訊息
 
 ### 伺服器無法啟動
-- 確認 Node.js 版本（需要 18.x 或更高）
+- 確認 Node.js 版本（需要 20.17 或更高）
 - 檢查 3000 端口是否被占用（或您配置的端口）
 - 確認所有依賴已正確安裝 (`npm install`)
 - 檢查 `.env` 檔案中的 PORT 配置是否正確
