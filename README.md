@@ -52,37 +52,64 @@
 ## 系統需求
 
 - Ubuntu 24.04
-- Node.js 18.x 或更高版本
+- Node.js 18.x 或更高版本（已在 Node 24 以上的主機使用）
 - npm 或 yarn
 
 ## 安裝步驟
 
-### 方式一：一鍵安裝（推薦）
+### 方式一：從 GitHub 一鍵部署到主機（推薦）
+
+在全新的 Ubuntu 主機上，用具 sudo 權限的帳號（例如 `itadmin`）依序貼上下面的指令。Node.js 已安裝（18 以上，含 24）就不會重裝。
 
 ```bash
-# 進入專案目錄
-cd "資金週報系統"
+# 1. 準備工具（git 取得程式碼；build-essential、python3 是備用：套件沒有現成的預編譯檔時才用來編譯）
+sudo apt-get update && sudo apt-get install -y git rsync build-essential python3
 
-# 賦予腳本執行權限（僅首次需要）
-chmod +x install.sh
+# 2. 從 GitHub 取得程式碼（放在你的家目錄即可，安裝腳本會複製到 /opt）
+cd ~ && git clone https://github.com/oupaul/wfr-system.git && cd wfr-system
 
-# 執行一鍵安裝腳本
-./install.sh
+# 3. 執行一鍵安裝腳本（互動式，下面有每個問題的建議答案）
+chmod +x *.sh && sudo ./install.sh
 ```
 
-安裝腳本會自動：
-- 引導您選擇部署路徑（當前目錄或 /opt/fund-weekly-report）
-- 配置服務端口（預設 3000）
-- 配置瀏覽器標題（預設「資金週報系統」）
-- 檢查並安裝 Node.js（如需要）
-- 安裝所有依賴套件
-- 初始化資料庫
-- 建立環境配置檔案
+安裝腳本的問題與建議答案（正式環境）：
 
-**安裝選項說明：**
-- **部署路徑**：可選擇部署到當前目錄（開發用）或 `/opt/fund-weekly-report`（生產環境，需要 root 權限）
-- **服務端口**：自定義服務運行端口，預設為 3000
-- **瀏覽器標題**：自定義瀏覽器分頁顯示的名稱，預設為「資金週報系統」
+| 問題 | 建議答案 |
+|---|---|
+| [1] 部署方式 | `2`（部署到 /opt）；資料夾名稱自訂，例如 `cashflow-prod` |
+| [2] 服務端口 | 例如 `6664`（要與前面的 nginx／Cloudflare Tunnel 設定一致） |
+| [3] 瀏覽器標題 | 直接 Enter（資金週報系統） |
+| [4] 收支記錄功能模式 | `1`（收入＋支出） |
+| [5] 閒置登出時間 | 直接 Enter（30 分鐘） |
+| [6] 自動備份 | 建議選「不啟用」，改在系統的「管理者儀表板 → 備份管理」設定站內排程 |
+| [7] systemd 常駐服務 | `Y`，服務名稱例如 `cashflow-prod`（之後 update.sh 會自動偵測） |
+| 最後確認 | `Y` |
+
+安裝完成後：
+- 畫面會**只顯示一次**預設管理員 `admin` 的隨機密碼，請立刻記下，登入後馬上修改。
+- 網址是 `http://主機IP:端口`；對外請用 nginx 或 Cloudflare Tunnel 加 HTTPS（Cookie 的 Secure 屬性需要 HTTPS）。
+- 之後更新版本：`cd /opt/資料夾名稱 && ./update.sh`（會自動備份資料庫、`git pull`、安裝套件並重啟服務）。
+- 一開始 clone 下來的 `~/wfr-system` 只是安裝來源，裝完可以刪除；**以後都在 `/opt/資料夾名稱` 裡操作**。
+
+**在主機上用 sudo 與一般帳號的注意事項**：服務請以一般帳號（例如 `itadmin`）運行，`database/` 底下的檔案要屬於該帳號。若曾用 `sudo` 執行過會寫入資料庫的指令，檔案可能變成 root 擁有，造成服務登入時崩潰，修復：`sudo chown -R itadmin:itadmin /opt/資料夾名稱/database`。
+
+**把舊主機的資料搬到新主機**（全新安裝是空的資料庫）：先在舊主機建立一致的備份，再複製到新主機並重啟服務。
+```bash
+# 舊主機：產生備份檔（服務運行中也安全）
+cd /opt/舊資料夾 && sqlite3 database/fund_report.db ".backup '/tmp/fund_report_migrate.db'"
+# 傳到新主機（在舊主機執行）
+scp /tmp/fund_report_migrate.db itadmin@新主機:/tmp/
+# 新主機：停服務、換上資料庫、改擁有者、啟動
+sudo systemctl stop 服務名稱
+cp /tmp/fund_report_migrate.db /opt/新資料夾/database/fund_report.db
+sudo chown itadmin:itadmin /opt/新資料夾/database/fund_report.db
+sudo systemctl start 服務名稱
+```
+搬完後用舊主機的帳號密碼登入即可（使用者資料在資料庫裡）；新安裝產生的隨機 `admin` 密碼會被舊資料取代。
+
+#### 疑難排解
+- **`npm install` 時 sqlite3 或 argon2 編譯失敗**（新版 Node 沒有現成預編譯檔時）：確認已安裝 `build-essential python3`，再執行 `cd /opt/資料夾名稱 && npm rebuild sqlite3 argon2`。
+- **`./install.sh: cannot execute: required file not found`**：換行字元問題，見文末「疑難排解」。
 
 ### 方式二：手動安裝
 
