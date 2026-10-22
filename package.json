@@ -9,7 +9,7 @@
     "import-excel": "node scripts/import-excel.js",
     "show-excel": "node scripts/show-excel-structure.js",
     "create-admin": "node scripts/create-admin.js",
-    "dev": "nodemon server.js"
+    "dev": "node --watch server.js"
   },
   "keywords": [
     "fund",
@@ -36,9 +36,6 @@
     "multer": "^2.1.1",
     "sqlite3": "^6.0.1",
     "winston": "^3.19.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
   },
   "overrides": {
     "uuid": "^11.1.1",
