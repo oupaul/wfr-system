@@ -59,6 +59,30 @@
 
 ### 方式一：從 GitHub 一鍵部署到主機（推薦）
 
+#### 最快：貼一行（非互動，不用回答任何問題）
+
+在全新的 Ubuntu 主機上，用有 sudo 權限的一般帳號（例如 `itadmin`，服務會以這個帳號運行，**不要直接用 root 登入執行**）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/oupaul/wfr-system/main/deploy.sh | sudo bash -s -- --port 6664 --name cashflow-prod
+```
+
+`deploy.sh` 會依序：安裝 git／build-essential／python3、確認 Node.js（已有 18 以上就沿用，包含 24）→ `git clone` 到 `/opt/cashflow-prod` → 安裝套件 → 初始化資料庫 → 建立 `admin` 帳號（**隨機密碼，只顯示一次**）→ 產生 `.env`（隨機 SESSION_SECRET）→ 建立並啟動 systemd 服務 → 健康檢查。
+
+| 選項 | 說明 |
+|---|---|
+| `--port 6664` | 服務端口（預設 3000） |
+| `--name cashflow-prod` | systemd 服務名稱，也是預設資料夾 `/opt/<名稱>`（預設 `cashflow`） |
+| `--dir /opt/xxx` | 自訂部署目錄 |
+| `--user itadmin` | 運行服務的帳號（預設＝執行 sudo 的那個帳號） |
+| `--title "..."`、`--timeout 30` | 瀏覽器標題、閒置自動登出分鐘數 |
+| `--branch main`、`--repo URL` | 分支、程式碼來源 |
+| `--no-service` | 不建立 systemd 服務（之後自己 `npm start`） |
+
+安全保護：部署目錄或同名服務已存在時**不會覆蓋**，直接停下並告訴你改用 `./update.sh`；密碼不會出現在命令列參數。部署完成後：登入 → 立刻修改 admin 密碼 → 到「管理者儀表板 → 備份管理」設定每日備份；對外請加 nginx 或 Cloudflare Tunnel 與 HTTPS。之後更新：`cd /opt/cashflow-prod && ./update.sh`。
+
+#### 或：互動式安裝（可逐項自訂）
+
 在全新的 Ubuntu 主機上，用具 sudo 權限的帳號（例如 `itadmin`）依序貼上下面的指令。Node.js 已安裝（18 以上，含 24）就不會重裝。
 
 ```bash
