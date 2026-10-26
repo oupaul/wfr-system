@@ -13,6 +13,7 @@ const { requireEditor } = require('../middleware/auth');
 const bulk = require('../utils/bulkTransactions');
 const { createTransfer } = require('../utils/transfer');
 const { parseFee, recordFee } = require('../utils/feeRecord');
+const bulkDate = require('../utils/bulkDateChange');
 
 // 確保上傳目錄存在
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -370,6 +371,33 @@ router.get('/statistics', (req, res) => {
     });
 });
 
+// 批次修改日期：預覽（不寫入）與套用。必須在 /:id 之前。
+// 轉帳只要勾到任何一腿，另一腿一定一起改（兩腿日期必須一致）；套用時伺服器會重新規劃，不信任預覽結果
+router.post('/batch-date-preview', requireEditor, async (req, res) => {
+    try {
+        const plan = await bulkDate.buildPlan(req.body || {});
+        res.json({ success: true, rows: plan.rows, summary: plan.summary });
+    } catch (err) {
+        if (err.userError) return res.status(400).json({ error: err.message });
+        logger.error('批次修改日期預覽錯誤:', err);
+        res.status(500).json({ error: '預覽失敗', details: err.message });
+    }
+});
+
+router.post('/batch-date', requireEditor, async (req, res) => {
+    try {
+        const result = await bulkDate.applyPlan(req, req.body || {}, req.body && req.body.expected_changed !== undefined ? req.body.expected_changed : null);
+        res.json({
+            success: true, updated: result.updated, accounts: result.accounts, summary: result.summary,
+            message: `已修改 ${result.updated} 筆記錄的日期${result.summary.auto_included ? `（含轉帳另一腿 ${result.summary.auto_included} 筆）` : ''}，已重算 ${result.accounts} 個帳戶的餘額`
+        });
+    } catch (err) {
+        if (err.userError) return res.status(err.conflict ? 409 : 400).json({ error: err.message });
+        logger.error('批次修改日期錯誤:', err);
+        res.status(500).json({ error: '批次修改日期失敗', details: err.message });
+    }
+});
+
 // 批次刪除收支記錄（必須在 /:id 之前）
 router.post('/batch-delete', requireEditor, async (req, res) => {
     const { ids } = req.body;
@@ -383,13 +411,26 @@ router.post('/batch-delete', requireEditor, async (req, res) => {
     let deletedCount = 0;
     const placeholders = numericIds.map(() => '?').join(',');
     try {
-        const rows = await new Promise((resolve, reject) => {
+        let rows = await new Promise((resolve, reject) => {
             db.all(
                 `SELECT * FROM transactions WHERE id IN (${placeholders})`,
                 numericIds,
                 (err, r) => (err ? reject(err) : resolve(r || []))
             );
         });
+        // 轉帳要整組刪除（跟單筆刪除一致）：只勾到一腿時另一腿一起刪，否則會留下只扣款沒入帳（或反過來）的孤兒記錄
+        const groupIds = [...new Set(rows.map((r) => r.transfer_group_id).filter(Boolean))];
+        let extraLegs = 0;
+        if (groupIds.length) {
+            const have = new Set(rows.map((r) => r.id));
+            const legs = await new Promise((resolve, reject) => {
+                db.all(`SELECT * FROM transactions WHERE transfer_group_id IN (${groupIds.map(() => '?').join(',')})`, groupIds,
+                    (err, r) => (err ? reject(err) : resolve(r || [])));
+            });
+            const extra = legs.filter((r) => !have.has(r.id));
+            extraLegs = extra.length;
+            rows = rows.concat(extra);
+        }
         // 餘額重算依帳戶去重，刪 50 筆同帳戶的交易只重算 1 次，不是 50 次
         // （跟 Excel 匯入那邊的 distinctAccounts 寫法一致）
         const distinctAccounts = new Map();
@@ -416,7 +457,7 @@ router.post('/batch-delete', requireEditor, async (req, res) => {
                 logger.error('更新帳戶餘額失敗:', e);
             }
         }
-        res.json({ success: true, message: `已刪除 ${deletedCount} 筆記錄`, deletedCount });
+        res.json({ success: true, message: `已刪除 ${deletedCount} 筆記錄${extraLegs ? `（含轉帳另一腿 ${extraLegs} 筆一併刪除）` : ''}`, deletedCount });
     } catch (err) {
         logger.error('批次刪除錯誤:', err);
         res.status(500).json({ error: '批次刪除失敗', details: err.message });

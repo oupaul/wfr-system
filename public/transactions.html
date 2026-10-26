@@ -674,6 +674,9 @@
                 <button type="button" class="btn btn-danger" id="batchDeleteBtn" onclick="batchDelete()" disabled title="請先勾選要刪除的記錄">
                     🗑️ 批次刪除 (<span id="selectedCount">0</span>)
                 </button>
+                <button type="button" class="btn btn-secondary" id="batchDateBtn" onclick="openBatchDateModal()" disabled title="請先勾選要修改日期的記錄">
+                    📅 批次修改日期 (<span id="selectedCountDate">0</span>)
+                </button>
             </div>
 
             <!-- 數據表格 -->
@@ -837,6 +840,46 @@
             </div>
         </div>
     </div>
+
+<!-- 批次修改日期：勾選多筆後一次改日期，先預覽（含轉帳另一腿連動、結算日與借款還款警語）再確認 -->
+<div id="batchDateModal" class="modal">
+    <div class="modal-content" style="max-width: 1000px;">
+        <div class="modal-header">
+            <h2>📅 批次修改日期</h2>
+            <button class="close" onclick="closeBatchDateModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-row" style="align-items: end;">
+                <div class="form-group">
+                    <label>修改方式</label>
+                    <div style="display:flex; flex-direction:column; gap:6px; font-weight:normal;">
+                        <label style="font-weight:normal;"><input type="radio" name="batchDateMode" value="set" checked onchange="onBatchDateModeChange()" style="width:auto; margin-right:6px;">全部改成指定日期</label>
+                        <label style="font-weight:normal;"><input type="radio" name="batchDateMode" value="shift" onchange="onBatchDateModeChange()" style="width:auto; margin-right:6px;">全部順延 N 天（往前填負數）</label>
+                    </div>
+                </div>
+                <div class="form-group" id="batchDateSetWrap">
+                    <label for="batchDateValue">新日期 <span class="required">*</span></label>
+                    <input type="date" id="batchDateValue" oninput="schedulePreviewBatchDate()">
+                </div>
+                <div class="form-group" id="batchDateShiftWrap" style="display:none;">
+                    <label for="batchDateDays">順延天數 <span class="required">*</span></label>
+                    <input type="number" id="batchDateDays" step="1" placeholder="例如 2 或 -1" oninput="schedulePreviewBatchDate()">
+                </div>
+            </div>
+            <div id="batchDateSummary" style="margin: 4px 0 12px; line-height:1.8; font-size:14px; color:#1E293B;"></div>
+            <div style="max-height: 360px; overflow:auto; border:1px solid #E2E8F0; border-radius:6px;">
+                <table style="margin:0;">
+                    <thead><tr><th>原日期 → 新日期</th><th>類型</th><th>金額</th><th>說明</th><th>帳戶</th><th>提醒</th></tr></thead>
+                    <tbody id="batchDatePreviewBody"><tr><td colspan="6" style="text-align:center; color:#64748B; padding:20px;">請設定新日期或順延天數，這裡會顯示每一筆的變化</td></tr></tbody>
+                </table>
+            </div>
+            <div class="form-actions" style="margin-top:16px;">
+                <button type="button" class="btn btn-cancel" onclick="closeBatchDateModal()">取消</button>
+                <button type="button" class="btn btn-primary" id="batchDateConfirmBtn" onclick="confirmBatchDate()" disabled>確認修改</button>
+            </div>
+        </div>
+    </div>
+</div>
 
 <!-- 轉帳模態框：一次寫入轉出帳戶支出 + 轉入帳戶收入兩筆記錄，共用同一個
          transfer_group_id，排除在總收入/總支出統計之外；轉帳記錄只能整組刪除，
@@ -1567,6 +1610,10 @@
             const btn = document.getElementById('batchDeleteBtn');
             if (countEl) countEl.textContent = ids.length;
             if (btn) btn.disabled = ids.length === 0;
+            const dateBtn = document.getElementById('batchDateBtn');
+            const dateCount = document.getElementById('selectedCountDate');
+            if (dateCount) dateCount.textContent = ids.length;
+            if (dateBtn) dateBtn.disabled = ids.length === 0;
             const selectAll = document.getElementById('selectAll');
             if (selectAll) {
                 const rowCheckboxes = document.querySelectorAll('.row-checkbox');
@@ -1607,6 +1654,142 @@
                     showMessage('批次刪除失敗: ' + err.message, 'error');
                 })
                 .finally(() => { updateBatchDeleteState(); });
+        };
+
+        // ==================== 批次修改日期 ====================
+        let batchDateState = { ids: [], timer: null, lastPlan: null, token: 0 };
+        const BATCH_WARN_LABEL = { before_settlement: '早於結算日', future: '未來日期', balance_change: '餘額影響改變', loan_repayment: '可能對應借款還款', no_account: '帳戶對不上' };
+
+        window.openBatchDateModal = function() {
+            const ids = getSelectedIds();
+            if (ids.length === 0) { showMessage('請先勾選要修改日期的記錄', 'error'); return; }
+            batchDateState.ids = ids;
+            batchDateState.lastPlan = null;
+            document.querySelector('input[name="batchDateMode"][value="set"]').checked = true;
+            document.getElementById('batchDateValue').value = '';
+            document.getElementById('batchDateDays').value = '';
+            document.getElementById('batchDateSummary').innerHTML = `已勾選 <b>${ids.length}</b> 筆。轉帳的另一腿會自動一起修改。`;
+            document.getElementById('batchDatePreviewBody').innerHTML = '<tr><td colspan="6" style="text-align:center; color:#64748B; padding:20px;">請設定新日期或順延天數，這裡會顯示每一筆的變化</td></tr>';
+            document.getElementById('batchDateConfirmBtn').disabled = true;
+            onBatchDateModeChange();
+            document.getElementById('batchDateModal').style.display = 'block';
+        };
+
+        window.closeBatchDateModal = function() {
+            document.getElementById('batchDateModal').style.display = 'none';
+            clearTimeout(batchDateState.timer);
+        };
+
+        window.onBatchDateModeChange = function() {
+            const mode = document.querySelector('input[name="batchDateMode"]:checked').value;
+            document.getElementById('batchDateSetWrap').style.display = mode === 'set' ? '' : 'none';
+            document.getElementById('batchDateShiftWrap').style.display = mode === 'shift' ? '' : 'none';
+            schedulePreviewBatchDate();
+        };
+
+        function batchDatePayload() {
+            const mode = document.querySelector('input[name="batchDateMode"]:checked').value;
+            if (mode === 'set') {
+                const date = document.getElementById('batchDateValue').value;
+                return date ? { ids: batchDateState.ids, mode, date } : null;
+            }
+            const days = parseInt(document.getElementById('batchDateDays').value, 10);
+            return Number.isInteger(days) && days !== 0 ? { ids: batchDateState.ids, mode, days } : null;
+        }
+
+        window.schedulePreviewBatchDate = function() {
+            clearTimeout(batchDateState.timer);
+            batchDateState.timer = setTimeout(previewBatchDate, 300);
+        };
+
+        function previewBatchDate() {
+            const payload = batchDatePayload();
+            const confirmBtn = document.getElementById('batchDateConfirmBtn');
+            confirmBtn.disabled = true;
+            batchDateState.lastPlan = null;
+            if (!payload) return;
+            const token = ++batchDateState.token;
+            fetch(`${API_BASE}/transactions/batch-date-preview`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (token !== batchDateState.token) return; // 已有更新的預覽請求，丟掉過期結果
+                    if (result.error) {
+                        document.getElementById('batchDateSummary').innerHTML = `<span style="color:#DC2626;">${escapeHtml(result.error)}</span>`;
+                        document.getElementById('batchDatePreviewBody').innerHTML = '';
+                        return;
+                    }
+                    batchDateState.lastPlan = { payload, summary: result.summary };
+                    renderBatchDatePreview(result);
+                    confirmBtn.disabled = result.summary.changed === 0;
+                })
+                .catch(err => { console.error('預覽錯誤:', err); showMessage('預覽失敗', 'error'); });
+        }
+
+        function renderBatchDatePreview(result) {
+            const s = result.summary;
+            const parts = [`共 <b>${s.total}</b> 筆（你勾選 ${s.selected} 筆${s.auto_included ? `，轉帳另一腿連動 ${s.auto_included} 筆` : ''}）`,
+                `<b>${s.changed}</b> 筆日期會改變${s.unchanged ? `、${s.unchanged} 筆不變` : ''}`,
+                s.changed ? `涉及 ${s.accounts} 個帳戶，新日期 ${escapeHtml(s.new_date_min)}${s.new_date_min !== s.new_date_max ? ' ～ ' + escapeHtml(s.new_date_max) : ''}` : ''];
+            let html = parts.filter(Boolean).join('；') + '。';
+            const notes = [];
+            if (s.before_settlement) notes.push(`<span style="color:#F06000;font-weight:bold;">⚠ ${s.before_settlement} 筆新日期早於該帳戶最近一次結算，不會影響目前餘額（結算金額已視為包含）</span>`);
+            if (s.loan_repayment) notes.push(`<span style="color:#F06000;font-weight:bold;">⚠ ${s.loan_repayment} 筆可能對應借款還款記錄，借款那邊的還款日期不會跟著變，請到借款管理確認</span>`);
+            if (s.no_account) notes.push(`<span style="color:#F06000;font-weight:bold;">⚠ ${s.no_account} 筆的公司／帳戶對不上任何啟用中的銀行帳戶</span>`);
+            if (s.future) notes.push(`${s.future} 筆新日期在未來，到該日才會影響目前餘額`);
+            if (s.balance_change) notes.push(`${s.balance_change} 筆改日期後「是否影響目前餘額」的狀況會改變`);
+            if (notes.length) html += '<br>' + notes.join('<br>');
+            document.getElementById('batchDateSummary').innerHTML = html;
+
+            document.getElementById('batchDatePreviewBody').innerHTML = result.rows.map(r => {
+                const tags = [];
+                if (r.auto_included) tags.push('<span style="background:#1E293B;color:#fff;border-radius:10px;padding:1px 8px;font-size:12px;">轉帳另一腿連動</span>');
+                else if (r.transfer_group_id) tags.push('<span style="background:#E2E8F0;color:#1E293B;border-radius:10px;padding:1px 8px;font-size:12px;">轉帳</span>');
+                (r.warnings || []).forEach(w => tags.push(`<span title="${escapeHtml(w.text)}" style="color:${w.code === 'balance_change' || w.code === 'future' ? '#475569' : '#F06000'};font-size:12px;">${escapeHtml(BATCH_WARN_LABEL[w.code] || w.code)}</span>`));
+                const dateCell = r.changed
+                    ? `${escapeHtml(r.old_date)} → <b>${escapeHtml(r.new_date)}</b>`
+                    : `<span style="color:#94A3B8;">${escapeHtml(r.old_date)}（不變）</span>`;
+                const acct = [r.company_name, r.account_name].filter(Boolean).join('・');
+                return `<tr${r.changed ? '' : ' style="opacity:.55;"'}>
+                    <td style="white-space:nowrap;">${dateCell}</td>
+                    <td>${r.type === 'income' ? '收入' : '支出'}</td>
+                    <td style="text-align:right;">${formatCurrency(r.amount)}</td>
+                    <td>${escapeHtml(r.description || r.category || '')}</td>
+                    <td>${escapeHtml(acct)}</td>
+                    <td>${tags.join(' ')}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        window.confirmBatchDate = function() {
+            const plan = batchDateState.lastPlan;
+            if (!plan || plan.summary.changed === 0) return;
+            const s = plan.summary;
+            const msg = `確定要修改 ${s.changed} 筆記錄的日期嗎？\n新日期：${s.new_date_min}${s.new_date_min !== s.new_date_max ? ' ～ ' + s.new_date_max : ''}`
+                + (s.auto_included ? `\n（含轉帳另一腿 ${s.auto_included} 筆一併修改）` : '')
+                + (s.before_settlement ? `\n⚠ 其中 ${s.before_settlement} 筆新日期早於結算日，不會影響目前餘額` : '')
+                + (s.loan_repayment ? `\n⚠ 其中 ${s.loan_repayment} 筆可能對應借款還款記錄，借款那邊的日期不會跟著變` : '');
+            if (!confirm(msg)) return;
+            const btn = document.getElementById('batchDateConfirmBtn');
+            btn.disabled = true;
+            fetch(`${API_BASE}/transactions/batch-date`, {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ...plan.payload, expected_changed: s.changed })
+            })
+                .then(res => res.json())
+                .then(result => {
+                    if (result.error) {
+                        showMessage(result.error, 'error');
+                        previewBatchDate(); // 資料有變動時重新預覽
+                        return;
+                    }
+                    showMessage(result.message || '已修改日期', 'success');
+                    closeBatchDateModal();
+                    loadTransactions();
+                    loadStatistics();
+                })
+                .catch(err => { console.error('批次修改日期錯誤:', err); showMessage('批次修改日期失敗', 'error'); btn.disabled = false; });
         };
 
         // 載入統計
@@ -1809,6 +1992,9 @@
             const transferModal = document.getElementById('transferModal');
             if (event.target == transferModal) {
                 closeTransferModal();
+            }
+            if (event.target == document.getElementById('batchDateModal')) {
+                closeBatchDateModal();
             }
         }
 
